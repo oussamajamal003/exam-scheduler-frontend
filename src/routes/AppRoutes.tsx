@@ -7,7 +7,7 @@ import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { NotFound } from '@/pages/NotFound';
 
 export const AppRoutes: React.FC = () => {
-  return (
+  return ( 
     <BrowserRouter>
       <Routes>
         {/* Public / Auth Routes */}
