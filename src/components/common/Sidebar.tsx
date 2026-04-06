@@ -26,7 +26,7 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="w-64 bg-slate-900 min-h-screen text-slate-100 flex flex-col hidden md:flex">
+    <aside className="w-64 bg-slate-900 min-h-screen text-slate-100 flex-col hidden md:flex">
       <div className="h-16 flex items-center px-6 border-b border-slate-800 font-bold text-lg tracking-tight">
         {env.APP_NAME}
       </div>

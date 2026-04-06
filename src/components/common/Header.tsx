@@ -5,7 +5,7 @@ export const Header: React.FC = () => {
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
       <div className="flex items-center gap-4">
-        <button className="md:hidden p-2 -ml-2 text-slate-500 hover:text-slate-700">
+        <button className="md:hidden p-2 -ml-2 text-slate-500 hover:text-slate-700" title="Open menu">
           <Menu className="w-5 h-5" />
         </button>
         <div className="relative hidden sm:block">
@@ -19,7 +19,7 @@ export const Header: React.FC = () => {
       </div>
       
       <div className="flex items-center gap-4">
-        <button className="relative p-2 text-slate-500 hover:text-slate-700">
+        <button className="relative p-2 text-slate-500 hover:text-slate-700" title="Notifications">
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
         </button>

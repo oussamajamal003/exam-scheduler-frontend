@@ -37,13 +37,13 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="col-span-2 bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[300px]">
+        <div className="col-span-2 bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-75">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Upcoming Schedule</h2>
           <div className="flex items-center justify-center h-48 text-slate-400 border-2 border-dashed border-slate-200 rounded-lg">
             Schedule Chart Placeholder
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[300px]">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-75">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Recent Alerts</h2>
           <div className="space-y-4">
             <div className="p-3 bg-amber-50 text-amber-800 rounded-md border border-amber-100 text-sm">
