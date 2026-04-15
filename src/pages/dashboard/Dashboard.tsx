@@ -1,7 +1,14 @@
 import React from 'react';
 import { Users, BookOpen, AlertTriangle, CheckCircle } from 'lucide-react';
 
-const StatCard = ({ title, value, icon: Icon, trend }: any) => (
+interface StatCardProps {
+  title: string;
+  value: string;
+  icon: React.ElementType;
+  trend?: string;
+}
+
+const StatCard = ({ title, value, icon: Icon, trend }: StatCardProps) => (
   <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
     <div className="flex items-center justify-between">
       <div>

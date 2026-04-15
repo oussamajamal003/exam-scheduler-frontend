@@ -1,12 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
-import { DashboardLayout } from '@/layouts/DashboardLayout';
+import { AdminLayout } from '@/layouts/AdminLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
+import { StudentsPage } from '@/pages/admin/StudentsPage';
 import { NotFound } from '@/pages/NotFound';
-import { AuthGuard } from '@/guards/authguard';
+import { AuthGuard, RoleGuard } from '@/guards/authguard';
 
 export const AppRoutes: React.FC = () => {
   return ( 
@@ -18,14 +19,23 @@ export const AppRoutes: React.FC = () => {
           <Route path="/register" element={<RegisterPage />} />
         </Route>
 
-        {/* Protected Dashboard Routes */}
+        {/* Protected Admin/Dashboard Routes */}
         <Route element={<AuthGuard />}>
-          <Route element={<DashboardLayout />}>
+          <Route element={<AdminLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
           
+            {/* Implemented Feature Route */}
+            <Route
+              path="/students"
+              element={
+                <RoleGuard allowedRoles={['TECH_ADMIN', 'SCHEDULING_ADMIN']}>
+                  <StudentsPage />
+                </RoleGuard>
+              }
+            />
+
             {/* Placeholders for future modules */}
-            <Route path="/students" element={<div className="p-4">Students Management</div>} />
             <Route path="/exams" element={<div className="p-4">Exams Management</div>} />
             <Route path="/rooms" element={<div className="p-4">Rooms Management</div>} />
             <Route path="/supervisors" element={<div className="p-4">Supervisors Management</div>} />
