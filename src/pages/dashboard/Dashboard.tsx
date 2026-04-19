@@ -3,6 +3,7 @@ import { Users, BookOpen, AlertTriangle, CheckCircle, CalendarClock, Sparkles, A
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageSpinner } from '@/components/shared/PageSpinner';
+import { DashboardCharts } from '@/components/shared/DashboardCharts';
 
 const stats = [
   { title: 'Total Students', value: '12,450', icon: Users, trend: '+5.2%' },
@@ -88,6 +89,9 @@ export const Dashboard: React.FC = () => {
           </Card>
         ))}
       </div>
+
+      {/* Charts Section */}
+      <DashboardCharts />
 
       <div className="grid gap-6 lg:grid-cols-[1.25fr_0.95fr]">
         <Card>

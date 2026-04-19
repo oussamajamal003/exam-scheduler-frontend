@@ -5,11 +5,12 @@ import { useCreateStudent, useDeleteStudent, useStudentExams, useStudents, useUp
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Student } from "../../schemas/student";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Card, CardContent } from "../../components/ui/card";
 import { getApiErrorMessage } from "../../lib/apiError";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { Users, Plus, RefreshCw, TrendingUp } from "lucide-react";
 
 export function StudentsPage() {
   const { data: students = [], isLoading, isError, error } = useStudents();
@@ -102,50 +103,88 @@ export function StudentsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
-      <Card className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/90 shadow-md shadow-zinc-200/40">
-        <CardHeader className="grid gap-4 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1.35fr_auto] lg:items-center">
-          <div className="space-y-3">
-            <div className="inline-flex rounded-full bg-zinc-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/90 shadow-sm shadow-zinc-950/10">
-              Student Management
+    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+      {/* Header Section */}
+      <div className="mb-8 space-y-1">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-none bg-zinc-950 text-white shadow-sm">
+            <Users className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Students</h1>
+            <p className="text-sm text-zinc-500 mt-0.5">Manage and organize student records across your institution</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 mb-8">
+        <Button 
+          onClick={openCreateModal}
+          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+        >
+          <Plus className="size-4" />
+          Add Student
+        </Button>
+        <Button 
+          variant="outline"
+          onClick={() => window.location.reload()}
+          className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
+        >
+          <RefreshCw className="size-4" />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Students</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{students.length}</p>
+                <p className="text-xs text-zinc-500 mt-2">Active profiles in system</p>
+              </div>
+              <div className="p-2 rounded-none bg-blue-50">
+                <TrendingUp className="size-5 text-blue-600" />
+              </div>
             </div>
-            <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Students</CardTitle>
-            <p className="max-w-2xl text-sm leading-6 text-zinc-500">
-              Manage student records, view exam details, and keep your scheduling roster polished and connected.
-            </p>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:w-auto">
-            <Button className="h-10 rounded-xl bg-zinc-950 px-4 text-white shadow-sm shadow-zinc-950/10 transition-colors hover:bg-zinc-900 sm:h-11 sm:rounded-full" onClick={openCreateModal}>
-              Add New Student
-            </Button>
-            <Button variant="outline" className="h-10 rounded-xl border-zinc-200 text-zinc-950 hover:bg-zinc-50 sm:h-11 sm:rounded-full" onClick={() => window.location.reload()}>
-              Refresh List
-            </Button>
-          </div>
-        </CardHeader>
+        <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Actions Available</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">3</p>
+                <p className="text-xs text-zinc-500 mt-2">Add, edit, and delete</p>
+              </div>
+              <div className="p-2 rounded-none bg-green-50">
+                <Plus className="size-5 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <CardContent className="grid gap-4 p-4 sm:p-6 md:grid-cols-3">
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">Total students</p>
-            <p className="mt-4 text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">{students.length}</p>
-            <p className="mt-2 text-sm text-zinc-500">Active profiles currently available in the system.</p>
-          </div>
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">Quick actions</p>
-            <p className="mt-4 text-sm leading-6 text-zinc-500">Use the action panel below to update student details or review exam records with confidence.</p>
-          </div>
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">System status</p>
-            <p className="mt-4 text-sm leading-6 text-zinc-500">Everything is synced in real time, with fast student updates and secure enrollment management.</p>
-          </div>
-        </CardContent>
-      </Card>
+        <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-2">
+          <CardContent className="p-6">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">System Status</p>
+            <p className="text-sm text-zinc-600 mt-2">Real-time sync enabled. All student records are automatically updated with exam details and enrollment information. Your data is always current and secure.</p>
+            <div className="flex gap-2 mt-3">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span className="text-xs font-medium text-green-600">Operational</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
+      {/* Error Messages */}
       {(createMutation.isError || updateMutation.isError) && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
           {createMutation.isError && (
-            <Card className="rounded-xl border border-destructive/20 bg-destructive/10 text-destructive">
+            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
               <CardContent className="p-4 sm:p-5">
                 <p className="text-sm font-semibold">Create Error</p>
                 <p className="mt-2 text-sm">{getApiErrorMessage(createMutation.error, "Failed to create student.")}</p>
@@ -153,7 +192,7 @@ export function StudentsPage() {
             </Card>
           )}
           {updateMutation.isError && (
-            <Card className="rounded-xl border border-destructive/20 bg-destructive/10 text-destructive">
+            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
               <CardContent className="p-4 sm:p-5">
                 <p className="text-sm font-semibold">Update Error</p>
                 <p className="mt-2 text-sm">{getApiErrorMessage(updateMutation.error, "Failed to update student.")}</p>
@@ -163,13 +202,17 @@ export function StudentsPage() {
         </div>
       )}
 
-      <StudentList
-        students={students}
-        isDeleting={deleteMutation.isPending}
-        onEditStudent={openEditModal}
-        onViewExams={setExamStudent}
-        onDeleteStudent={handleDelete}
-      />
+      {/* Students List */}
+      <div className="mb-8">
+        <StudentList
+          students={students}
+          isLoading={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending}
+          onEditStudent={openEditModal}
+          onViewExams={setExamStudent}
+          onDeleteStudent={handleDelete}
+        />
+      </div>
 
       <DeleteConfirmModal
         open={Boolean(deletingStudent)}

@@ -1,23 +1,23 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Student } from "../../schemas/student";
-import { Edit2, Trash2, BookOpen } from "lucide-react";
+import { Supervisor } from "../../schemas/supervisor";
+import { Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeleton } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
-interface StudentListProps {
-  students: Student[];
+interface SupervisorListProps {
+  supervisors: Supervisor[];
   isLoading?: boolean;
   isDeleting?: boolean;
-  onEditStudent: (student: Student) => void;
-  onViewExams: (student: Student) => void;
-  onDeleteStudent: (student: Student) => void;
+  onEditSupervisor: (supervisor: Supervisor) => void;
+  onViewWorkload: (supervisor: Supervisor) => void;
+  onDeleteSupervisor: (supervisor: Supervisor) => void;
 }
 
-export function StudentList({ students, isLoading, isDeleting, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
-  const studentRows = Array.isArray(students) ? students : [];
+export function SupervisorList({ supervisors, isLoading, isDeleting, onEditSupervisor, onViewWorkload, onDeleteSupervisor }: SupervisorListProps) {
+  const supervisorRows = Array.isArray(supervisors) ? supervisors : [];
 
   if (isLoading) {
     return <TableSkeleton columns={5} rows={8} />;
@@ -30,13 +30,13 @@ export function StudentList({ students, isLoading, isDeleting, onEditStudent, on
           <div className="inline-flex items-center rounded-none bg-zinc-950 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-white shadow-sm shadow-zinc-950/10">
             Directory
           </div>
-          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Student Management</CardTitle>
-          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Browse student records, edit profiles, review exam status, and manage your enrollment system with precision.</p>
+          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Supervisors</CardTitle>
+          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Manage examinee supervisors, track workloads, and map specific centers efficiently.</p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Students</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{studentRows.length}</p>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Staff</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{supervisorRows.length}</p>
           </div>
         </div>
       </CardHeader>
@@ -45,54 +45,55 @@ export function StudentList({ students, isLoading, isDeleting, onEditStudent, on
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
-                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Univ. ID</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Email</TableHead>
-                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Exams</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 inline-flex sm:table-cell">Department / Center</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Workload</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {studentRows.length === 0 ? (
+              {supervisorRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
                     <EmptyState
-                      icon={BookOpen}
-                      title="No students found"
-                      description="Create your first student record to get started with exam scheduling."
+                      icon={ShieldAlert}
+                      title="No supervisors found"
+                      description="Add a supervisor record to start assigning workloads"
                       action={{
-                        label: "Add Student",
+                        label: "Add Supervisor",
                         onClick: () => {},
                       }}
                     />
                   </TableCell>
                 </TableRow>
               ) : (
-                studentRows.map((student, idx) => (
+                supervisorRows.map((sup, idx) => (
                   <TableRow
-                    key={student.id}
+                    key={sup.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                      idx === studentRows.length - 1 && "border-b-0"
+                      idx === supervisorRows.length - 1 && "border-b-0"
                     )}
                   >
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <span className="font-bold text-zinc-950 text-sm">{student.universityId}</span>
+                      <div className="font-semibold text-zinc-950 text-sm">{sup.name}</div>
+                      <p className="text-xs text-zinc-500 mt-0.5">Active</p>
                     </TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{sup.email}</TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <div className="font-semibold text-zinc-950 text-sm">{student.firstName} {student.lastName}</div>
-                      <p className="text-xs text-zinc-500 mt-0.5">Active student</p>
+                      <div className="font-medium text-zinc-900 text-sm">{sup.department}</div>
+                      <p className="text-xs text-zinc-500 mt-0.5">{sup.center}</p>
                     </TableCell>
-                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{student.email}</TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewExams(student)}
-                        className="h-8 rounded-none text-xs font-semibold text-zinc-600 hover:bg-blue-100/50 hover:text-blue-700 transition-colors"
+                        onClick={() => onViewWorkload(sup)}
+                        className="h-8 rounded-none text-xs font-semibold text-zinc-600 hover:bg-indigo-100/50 hover:text-indigo-700 transition-colors"
                       >
-                        <BookOpen className="size-3.5 mr-1.5" />
-                        Exams
+                        <ShieldAlert className="size-3.5 mr-1.5" />
+                        View Workload
                       </Button>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
@@ -100,9 +101,9 @@ export function StudentList({ students, isLoading, isDeleting, onEditStudent, on
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onEditStudent(student)}
+                          onClick={() => onEditSupervisor(sup)}
                           className="h-8 w-8 rounded-none text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors p-0 flex items-center justify-center"
-                          title="Edit student"
+                          title="Edit supervisor"
                         >
                           <Edit2 className="size-4" />
                         </Button>
@@ -110,9 +111,9 @@ export function StudentList({ students, isLoading, isDeleting, onEditStudent, on
                           variant="ghost"
                           size="sm"
                           disabled={isDeleting}
-                          onClick={() => onDeleteStudent(student)}
+                          onClick={() => onDeleteSupervisor(sup)}
                           className="h-8 w-8 rounded-none text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors p-0 flex items-center justify-center disabled:opacity-50"
-                          title="Delete student"
+                          title="Delete supervisor"
                         >
                           <Trash2 className="size-4" />
                         </Button>
