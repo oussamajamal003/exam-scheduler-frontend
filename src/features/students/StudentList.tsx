@@ -1,171 +1,120 @@
-import React from 'react';
-import { useCreateStudent, useDeleteStudent, useStudents } from '../../hooks/students/useStudents';
-import { Button } from '../../components/ui/button';
-import { PlusCircle, Search, Trash2, GraduationCap } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Student } from "../../schemas/student";
+import { Edit2, Trash2, BookOpen } from "lucide-react";
+import { cn } from "../../lib/utils";
 
-export const StudentList: React.FC = () => {
-  const [search, setSearch] = React.useState('');
-  const { data: students, isLoading, isError } = useStudents(search);
-  const createStudentMutation = useCreateStudent();
-  const deleteStudentMutation = useDeleteStudent();
+interface StudentListProps {
+  students: Student[];
+  isDeleting?: boolean;
+  onEditStudent: (student: Student) => void;
+  onViewExams: (student: Student) => void;
+  onDeleteStudent: (student: Student) => void;
+}
+
+export function StudentList({ students, isDeleting, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
   const studentRows = Array.isArray(students) ? students : [];
 
-  const handleCreateStudent = async () => {
-    const name = window.prompt('Student full name');
-    if (!name) return;
-
-    const email = window.prompt('Student email');
-    if (!email) return;
-
-    const studentId = window.prompt('University ID');
-    if (!studentId) return;
-
-    const password = window.prompt('Temporary password (min 6 characters)', 'student123');
-    if (!password || password.length < 6) {
-      window.alert('Password must be at least 6 characters.');
-      return;
-    }
-
-    try {
-      await createStudentMutation.mutateAsync({
-        name,
-        email,
-        studentId,
-        password,
-      });
-      window.alert('Student created successfully.');
-    } catch {
-      window.alert('Failed to create student. Check console/server logs.');
-    }
-  };
-
-  const handleDeleteStudent = async (id: string, name: string) => {
-    const confirmed = window.confirm(`Delete ${name}? This action cannot be undone.`);
-    if (!confirmed) return;
-
-    try {
-      await deleteStudentMutation.mutateAsync(id);
-    } catch {
-      window.alert('Failed to delete student.');
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-24 text-muted-foreground animate-pulse">
-        <GraduationCap className="h-12 w-12 mb-4 opacity-20" />
-        <span className="text-lg font-medium">Loading student records...</span>
-      </div>
-    );
-  }
-
-  if (isError) return <div className="p-8 text-center text-destructive bg-destructive/10 rounded-xl">Error loading student data.</div>;
-
   return (
-    <div className="space-y-6">
-      {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search students..." 
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="pl-9 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary w-64 bg-background"
-            />
+    <Card className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
+      <CardHeader className="flex flex-col gap-4 border-b border-zinc-200/60 px-4 py-5 sm:px-6 sm:py-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <div className="inline-flex items-center rounded-full bg-zinc-950 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-white shadow-sm shadow-zinc-950/10">
+            Directory
+          </div>
+          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Student Management</CardTitle>
+          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Browse student records, edit profiles, review exam status, and manage your enrollment system with precision.</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-2xl bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
+          <div className="text-right">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Students</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{studentRows.length}</p>
           </div>
         </div>
-        <Button
-          onClick={handleCreateStudent}
-          disabled={createStudentMutation.isPending}
-          className="w-full sm:w-auto shadow-sm gap-2 whitespace-nowrap"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>{createStudentMutation.isPending ? 'Adding...' : 'Add Student'}</span>
-        </Button>
-      </div>
-      
-      {/* Data Table Card */}
-      <div className="rounded-xl border border-border bg-card text-card-foreground shadow-sm overflow-hidden">
+      </CardHeader>
+      <CardContent className="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-muted-foreground">Student Name</th>
-                <th className="px-6 py-4 font-semibold text-muted-foreground">Registration ID</th>
-                <th className="px-6 py-4 font-semibold text-muted-foreground">Email Address</th>
-                <th className="px-6 py-4 font-semibold text-muted-foreground">Department</th>
-                <th className="px-6 py-4 font-semibold text-muted-foreground text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {studentRows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground bg-muted/20">
-                    <div className="flex flex-col items-center justify-center space-y-3">
-                      <div className="w-12 h-12 bg-background border border-border rounded-full flex items-center justify-center text-muted-foreground">
-                        <Search className="w-5 h-5 opacity-50" />
+          <Table className="min-w-full">
+            <TableHeader>
+              <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Univ. ID</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Email</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Exams</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {studentRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-zinc-500 py-12 px-4">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="rounded-2xl bg-zinc-100 p-3">
+                        <BookOpen className="size-5 text-zinc-400" />
                       </div>
                       <p className="font-medium">No students found</p>
-                      <p className="text-xs max-w-sm">There are no students matching your criteria, or none have been added to the system yet.</p>
-                      <Button variant="link" onClick={handleCreateStudent} className="mt-2 text-primary gap-1">
-                        Add the first student <PlusCircle className="w-3 h-3" />
-                      </Button>
+                      <p className="text-sm text-zinc-400">Create your first student record to get started</p>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                studentRows.map((student) => (
-                  <tr key={student.id} className="hover:bg-muted/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase shadow-sm border border-primary/20">
-                          {student.name.charAt(0)}
-                        </div>
-                        <span className="font-medium text-foreground">{student.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">{student.studentId}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{student.email}</td>
-                    <td className="px-6 py-4">
-                      {student.department ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-secondary text-secondary-foreground border border-border">
-                          {student.department}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
+                  </TableCell>
+                </TableRow>
+              )}
+              {studentRows.map((student, idx) => (
+                <TableRow
+                  key={student.id}
+                  className={cn(
+                    "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
+                    idx === studentRows.length - 1 && "border-b-0"
+                  )}
+                >
+                  <TableCell className="px-4 py-4 sm:px-6">
+                    <span className="font-bold text-zinc-950 text-sm">{student.universityId}</span>
+                  </TableCell>
+                  <TableCell className="px-4 py-4 sm:px-6">
+                    <div className="font-semibold text-zinc-950 text-sm">{student.firstName} {student.lastName}</div>
+                    <p className="text-xs text-zinc-500 mt-0.5">Active student</p>
+                  </TableCell>
+                  <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{student.email}</TableCell>
+                  <TableCell className="px-4 py-4 sm:px-6 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewExams(student)}
+                      className="h-8 rounded-lg text-xs font-semibold text-zinc-600 hover:bg-blue-100/50 hover:text-blue-700 transition-colors"
+                    >
+                      <BookOpen className="size-3.5 mr-1.5" />
+                      Exams
+                    </Button>
+                  </TableCell>
+                  <TableCell className="px-4 py-4 sm:px-6 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDeleteStudent(student.id, student.name)}
-                        disabled={deleteStudentMutation.isPending}
+                        size="sm"
+                        onClick={() => onEditStudent(student)}
+                        className="h-8 w-8 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors p-0 flex items-center justify-center"
+                        title="Edit student"
+                      >
+                        <Edit2 className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isDeleting}
+                        onClick={() => onDeleteStudent(student)}
+                        className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors p-0 flex items-center justify-center disabled:opacity-50"
                         title="Delete student"
                       >
-                        <Trash2 className="w-4 h-4 text-destructive" />
+                        <Trash2 className="size-4" />
                       </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-        
-        {/* Pagination placeholder */}
-        <div className="border-t border-border px-6 py-4 bg-muted/20 flex items-center justify-between text-sm text-muted-foreground">
-          <div>Showing <span className="font-medium text-foreground">{studentRows.length}</span> students</div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>Previous</Button>
-            <Button variant="outline" size="sm" disabled>Next</Button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
-};
+}

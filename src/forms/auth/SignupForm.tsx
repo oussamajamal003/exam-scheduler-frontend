@@ -23,19 +23,19 @@ export const SignupForm: React.FC = () => {
   return (
     <AuthCard
       footer={
-        <div className="text-sm text-slate-500">
+        <div className="text-[13px] text-zinc-500">
           Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors">
+          <Link to="/login" className="font-medium text-zinc-950 transition-colors hover:underline">
             Sign in
           </Link>
         </div>
       }
     >
-      <AuthHeader title="Exam Scheduling System" subtitle="Create your account" />
+      <AuthHeader title="Smart Exam Scheduler" subtitle="Let's get your account set up." />
 
-      <form onSubmit={handleSubmit((data) => signup(data))} className="space-y-4">
+      <form onSubmit={handleSubmit((data) => signup(data))} className="space-y-5">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-[13px] font-medium text-destructive">
             {error.response?.data?.message || error.message || 'Registration failed. Please try again.'}
           </div>
         )}
@@ -55,8 +55,8 @@ export const SignupForm: React.FC = () => {
           error={errors.confirmPassword?.message}
         />
 
-        <Button type="submit" disabled={isPending} className="w-full bg-blue-600 text-white shadow-sm transition-all hover:bg-blue-700 disabled:opacity-70">
-          {isPending ? 'Signing up...' : 'Sign Up'}
+        <Button type="submit" disabled={isPending} className="h-11 w-full bg-zinc-950 font-medium text-zinc-50 shadow-sm transition-all hover:bg-zinc-900 disabled:opacity-70">
+          {isPending ? 'Processing...' : 'Create Account'}
         </Button>
       </form>
     </AuthCard>

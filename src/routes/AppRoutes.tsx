@@ -6,8 +6,28 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { StudentsPage } from '@/pages/admin/StudentsPage';
+import { AIOptimizerPage } from '@/pages/admin/AIOptimizerPage';
+import { CoursesPage } from '@/pages/admin/CoursesPage';
+import { SupervisorsPage } from '@/pages/admin/SupervisorsPage';
+import { RoomsCentersPage } from '@/pages/admin/RoomsCentersPage';
 import { NotFound } from '@/pages/NotFound';
+import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard } from '@/guards/authguard';
+
+const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setIsLoading(false), 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return <PageSpinner label={`Loading ${title.toLowerCase()}`} />;
+  }
+
+  return <div className="p-4 text-zinc-950">{title}</div>;
+};
 
 export const AppRoutes: React.FC = () => {
   return ( 
@@ -36,12 +56,14 @@ export const AppRoutes: React.FC = () => {
             />
 
             {/* Placeholders for future modules */}
-            <Route path="/exams" element={<div className="p-4">Exams Management</div>} />
-            <Route path="/rooms" element={<div className="p-4">Rooms Management</div>} />
-            <Route path="/supervisors" element={<div className="p-4">Supervisors Management</div>} />
-            <Route path="/schedule" element={<div className="p-4">Schedule Generation</div>} />
-            <Route path="/conflicts" element={<div className="p-4">Conflicts Detection</div>} />
-            <Route path="/settings" element={<div className="p-4">System Settings</div>} />
+            <Route path="/ai" element={<AIOptimizerPage />} />
+            <Route path="/courses" element={<CoursesPage />} />
+            <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
+            <Route path="/rooms" element={<RoomsCentersPage />} />
+            <Route path="/supervisors" element={<SupervisorsPage />} />
+            <Route path="/schedule" element={<PlaceholderPage title="Schedule Generation" />} />
+            <Route path="/conflicts" element={<PlaceholderPage title="Conflicts Detection" />} />
+            <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
           </Route>
         </Route>
 

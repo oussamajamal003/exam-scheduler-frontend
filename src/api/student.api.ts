@@ -1,24 +1,14 @@
-import { axiosClient } from './axiosclient';
-import { Student, StudentFormData } from '../schemas/student';
+import { axiosClient } from "./axiosclient";
+import { Student, CreateStudentDto, UpdateStudentDto } from "../schemas/student";
 
-type ApiResponse<T> = {
+type ApiEnvelope<T> = {
   success: boolean;
   message: string;
-  data: T;
+  data?: T;
 };
 
-type StudentsServicePayload = {
-  data: Array<{
-    id: string;
-    universityId: string;
-    user?: {
-      name?: string;
-      email?: string;
-    };
-    program?: {
-      name?: string;
-    };
-  }>;
+type PaginatedStudentsPayload = {
+  data: BackendStudent[];
   meta?: {
     total: number;
     page: number;
@@ -27,77 +17,86 @@ type StudentsServicePayload = {
   };
 };
 
-type StudentRecord = {
+type BackendStudent = {
   id: string;
   universityId: string;
   user?: {
     name?: string;
     email?: string;
   };
-  program?: {
-    name?: string;
+};
+
+export type StudentExam = {
+  courseName: string;
+  courseCode: string;
+  status?: string;
+  duration?: number | null;
+  assignments?: Array<{
+    id?: string;
+    schedule?: unknown;
+    timeSlot?: unknown;
+    room?: unknown;
+  }>;
+};
+
+const mapBackendStudent = (student: BackendStudent): Student => {
+  const name = student.user?.name?.trim() ?? "";
+  const [firstName, ...lastNameParts] = name.split(" ").filter(Boolean);
+
+  return {
+    id: student.id,
+    universityId: student.universityId,
+    firstName: firstName ?? "",
+    lastName: lastNameParts.join(" ") || "",
+    email: student.user?.email ?? "",
   };
 };
 
-type SignupResponse = {
-  token: string;
-  message?: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role?: string;
-  };
+export const getStudents = async (): Promise<Student[]> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedStudentsPayload>>("/students");
+  return (response.data?.data?.data ?? []).map(mapBackendStudent);
 };
 
-export type CreateStudentInput = StudentFormData & {
-  password: string;
+export const getStudent = async (id: string): Promise<Student> => {
+  const response = await axiosClient.get<ApiEnvelope<BackendStudent>>(`/students/${id}`);
+  if (!response.data?.data) {
+    throw new Error("Student payload is missing in API response");
+  }
+  return mapBackendStudent(response.data.data);
 };
 
-export type GetStudentsParams = {
-  search?: string;
-  page?: number;
-  limit?: number;
-};
-
-const mapStudent = (item: StudentRecord): Student => ({
-  id: item.id,
-  name: item.user?.name ?? 'Unknown',
-  email: item.user?.email ?? '',
-  studentId: item.universityId,
-  department: item.program?.name,
-  level: undefined,
-  createdAt: '',
-  updatedAt: '',
-});
-
-export const getStudents = async (params: GetStudentsParams = {}): Promise<Student[]> => {
-  const response = await axiosClient.get<ApiResponse<StudentsServicePayload>>('/students', { params });
-  const students = response.data?.data?.data;
-  return Array.isArray(students) ? students.map(mapStudent) : [];
-};
-
-export const createStudent = async (data: CreateStudentInput): Promise<Student> => {
-  const signupResponse = await axiosClient.post<SignupResponse>('/auth/signup', {
-    name: data.name,
+export const createStudent = async (data: CreateStudentDto): Promise<Student> => {
+  const payload = {
+    universityId: data.universityId,
+    firstName: data.firstName,
+    lastName: data.lastName,
     email: data.email,
-    password: data.password,
-    role: 'STUDENT',
-  });
+    ...(data.programId ? { programId: data.programId } : {}),
+  };
 
-  const studentResponse = await axiosClient.post<ApiResponse<StudentRecord>>('/students', {
-    userId: signupResponse.data.user.id,
-    universityId: data.studentId,
-  });
-
-  return mapStudent(studentResponse.data.data);
+  const response = await axiosClient.post<ApiEnvelope<BackendStudent>>("/students", payload);
+  if (!response.data?.data) {
+    throw new Error("Created student payload is missing in API response");
+  }
+  return mapBackendStudent(response.data.data);
 };
 
-export const updateStudent = async (id: string, data: StudentFormData): Promise<Student> => {
-  const response = await axiosClient.put<ApiResponse<Student>>(`/students/${id}`, data);
-  return response.data.data;
+export const updateStudent = async (id: string, data: UpdateStudentDto): Promise<Student> => {
+  const response = await axiosClient.put<ApiEnvelope<BackendStudent>>(`/students/${id}`, {
+    universityId: data.universityId,
+    ...(data.programId ? { programId: data.programId } : {}),
+  });
+  if (!response.data?.data) {
+    throw new Error("Updated student payload is missing in API response");
+  }
+  return mapBackendStudent(response.data.data);
 };
 
 export const deleteStudent = async (id: string): Promise<void> => {
   await axiosClient.delete(`/students/${id}`);
+};
+
+export const getStudentExams = async (id: string): Promise<StudentExam[]> => {
+  const response = await axiosClient.get<ApiEnvelope<StudentExam[]>>(`/students/${id}/exams`);
+  return response.data?.data ?? [];
 };

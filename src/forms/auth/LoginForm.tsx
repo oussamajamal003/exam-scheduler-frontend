@@ -23,19 +23,19 @@ export const LoginForm: React.FC = () => {
   return (
     <AuthCard
       footer={
-        <div className="text-sm text-slate-500">
+        <div className="text-[13px] text-zinc-500">
           Don’t have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors">
+          <Link to="/register" className="font-medium text-zinc-950 transition-colors hover:underline">
             Sign up
           </Link>
         </div>
       }
     >
-      <AuthHeader title="Exam Scheduling System" subtitle="Login to your account" />
+      <AuthHeader title="Smart Exam Scheduler" subtitle="Welcome back. Please enter your details." />
 
-      <form onSubmit={handleSubmit((data) => login(data))} className="space-y-4">
+      <form onSubmit={handleSubmit((data) => login(data))} className="space-y-5">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-[13px] font-medium text-destructive">
             {error.message || 'Invalid email or password. Please try again.'}
           </div>
         )}
@@ -58,15 +58,15 @@ export const LoginForm: React.FC = () => {
             {...register('password')}
             error={errors.password?.message}
           />
-          <div className="flex justify-end pt-1">
-            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline">
+          <div className="flex justify-end pt-2">
+            <Link to="/forgot-password" className="text-[13px] font-medium text-zinc-600 transition-colors hover:text-zinc-950">
               Forgot password?
             </Link>
           </div>
         </div>
 
-        <Button type="submit" disabled={isPending} className="w-full bg-blue-600 text-white shadow-sm transition-all hover:bg-blue-700 disabled:opacity-70">
-          {isPending ? 'Signing in...' : 'Login'}
+        <Button type="submit" disabled={isPending} className="h-11 w-full bg-zinc-950 font-medium text-zinc-50 shadow-sm transition-all hover:bg-zinc-900 disabled:opacity-70">
+          {isPending ? 'Authenticating...' : 'Sign In'}
         </Button>
       </form>
     </AuthCard>
