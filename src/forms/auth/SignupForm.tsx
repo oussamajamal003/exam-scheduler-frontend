@@ -25,7 +25,7 @@ export const SignupForm: React.FC = () => {
       footer={
         <div className="text-[13px] text-zinc-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-zinc-950 transition-colors hover:underline">
+          <Link to="/login" state={{ fromSignup: true }} className="font-medium text-zinc-950 transition-colors hover:underline">
             Sign in
           </Link>
         </div>

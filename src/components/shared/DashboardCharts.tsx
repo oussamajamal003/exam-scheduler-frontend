@@ -35,10 +35,17 @@ const SimpleChart: React.FC<SimpleChartProps> = ({ title, data, icon: Icon, type
                 <div className="flex-1 ml-2">
                   <div className="w-full bg-secondary rounded-full h-2">
                     <div
-                      className="bg-primary h-2 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${(item.value / maxValue) * 100}%`,
-                      }}
+                      className={
+                        item.value >= maxValue * 0.9
+                          ? "bg-primary h-2 w-full rounded-full transition-all duration-500"
+                          : item.value >= maxValue * 0.75
+                            ? "bg-primary h-2 w-4/5 rounded-full transition-all duration-500"
+                            : item.value >= maxValue * 0.5
+                              ? "bg-primary h-2 w-3/5 rounded-full transition-all duration-500"
+                              : item.value >= maxValue * 0.25
+                                ? "bg-primary h-2 w-2/5 rounded-full transition-all duration-500"
+                                : "bg-primary h-2 w-1/5 rounded-full transition-all duration-500"
+                      }
                     />
                   </div>
                 </div>

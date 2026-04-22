@@ -23,7 +23,11 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const message = typeof error.response?.data?.message === 'string' ? error.response.data.message : '';
+    const invalidToken = status === 403 && /token/i.test(message);
+
+    if (status === 401 || invalidToken) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }

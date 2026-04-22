@@ -10,6 +10,7 @@ import { AIOptimizerPage } from '@/pages/admin/AIOptimizerPage';
 import { CoursesPage } from '../pages/admin/CoursesPage';
 import { SupervisorsPage } from '@/pages/admin/SupervisorsPage';
 import { RoomsCentersPage } from '../pages/admin/RoomsCentersPage';
+import { DepartmentsPage } from '@/pages/admin/DepartmentsPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard } from '@/guards/authguard';
@@ -58,10 +59,17 @@ export const AppRoutes: React.FC = () => {
             {/* Placeholders for future modules */}
             <Route path="/ai" element={<AIOptimizerPage />} />
             <Route path="/courses" element={<CoursesPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/semesters" element={<PlaceholderPage title="Semesters" />} />
+            <Route path="/course-offerings" element={<PlaceholderPage title="Course Offerings" />} />
+            <Route path="/enrollments" element={<PlaceholderPage title="Enrollments" />} />
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
             <Route path="/rooms" element={<RoomsCentersPage />} />
+            <Route path="/centers" element={<RoomsCentersPage />} />
             <Route path="/supervisors" element={<SupervisorsPage />} />
+            <Route path="/timeslots" element={<PlaceholderPage title="Time Slots" />} />
             <Route path="/schedule" element={<PlaceholderPage title="Schedule Generation" />} />
+            <Route path="/scheduling" element={<PlaceholderPage title="Schedule Generation" />} />
             <Route path="/conflicts" element={<PlaceholderPage title="Conflicts Detection" />} />
             <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
           </Route>

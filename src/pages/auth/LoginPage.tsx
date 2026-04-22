@@ -1,26 +1,27 @@
 import React from 'react';
 import { LoginForm } from '@/forms/auth/LoginForm';
-import { SplashScreen } from '@/components/shared/SplashScreen';
+import { PageSpinner } from '@/components/shared/PageSpinner';
+import { useLocation } from 'react-router-dom';
 
 export const LoginPage: React.FC = () => {
-  const [showSplash, setShowSplash] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sis-login-splash-seen') !== 'true';
-  });
+  const location = useLocation();
+  const fromSignup = Boolean((location.state as { fromSignup?: boolean } | null)?.fromSignup);
+  const [stage, setStage] = React.useState<'spinner' | 'form'>(fromSignup ? 'spinner' : 'form');
 
   React.useEffect(() => {
-    if (!showSplash) return;
+    if (!fromSignup || stage === 'form') return;
 
     const timer = window.setTimeout(() => {
-      localStorage.setItem('sis-login-splash-seen', 'true');
-      setShowSplash(false);
-    }, 2200);
+      setStage('form');
+    }, 1200);
 
-    return () => window.clearTimeout(timer);
-  }, [showSplash]);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [fromSignup, stage]);
 
-  if (showSplash) {
-    return <SplashScreen />;
+  if (stage === 'spinner') {
+    return <PageSpinner label="Preparing sign in" />;
   }
 
   return <LoginForm />;

@@ -15,6 +15,12 @@ export interface AuthResponse {
   message?: string;
 }
 
+interface ApiEnvelope<T> {
+  success: boolean;
+  message: string;
+  data?: T;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -27,19 +33,32 @@ export interface SignupCredentials {
   confirmPassword?: string;
 }
 
+const unwrapResponseData = <T>(responseData: ApiEnvelope<T> | T): T => {
+  if (
+    responseData &&
+    typeof responseData === 'object' &&
+    'data' in responseData &&
+    responseData.data !== undefined
+  ) {
+    return responseData.data;
+  }
+
+  return responseData as T;
+};
+
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await axiosClient.get<User>('/auth/');
-  return response.data;
+  const response = await axiosClient.get<ApiEnvelope<User>>('/auth/');
+  return unwrapResponseData(response.data);
 };
 
 export const signupUser = async (data: SignupCredentials): Promise<AuthResponse> => {
-  const response = await axiosClient.post<AuthResponse>('/auth/signup', data);
-  return response.data;
+  const response = await axiosClient.post<ApiEnvelope<AuthResponse>>('/auth/signup', data);
+  return unwrapResponseData(response.data);
 };
 
 export const loginUser = async (data: LoginCredentials): Promise<AuthResponse> => {
-  const response = await axiosClient.post<AuthResponse>('/auth/login', data);
-  return response.data;
+  const response = await axiosClient.post<ApiEnvelope<AuthResponse>>('/auth/login', data);
+  return unwrapResponseData(response.data);
 };
 
 export const logoutUser = async (): Promise<void> => {

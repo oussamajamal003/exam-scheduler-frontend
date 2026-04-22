@@ -85,6 +85,7 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
       </div>
       <button
         onClick={handleClose}
+        title="Close toast"
         className="absolute right-2 top-2 rounded-none p-1 text-zinc-400 hover:text-zinc-600 transition-colors"
       >
         <X className="size-4" />
