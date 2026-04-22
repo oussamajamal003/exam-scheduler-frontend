@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import { DepartmentList } from '@/features/departments/DepartmentList';
 import { ProgramForm, type ProgramFormSubmitValues } from '@/forms/programs/ProgramForm';
-import { getApiErrorMessage } from '@/lib/apiError';
+import { getApiErrorMessage, getApiValidationErrors } from '@/lib/apiError';
 import { useCreateDepartment, useDepartments, useUpdateDepartment } from '@/hooks/departments/useDepartments';
 import { useCreateProgram, useDeleteProgram, usePrograms, useUpdateProgram } from '@/hooks/programs/usePrograms';
 import type { Program } from '@/schemas/program';
@@ -93,6 +93,42 @@ export function DepartmentsPage() {
     void refetchPrograms();
     void refetchDepartments();
   };
+
+  const submitErrorMessage = 
+    createDepartmentMutation.isError ? getApiErrorMessage(createDepartmentMutation.error, 'Failed to create department.') :
+    updateDepartmentMutation.isError ? getApiErrorMessage(updateDepartmentMutation.error, 'Failed to update department.') :
+    createProgramMutation.isError ? getApiErrorMessage(createProgramMutation.error, 'Failed to create program.') :
+    updateProgramMutation.isError ? getApiErrorMessage(updateProgramMutation.error, 'Failed to update program.') :
+    undefined;
+
+  const submitValidationMessages = useMemo(() => {
+    let errors: Record<string, string[]> | undefined;
+    
+    const deptError = createDepartmentMutation.error || updateDepartmentMutation.error;
+    if (deptError) {
+      const deptErrors = getApiValidationErrors(deptError);
+      if (Object.keys(deptErrors).length > 0) {
+        errors = {
+          departmentName: deptErrors.name,
+          departmentCode: deptErrors.code,
+        };
+      }
+    } 
+    
+    const progError = createProgramMutation.error || updateProgramMutation.error;
+    if (progError) {
+      const progErrors = getApiValidationErrors(progError);
+      if (Object.keys(progErrors).length > 0) {
+        errors = {
+          ...(errors || {}),
+          name: progErrors.name,
+          code: progErrors.code,
+        };
+      }
+    }
+    
+    return errors;
+  }, [createDepartmentMutation.error, updateDepartmentMutation.error, createProgramMutation.error, updateProgramMutation.error]);
 
   const handleProgramSubmit = async (data: ProgramFormSubmitValues) => {
     let departmentId = data.departmentId;
@@ -251,51 +287,6 @@ export function DepartmentsPage() {
         </Card>
       </div>
 
-      {(createDepartmentMutation.isError || updateDepartmentMutation.isError || createProgramMutation.isError || updateProgramMutation.isError || deleteProgramMutation.isError) && (
-        <div className="mb-8 grid gap-4 md:grid-cols-2">
-          {createDepartmentMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Department Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createDepartmentMutation.error, 'Failed to create department.')}</p>
-              </CardContent>
-            </Card>
-          )}
-          {updateDepartmentMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Department Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateDepartmentMutation.error, 'Failed to update department.')}</p>
-              </CardContent>
-            </Card>
-          )}
-          {createProgramMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Create Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createProgramMutation.error, 'Failed to create program.')}</p>
-              </CardContent>
-            </Card>
-          )}
-          {updateProgramMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Update Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateProgramMutation.error, 'Failed to update program.')}</p>
-              </CardContent>
-            </Card>
-          )}
-          {deleteProgramMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Delete Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(deleteProgramMutation.error, 'Failed to delete program.')}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
       <div className="mb-8">
         <DepartmentList
           programs={programs}
@@ -333,6 +324,8 @@ export function DepartmentsPage() {
               key={editingProgram?.id ?? 'new-program'}
               initialData={editingProgram ?? undefined}
               onSubmit={handleProgramSubmit}
+              submitErrorMessage={submitErrorMessage}
+              submitValidationMessages={submitValidationMessages}
               isLoading={
                 createProgramMutation.isPending ||
                 updateProgramMutation.isPending ||

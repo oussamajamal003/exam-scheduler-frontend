@@ -4,16 +4,20 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
 import { BookOpen, Plus, RefreshCw, TrendingUp } from "lucide-react";
 
 import { CourseList } from "../../features/courses/CourseList";
 import { CourseForm } from "../../forms/courses/CourseForm";
 import { Course } from "../../schemas/course";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "../../hooks/courses/useCourses";
+import { usePrograms } from "../../hooks/programs/usePrograms";
+import { useSemesters } from "../../hooks/semesters/useSemesters";
 
 export function CoursesPage() {
   const { data: courses = [], isLoading, isError, error } = useCourses();
+  const programsQuery = usePrograms();
+  const semestersQuery = useSemesters();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [detailCourse, setDetailCourse] = useState<Course | null>(null);
@@ -24,6 +28,17 @@ export function CoursesPage() {
   const deleteMutation = useDeleteCourse();
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const programs = programsQuery.data ?? [];
+  const semesters = semestersQuery.data ?? [];
+
+  const submitError = editingCourse ? updateMutation.error : createMutation.error;
+  const isSubmitError = editingCourse ? updateMutation.isError : createMutation.isError;
+  const submitErrorMessage = isSubmitError 
+    ? getApiErrorMessage(submitError, `Failed to ${editingCourse ? "update" : "create"} course.`) 
+    : undefined;
+  const submitValidationMessages = isSubmitError 
+    ? getApiValidationMessages(submitError) 
+    : undefined;
 
   const openCreateModal = () => {
     setEditingCourse(null);
@@ -89,7 +104,7 @@ export function CoursesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
       {/* Header Section */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -166,30 +181,25 @@ export function CoursesPage() {
         </Card>
       </div>
 
-      {/* Error Messages */}
-      {(createMutation.isError || updateMutation.isError || deleteMutation.isError) && (
-        <div className="grid gap-4 md:grid-cols-3 mb-8">
-          {createMutation.isError && (
+      {(programsQuery.isError || semestersQuery.isError) && (
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
+          {programsQuery.isError && (
             <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
               <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Create Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createMutation.error, "Failed to create course.")}</p>
+                <p className="text-sm font-semibold">Programs Load Error</p>
+                <p className="mt-2 text-sm">
+                  {getApiErrorMessage(programsQuery.error, "Failed to load programs for the course form.")}
+                </p>
               </CardContent>
             </Card>
           )}
-          {updateMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
+          {semestersQuery.isError && (
+            <Card className="rounded-none border border-amber-200 bg-amber-50 text-amber-900">
               <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Update Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateMutation.error, "Failed to update course.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {deleteMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Delete Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(deleteMutation.error, "Failed to delete course.")}</p>
+                <p className="text-sm font-semibold">Semesters Load Warning</p>
+                <p className="mt-2 text-sm">
+                  {getApiErrorMessage(semestersQuery.error, "Failed to load semesters for the course form.")}
+                </p>
               </CardContent>
             </Card>
           )}
@@ -213,6 +223,22 @@ export function CoursesPage() {
           <div className="mt-4">
             <CourseForm 
               initialData={editingCourse ?? undefined} 
+              programs={programs}
+              semesters={semesters}
+              isProgramsLoading={programsQuery.isLoading}
+              isSemestersLoading={semestersQuery.isLoading}
+              programsErrorMessage={
+                programsQuery.isError
+                  ? getApiErrorMessage(programsQuery.error, "Failed to load programs for the course form.")
+                  : undefined
+              }
+              semestersErrorMessage={
+                semestersQuery.isError
+                  ? getApiErrorMessage(semestersQuery.error, "Failed to load semesters for the course form.")
+                  : undefined
+              }
+              submitErrorMessage={submitErrorMessage}
+              submitValidationMessages={submitValidationMessages}
               onSubmit={handleSubmit} 
               isLoading={isSaving} 
             />

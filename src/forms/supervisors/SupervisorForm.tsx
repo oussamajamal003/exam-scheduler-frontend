@@ -12,9 +12,17 @@ interface SupervisorFormProps {
   initialData?: Supervisor;
   onSubmit: (data: Supervisor) => void;
   isLoading?: boolean;
+  submitErrorMessage?: string | null;
+  submitValidationMessages?: string[];
 }
 
-export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorFormProps) {
+export function SupervisorForm({ 
+  initialData, 
+  onSubmit, 
+  isLoading,
+  submitErrorMessage,
+  submitValidationMessages = []
+}: SupervisorFormProps) {
   const form = useForm({
     resolver: zodResolver(supervisorSchema),
     defaultValues: initialData || {
@@ -40,10 +48,34 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
     });
   }, [form, initialData]);
 
-  const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const hasFieldErrors = Object.keys(form.formState.errors).length > 0;
+  const hasSubmitErrors = !!submitErrorMessage || submitValidationMessages.length > 0;
+  const isGlobalError = hasFieldErrors || hasSubmitErrors;
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      {hasSubmitErrors && (
+        <div className="rounded-none bg-destructive/10 px-4 py-3 border border-destructive/20">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              {submitErrorMessage && (
+                <p className="text-sm font-semibold text-destructive leading-snug">
+                  {submitErrorMessage}
+                </p>
+              )}
+              {submitValidationMessages.length > 0 && (
+                <ul className="text-xs font-medium text-destructive/90 list-disc list-inside ml-1">
+                  {submitValidationMessages.map((msg, idx) => (
+                    <li key={idx} className="leading-relaxed">{msg}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Label htmlFor="name" className="text-sm font-semibold text-zinc-950">
           Name
@@ -54,17 +86,17 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
             {...form.register("name")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.name
+              (form.formState.errors.name || hasSubmitErrors)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., Mohamed Ali"
             disabled={isLoading}
           />
-          {form.formState.errors.name && (
+          {(form.formState.errors.name || hasSubmitErrors) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.name && !!form.watch("name") && (
+          {!form.formState.errors.name && !hasSubmitErrors && !!form.watch("name") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -89,17 +121,17 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
             {...form.register("email")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.email
+              (form.formState.errors.email || hasSubmitErrors)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., m.ali@university.edu"
             disabled={isLoading}
           />
-          {form.formState.errors.email && (
+          {(form.formState.errors.email || hasSubmitErrors) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !!form.watch("email") && (
+          {!form.formState.errors.email && !hasSubmitErrors && !!form.watch("email") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -123,17 +155,17 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
             {...form.register("department")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.department
+              (form.formState.errors.department || hasSubmitErrors)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., Computer Science"
             disabled={isLoading}
           />
-          {form.formState.errors.department && (
+          {(form.formState.errors.department || hasSubmitErrors) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.department && !!form.watch("department") && (
+          {!form.formState.errors.department && !hasSubmitErrors && !!form.watch("department") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -157,17 +189,17 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
             {...form.register("center")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.center
+              (form.formState.errors.center || hasSubmitErrors)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., Main Campus"
             disabled={isLoading}
           />
-          {form.formState.errors.center && (
+          {(form.formState.errors.center || hasSubmitErrors) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.center && !!form.watch("center") && (
+          {!form.formState.errors.center && !hasSubmitErrors && !!form.watch("center") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -183,7 +215,7 @@ export function SupervisorForm({ initialData, onSubmit, isLoading }: SupervisorF
 
       <Button
         type="submit"
-        disabled={isLoading || hasErrors}
+        disabled={isLoading || isGlobalError}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

@@ -29,7 +29,7 @@ export function RoomList({ rooms, isLoading, isDeleting, onEditRoom, onDeleteRoo
           <div className="inline-flex items-center rounded-none bg-zinc-950 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-white shadow-sm shadow-zinc-950/10">
             Facilities
           </div>
-          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Rooms & Centers</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Rooms</CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Allocate physical spaces, track maximum holding capacity, and align rooms strictly per examination center.</p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">

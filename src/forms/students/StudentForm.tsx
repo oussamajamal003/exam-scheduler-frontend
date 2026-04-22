@@ -12,9 +12,11 @@ interface StudentFormProps {
   initialData?: Student;
   onSubmit: (data: Student) => void;
   isLoading?: boolean;
+  submitErrorMessage?: string;
+  submitValidationMessages?: Record<string, string[]>;
 }
 
-export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormProps) {
+export function StudentForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: StudentFormProps) {
   const form = useForm({
     resolver: zodResolver(studentSchema),
     defaultValues: initialData || {
@@ -44,6 +46,13 @@ export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormPro
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      {submitErrorMessage && (
+        <div className="flex items-center gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20 mb-4 text-destructive">
+          <AlertCircle className="size-4 shrink-0" />
+          <p className="text-sm font-medium leading-snug">{submitErrorMessage}</p>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Label htmlFor="universityId" className="text-sm font-semibold text-zinc-950">
           University ID
@@ -54,25 +63,25 @@ export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormPro
             {...form.register("universityId")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.universityId
+              form.formState.errors.universityId || submitValidationMessages?.universityId
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., STU2024001"
           />
-          {form.formState.errors.universityId && (
+          {(form.formState.errors.universityId || submitValidationMessages?.universityId) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.universityId && !!form.watch("universityId") && (
+          {!form.formState.errors.universityId && !submitValidationMessages?.universityId && !!form.watch("universityId") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.universityId && (
+        {(form.formState.errors.universityId || submitValidationMessages?.universityId) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.universityId.message}
+              {form.formState.errors.universityId?.message || submitValidationMessages?.universityId?.join(", ")}
             </p>
           </div>
         )}
@@ -89,25 +98,25 @@ export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormPro
               {...form.register("firstName")}
               className={cn(
                 "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-                form.formState.errors.firstName
+                form.formState.errors.firstName || submitValidationMessages?.firstName
                   ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                   : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
               )}
               disabled={isLoading}
               placeholder="John"
             />
-            {form.formState.errors.firstName && (
+            {(form.formState.errors.firstName || submitValidationMessages?.firstName) && (
               <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
             )}
-          {!form.formState.errors.firstName && !!form.watch("firstName") && (
+          {!form.formState.errors.firstName && !submitValidationMessages?.firstName && !!form.watch("firstName") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
           </div>
-          {form.formState.errors.firstName && (
+          {(form.formState.errors.firstName || submitValidationMessages?.firstName) && (
             <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
               <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-xs font-medium text-destructive leading-snug">
-                {form.formState.errors.firstName.message}
+                {form.formState.errors.firstName?.message || submitValidationMessages?.firstName?.join(", ")}
               </p>
             </div>
           )}
@@ -123,25 +132,25 @@ export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormPro
               {...form.register("lastName")}
               className={cn(
                 "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-                form.formState.errors.lastName
+                form.formState.errors.lastName || submitValidationMessages?.lastName
                   ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                   : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
               )}
               disabled={isLoading}
               placeholder="Doe"
             />
-            {form.formState.errors.lastName && (
+            {(form.formState.errors.lastName || submitValidationMessages?.lastName) && (
               <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
             )}
-          {!form.formState.errors.lastName && !!form.watch("lastName") && (
+          {!form.formState.errors.lastName && !submitValidationMessages?.lastName && !!form.watch("lastName") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
           </div>
-          {form.formState.errors.lastName && (
+          {(form.formState.errors.lastName || submitValidationMessages?.lastName) && (
             <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
               <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-xs font-medium text-destructive leading-snug">
-                {form.formState.errors.lastName.message}
+                {form.formState.errors.lastName?.message || submitValidationMessages?.lastName?.join(", ")}
               </p>
             </div>
           )}
@@ -159,25 +168,25 @@ export function StudentForm({ initialData, onSubmit, isLoading }: StudentFormPro
             {...form.register("email")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.email
+              form.formState.errors.email || submitValidationMessages?.email
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="john.doe@university.edu"
           />
-          {form.formState.errors.email && (
+          {(form.formState.errors.email || submitValidationMessages?.email) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !!form.watch("email") && (
+          {!form.formState.errors.email && !submitValidationMessages?.email && !!form.watch("email") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.email && (
+        {(form.formState.errors.email || submitValidationMessages?.email) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.email.message}
+              {form.formState.errors.email?.message || submitValidationMessages?.email?.join(", ")}
             </p>
           </div>
         )}

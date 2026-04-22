@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
 import { Users, Plus, RefreshCw, TrendingUp } from "lucide-react";
 
 import { SupervisorList } from "../../features/supervisors/SupervisorList";
@@ -166,36 +166,6 @@ export function SupervisorsPage() {
         </Card>
       </div>
 
-      {/* Error Messages */}
-      {(createMutation.isError || updateMutation.isError || deleteMutation.isError) && (
-        <div className="grid gap-4 md:grid-cols-3 mb-8">
-          {createMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Create Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createMutation.error, "Failed to create supervisor.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {updateMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Update Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateMutation.error, "Failed to update supervisor.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {deleteMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Delete Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(deleteMutation.error, "Failed to delete supervisor.")}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
       <SupervisorList
         supervisors={supervisors}
         isLoading={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
@@ -214,7 +184,17 @@ export function SupervisorsPage() {
             <SupervisorForm 
               initialData={editingSupervisor ?? undefined} 
               onSubmit={handleSubmit} 
-              isLoading={isSaving} 
+              isLoading={isSaving}
+              submitErrorMessage={
+                createMutation.isError ? getApiErrorMessage(createMutation.error, "Failed to create supervisor.") :
+                updateMutation.isError ? getApiErrorMessage(updateMutation.error, "Failed to update supervisor.") :
+                null
+              }
+              submitValidationMessages={
+                createMutation.isError ? getApiValidationMessages(createMutation.error) :
+                updateMutation.isError ? getApiValidationMessages(updateMutation.error) :
+                []
+              }
             />
           </div>
         </DialogContent>

@@ -33,9 +33,11 @@ interface ProgramFormProps {
   initialData?: Program;
   onSubmit: (data: ProgramFormSubmitValues) => void | Promise<void>;
   isLoading?: boolean;
+  submitErrorMessage?: string;
+  submitValidationMessages?: Record<string, string[]>;
 }
 
-export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormProps) {
+export function ProgramForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: ProgramFormProps) {
   const form = useForm<ProgramFormValues>({
     resolver: zodResolver(programFormSchema),
     defaultValues: {
@@ -137,6 +139,18 @@ export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormPro
 
   return (
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
+      {submitErrorMessage && (
+        <div className="rounded-none border border-red-200 bg-red-50 p-4 text-red-900">
+          <div className="flex gap-3">
+            <AlertCircle className="size-5 text-red-600" />
+            <div className="space-y-1">
+              <h5 className="text-sm font-medium leading-none">Error</h5>
+              <div className="text-sm text-red-800">{submitErrorMessage}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Label htmlFor="program-name" className="text-sm font-semibold text-zinc-950">
           Program Name
@@ -149,18 +163,22 @@ export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormPro
             placeholder="e.g., Bachelor of Science in Computer Science"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 pr-10 text-sm transition-all',
-              form.formState.errors.name
+              form.formState.errors.name || submitValidationMessages?.name
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.name ? (
+          {form.formState.errors.name || submitValidationMessages?.name ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
           ) : watchedName ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>
-        {form.formState.errors.name && <p className="text-xs font-medium text-destructive">{form.formState.errors.name.message}</p>}
+        {form.formState.errors.name ? (
+          <p className="text-xs font-medium text-destructive">{form.formState.errors.name.message}</p>
+        ) : submitValidationMessages?.name ? (
+          <p className="text-xs font-medium text-destructive">{submitValidationMessages.name[0]}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2.5">
@@ -175,18 +193,22 @@ export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormPro
             placeholder="e.g., BSCS"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 pr-10 text-sm uppercase tracking-[0.12em] transition-all',
-              form.formState.errors.code
+              form.formState.errors.code || submitValidationMessages?.code
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.code ? (
+          {form.formState.errors.code || submitValidationMessages?.code ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
           ) : watchedCode ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>
-        {form.formState.errors.code && <p className="text-xs font-medium text-destructive">{form.formState.errors.code.message}</p>}
+        {form.formState.errors.code ? (
+          <p className="text-xs font-medium text-destructive">{form.formState.errors.code.message}</p>
+        ) : submitValidationMessages?.code ? (
+          <p className="text-xs font-medium text-destructive">{submitValidationMessages.code[0]}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2.5">
@@ -220,12 +242,16 @@ export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormPro
             placeholder="e.g., School of Engineering"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all',
-              form.formState.errors.departmentName
+              form.formState.errors.departmentName || submitValidationMessages?.departmentName
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.departmentName && <p className="text-xs font-medium text-destructive">{form.formState.errors.departmentName.message}</p>}
+          {form.formState.errors.departmentName ? (
+            <p className="text-xs font-medium text-destructive">{form.formState.errors.departmentName.message}</p>
+          ) : submitValidationMessages?.departmentName ? (
+             <p className="text-xs font-medium text-destructive">{submitValidationMessages.departmentName[0]}</p>
+          ) : null}
         </div>
 
         <div className="space-y-2.5">
@@ -239,12 +265,16 @@ export function ProgramForm({ initialData, onSubmit, isLoading }: ProgramFormPro
             placeholder="e.g., ENG"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 text-sm uppercase tracking-[0.12em] transition-all',
-              form.formState.errors.departmentCode
+              form.formState.errors.departmentCode || submitValidationMessages?.departmentCode
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.departmentCode && <p className="text-xs font-medium text-destructive">{form.formState.errors.departmentCode.message}</p>}
+          {form.formState.errors.departmentCode ? (
+            <p className="text-xs font-medium text-destructive">{form.formState.errors.departmentCode.message}</p>
+          ) : submitValidationMessages?.departmentCode ? (
+             <p className="text-xs font-medium text-destructive">{submitValidationMessages.departmentCode[0]}</p>
+          ) : null}
         </div>
       </div>
 

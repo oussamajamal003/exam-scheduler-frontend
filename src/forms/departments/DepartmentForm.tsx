@@ -20,9 +20,11 @@ interface DepartmentFormProps {
   initialData?: Department;
   onSubmit: (data: CreateDepartmentDto) => void;
   isLoading?: boolean;
+  submitErrorMessage?: string;
+  submitValidationMessages?: Record<string, string[]>;
 }
 
-export function DepartmentForm({ initialData, onSubmit, isLoading }: DepartmentFormProps) {
+export function DepartmentForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: DepartmentFormProps) {
   const form = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentFormSchema),
     defaultValues: initialData ?? {
@@ -48,6 +50,18 @@ export function DepartmentForm({ initialData, onSubmit, isLoading }: DepartmentF
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      {submitErrorMessage && (
+        <div className="rounded-none border border-red-200 bg-red-50 p-4 text-red-900">
+          <div className="flex gap-3">
+            <AlertCircle className="size-5 text-red-600" />
+            <div className="space-y-1">
+              <h5 className="text-sm font-medium leading-none">Error</h5>
+              <div className="text-sm text-red-800">{submitErrorMessage}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Label htmlFor="department-name" className="text-sm font-semibold text-zinc-950">
           Name
@@ -60,18 +74,22 @@ export function DepartmentForm({ initialData, onSubmit, isLoading }: DepartmentF
             placeholder="e.g., Computer Science"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 pr-10 text-sm transition-all',
-              form.formState.errors.name
+              form.formState.errors.name || submitValidationMessages?.name
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.name ? (
+          {form.formState.errors.name || submitValidationMessages?.name ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
           ) : form.watch('name') ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>
-        {form.formState.errors.name && <p className="text-xs font-medium text-destructive">{form.formState.errors.name.message}</p>}
+        {form.formState.errors.name ? (
+          <p className="text-xs font-medium text-destructive">{form.formState.errors.name.message}</p>
+        ) : submitValidationMessages?.name ? (
+          <p className="text-xs font-medium text-destructive">{submitValidationMessages.name[0]}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2.5">
@@ -86,18 +104,22 @@ export function DepartmentForm({ initialData, onSubmit, isLoading }: DepartmentF
             placeholder="e.g., CS"
             className={cn(
               'h-10 rounded-none border-zinc-200 bg-white/50 pr-10 text-sm uppercase tracking-[0.12em] transition-all',
-              form.formState.errors.code
+              form.formState.errors.code || submitValidationMessages?.code
                 ? 'border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30'
                 : 'hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50'
             )}
           />
-          {form.formState.errors.code ? (
+          {form.formState.errors.code || submitValidationMessages?.code ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
           ) : form.watch('code') ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>
-        {form.formState.errors.code && <p className="text-xs font-medium text-destructive">{form.formState.errors.code.message}</p>}
+        {form.formState.errors.code ? (
+          <p className="text-xs font-medium text-destructive">{form.formState.errors.code.message}</p>
+        ) : submitValidationMessages?.code ? (
+          <p className="text-xs font-medium text-destructive">{submitValidationMessages.code[0]}</p>
+        ) : null}
       </div>
 
       <Button

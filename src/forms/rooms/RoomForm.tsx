@@ -13,9 +13,11 @@ interface RoomFormProps {
   initialData?: Room;
   onSubmit: (data: Room) => void;
   isLoading?: boolean;
+  submitErrorMessage?: string | null;
+  submitValidationMessages?: Record<string, string[]> | null;
 }
 
-export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
+export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: RoomFormProps) {
   const form = useForm({
     resolver: zodResolver(roomSchema),
     defaultValues: initialData || {
@@ -45,6 +47,15 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      {submitErrorMessage && !submitValidationMessages && (
+        <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20 mb-4">
+          <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm font-medium text-destructive leading-snug">
+            {submitErrorMessage}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Label htmlFor="name" className="text-sm font-semibold text-zinc-950">
           Room Name
@@ -55,25 +66,25 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
             {...form.register("name")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.name
+              (form.formState.errors.name || submitValidationMessages?.name)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., Room 101"
           />
-          {form.formState.errors.name && (
+          {(form.formState.errors.name || submitValidationMessages?.name) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.name && !!form.watch("name") && (
+          {!(form.formState.errors.name || submitValidationMessages?.name) && !!form.watch("name") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.name && (
+        {(form.formState.errors.name || submitValidationMessages?.name) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.name.message as string}
+              {(form.formState.errors.name?.message as string) || submitValidationMessages?.name?.[0]}
             </p>
           </div>
         )}
@@ -89,25 +100,25 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
             {...form.register("center")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.center
+              (form.formState.errors.center || submitValidationMessages?.center)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., North Campus"
           />
-          {form.formState.errors.center && (
+          {(form.formState.errors.center || submitValidationMessages?.center) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.center && !!form.watch("center") && (
+          {!(form.formState.errors.center || submitValidationMessages?.center) && !!form.watch("center") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.center && (
+        {(form.formState.errors.center || submitValidationMessages?.center) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.center.message as string}
+              {(form.formState.errors.center?.message as string) || submitValidationMessages?.center?.[0]}
             </p>
           </div>
         )}
@@ -124,25 +135,25 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
             {...form.register("capacity")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.capacity
+              (form.formState.errors.capacity || submitValidationMessages?.capacity)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., 50"
           />
-          {form.formState.errors.capacity && (
+          {(form.formState.errors.capacity || submitValidationMessages?.capacity) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.capacity && !!form.watch("capacity") && (
+          {!(form.formState.errors.capacity || submitValidationMessages?.capacity) && !!form.watch("capacity") && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.capacity && (
+        {(form.formState.errors.capacity || submitValidationMessages?.capacity) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.capacity.message as string}
+              {(form.formState.errors.capacity?.message as string) || submitValidationMessages?.capacity?.[0]}
             </p>
           </div>
         )}
@@ -159,7 +170,7 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
         >
           <SelectTrigger className={cn(
             "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-            form.formState.errors.status
+            (form.formState.errors.status || submitValidationMessages?.status)
               ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
               : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
           )}>
@@ -170,11 +181,11 @@ export function RoomForm({ initialData, onSubmit, isLoading }: RoomFormProps) {
             <SelectItem value="Maintenance">Maintenance</SelectItem>
           </SelectContent>
         </Select>
-        {form.formState.errors.status && (
+        {(form.formState.errors.status || submitValidationMessages?.status) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.status.message as string}
+              {(form.formState.errors.status?.message as string) || submitValidationMessages?.status?.[0]}
             </p>
           </div>
         )}

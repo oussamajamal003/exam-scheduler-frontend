@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 import { Button } from "../../components/ui/button";
 import { Student } from "../../schemas/student";
 import { Card, CardContent } from "../../components/ui/card";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
@@ -180,28 +180,6 @@ export function StudentsPage() {
         </Card>
       </div>
 
-      {/* Error Messages */}
-      {(createMutation.isError || updateMutation.isError) && (
-        <div className="grid gap-4 md:grid-cols-2 mb-8">
-          {createMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Create Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createMutation.error, "Failed to create student.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {updateMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Update Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateMutation.error, "Failed to update student.")}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
       {/* Students List */}
       <div className="mb-8">
         <StudentList
@@ -243,6 +221,16 @@ export function StudentsPage() {
               initialData={editingStudent ?? undefined}
               onSubmit={handleSubmit}
               isLoading={isSaving}
+              submitErrorMessage={
+                createMutation.isError || updateMutation.isError
+                  ? getApiErrorMessage(createMutation.error || updateMutation.error, "An error occurred while saving.")
+                  : undefined
+              }
+              submitValidationMessages={
+                createMutation.isError || updateMutation.isError
+                  ? getApiValidationErrors(createMutation.error || updateMutation.error)
+                  : undefined
+              }
             />
           </div>
         </DialogContent>

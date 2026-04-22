@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -11,6 +11,8 @@ import { CoursesPage } from '../pages/admin/CoursesPage';
 import { SupervisorsPage } from '@/pages/admin/SupervisorsPage';
 import { RoomsCentersPage } from '../pages/admin/RoomsCentersPage';
 import { DepartmentsPage } from '@/pages/admin/DepartmentsPage';
+import { CourseOfferingsPage } from '@/pages/admin/CourseOfferingsPage';
+import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard } from '@/guards/authguard';
@@ -30,9 +32,20 @@ const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   return <div className="p-4 text-zinc-950">{title}</div>;
 };
 
+const ScrollToTop: React.FC = () => {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [pathname]);
+
+  return null;
+};
+
 export const AppRoutes: React.FC = () => {
   return ( 
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* Public / Auth Routes */}
         <Route element={<AuthLayout />}>
@@ -61,7 +74,8 @@ export const AppRoutes: React.FC = () => {
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/semesters" element={<PlaceholderPage title="Semesters" />} />
-            <Route path="/course-offerings" element={<PlaceholderPage title="Course Offerings" />} />
+            <Route path="/course-offerings" element={<CourseOfferingsPage />} />
+            <Route path="/course-offerings/:id" element={<CourseOfferingDetailPage />} />
             <Route path="/enrollments" element={<PlaceholderPage title="Enrollments" />} />
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
             <Route path="/rooms" element={<RoomsCentersPage />} />

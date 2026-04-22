@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { Building2, Plus, RefreshCw, TrendingUp } from "lucide-react";
 
 import { RoomList } from "../../features/rooms/RoomList";
@@ -23,6 +23,11 @@ export function RoomsCentersPage() {
   const deleteMutation = useDeleteRoom();
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isErrorAction = createMutation.isError || updateMutation.isError;
+  const actionError = createMutation.error || updateMutation.error;
+
+  const submitErrorMessage = isErrorAction ? getApiErrorMessage(actionError, "Failed to save room.") : null;
+  const submitValidationMessages = isErrorAction ? getApiValidationErrors(actionError) : null;
 
   const openCreateModal = () => {
     setEditingRoom(null);
@@ -96,7 +101,7 @@ export function RoomsCentersPage() {
             <Building2 className="size-5" />
           </div>
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Rooms & Centers</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Rooms</h1>
             <p className="text-sm text-zinc-500 mt-0.5">Manage examination facilities and allocate testing spaces</p>
           </div>
         </div>
@@ -166,32 +171,14 @@ export function RoomsCentersPage() {
       </div>
 
       {/* Error Messages */}
-      {(createMutation.isError || updateMutation.isError || deleteMutation.isError) && (
+      {deleteMutation.isError && (
         <div className="grid gap-4 md:grid-cols-3 mb-8">
-          {createMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Create Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(createMutation.error, "Failed to create room.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {updateMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Update Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(updateMutation.error, "Failed to update room.")}</p>
-              </CardContent>
-            </Card>
-          )}
-          {deleteMutation.isError && (
-            <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
-              <CardContent className="p-4 sm:p-5">
-                <p className="text-sm font-semibold">Delete Error</p>
-                <p className="mt-2 text-sm">{getApiErrorMessage(deleteMutation.error, "Failed to delete room.")}</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="rounded-none border border-red-200 bg-red-50 text-red-900">
+            <CardContent className="p-4 sm:p-5">
+              <p className="text-sm font-semibold">Delete Error</p>
+              <p className="mt-2 text-sm">{getApiErrorMessage(deleteMutation.error, "Failed to delete room.")}</p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -215,7 +202,9 @@ export function RoomsCentersPage() {
             <RoomForm 
               initialData={editingRoom ?? undefined} 
               onSubmit={handleSubmit} 
-              isLoading={isSaving} 
+              isLoading={isSaving}
+              submitErrorMessage={submitErrorMessage}
+              submitValidationMessages={submitValidationMessages}
             />
           </div>
         </DialogContent>
