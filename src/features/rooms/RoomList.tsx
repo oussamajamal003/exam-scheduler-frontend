@@ -79,7 +79,7 @@ export function RoomList({ rooms, isLoading, isDeleting, onEditRoom, onDeleteRoo
                       <span className="font-bold text-zinc-950 text-sm">{room.name}</span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <span className="font-medium text-zinc-800 text-sm">{room.center}</span>
+                      <span className="font-medium text-zinc-800 text-sm">{room.centerName ?? "—"}</span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-sm font-semibold text-zinc-900">{room.capacity} <span className="text-zinc-500 font-normal">seats</span></TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">

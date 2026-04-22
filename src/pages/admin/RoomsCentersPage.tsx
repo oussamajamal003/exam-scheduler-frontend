@@ -215,7 +215,7 @@ export function RoomsCentersPage() {
         onCancel={() => setDeletingRoom(null)}
         onConfirm={confirmDelete}
         title="Delete Room"
-        description={`Are you sure you want to completely remove ${deletingRoom?.name} at ${deletingRoom?.center}? This could result in scheduling conflicts for active exams.`}
+        description={`Are you sure you want to completely remove ${deletingRoom?.name} at ${deletingRoom?.centerName ?? "this center"}? This could result in scheduling conflicts for active exams.`}
         isLoading={deleteMutation.isPending}
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete room.") : undefined}
       />

@@ -10,9 +10,12 @@ import { AIOptimizerPage } from '@/pages/admin/AIOptimizerPage';
 import { CoursesPage } from '../pages/admin/CoursesPage';
 import { SupervisorsPage } from '@/pages/admin/SupervisorsPage';
 import { RoomsCentersPage } from '../pages/admin/RoomsCentersPage';
+import { CentersPage } from '../pages/admin/CentersPage';
+import { TimeSlotsPage } from '../pages/admin/TimeSlotsPage';
 import { DepartmentsPage } from '@/pages/admin/DepartmentsPage';
 import { CourseOfferingsPage } from '@/pages/admin/CourseOfferingsPage';
 import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage';
+import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard } from '@/guards/authguard';
@@ -73,15 +76,15 @@ export const AppRoutes: React.FC = () => {
             <Route path="/ai" element={<AIOptimizerPage />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
-            <Route path="/semesters" element={<PlaceholderPage title="Semesters" />} />
+            <Route path="/semesters" element={<SemestersPage />} />
             <Route path="/course-offerings" element={<CourseOfferingsPage />} />
             <Route path="/course-offerings/:id" element={<CourseOfferingDetailPage />} />
             <Route path="/enrollments" element={<PlaceholderPage title="Enrollments" />} />
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
             <Route path="/rooms" element={<RoomsCentersPage />} />
-            <Route path="/centers" element={<RoomsCentersPage />} />
+            <Route path="/centers" element={<CentersPage />} />
             <Route path="/supervisors" element={<SupervisorsPage />} />
-            <Route path="/timeslots" element={<PlaceholderPage title="Time Slots" />} />
+            <Route path="/timeslots" element={<TimeSlotsPage />} />
             <Route path="/schedule" element={<PlaceholderPage title="Schedule Generation" />} />
             <Route path="/scheduling" element={<PlaceholderPage title="Schedule Generation" />} />
             <Route path="/conflicts" element={<PlaceholderPage title="Conflicts Detection" />} />

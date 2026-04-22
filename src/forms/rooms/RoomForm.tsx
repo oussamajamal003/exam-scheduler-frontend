@@ -2,11 +2,12 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { roomSchema, Room } from "../../schemas/room";
+import { useCenters } from "../../hooks/centers/useCenters";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Building2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface RoomFormProps {
@@ -18,30 +19,30 @@ interface RoomFormProps {
 }
 
 export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: RoomFormProps) {
+  const { data: centers = [], isLoading: centersLoading } = useCenters();
+
   const form = useForm({
     resolver: zodResolver(roomSchema),
-    defaultValues: initialData || {
-      name: "",
-      center: "",
-      capacity: undefined,
-      status: "Available",
+    defaultValues: {
+      name: initialData?.name ?? "",
+      centerId: initialData?.centerId ?? "",
+      centerName: initialData?.centerName ?? "",
+      capacity: initialData?.capacity ?? (undefined as unknown as number),
+      status: (initialData?.status ?? "Available") as "Available" | "Maintenance",
     },
     mode: "onChange",
   });
 
   useEffect(() => {
-    if (initialData) {
-      form.reset(initialData);
-      return;
-    }
-
     form.reset({
-      name: "",
-      center: "",
-      capacity: undefined,
-      status: "Available",
+      name: initialData?.name ?? "",
+      centerId: initialData?.centerId ?? "",
+      centerName: initialData?.centerName ?? "",
+      capacity: initialData?.capacity ?? (undefined as unknown as number),
+      status: (initialData?.status ?? "Available") as "Available" | "Maintenance",
     });
-  }, [form, initialData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData?.id]);
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
 
@@ -56,6 +57,7 @@ export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage,
         </div>
       )}
 
+      {/* Room Name */}
       <div className="space-y-2.5">
         <Label htmlFor="name" className="text-sm font-semibold text-zinc-950">
           Room Name
@@ -90,35 +92,51 @@ export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage,
         )}
       </div>
 
+      {/* Center Selector */}
       <div className="space-y-2.5">
-        <Label htmlFor="center" className="text-sm font-semibold text-zinc-950">
+        <Label htmlFor="centerId" className="text-sm font-semibold text-zinc-950">
           Center
         </Label>
         <div className="relative">
-          <Input
-            id="center"
-            {...form.register("center")}
-            className={cn(
-              "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              (form.formState.errors.center || submitValidationMessages?.center)
-                ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
-                : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
-            )}
-            disabled={isLoading}
-            placeholder="e.g., North Campus"
-          />
-          {(form.formState.errors.center || submitValidationMessages?.center) && (
-            <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
-          )}
-          {!(form.formState.errors.center || submitValidationMessages?.center) && !!form.watch("center") && (
-            <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
-          )}
+          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none z-10" />
+          <Select
+            value={form.watch("centerId")}
+            onValueChange={(value) => {
+              const selected = centers.find((c) => c.id === value);
+              form.setValue("centerId", value, { shouldValidate: true });
+              form.setValue("centerName", selected?.name ?? "");
+            }}
+            disabled={isLoading || centersLoading}
+          >
+            <SelectTrigger
+              id="centerId"
+              className={cn(
+                "h-10 pl-9 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
+                (form.formState.errors.centerId || submitValidationMessages?.centerId)
+                  ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
+                  : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              )}
+            >
+              <SelectValue placeholder={centersLoading ? "Loading centers…" : "Select a center"} />
+            </SelectTrigger>
+            <SelectContent>
+              {centers.length === 0 && !centersLoading && (
+                <SelectItem value="__empty__" disabled>No centers available</SelectItem>
+              )}
+              {centers.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.location ? <span className="text-zinc-400 ml-1 text-xs">— {c.location}</span> : null}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        {(form.formState.errors.center || submitValidationMessages?.center) && (
+        {(form.formState.errors.centerId || submitValidationMessages?.centerId) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {(form.formState.errors.center?.message as string) || submitValidationMessages?.center?.[0]}
+              {(form.formState.errors.centerId?.message as string) || submitValidationMessages?.centerId?.[0]}
             </p>
           </div>
         )}

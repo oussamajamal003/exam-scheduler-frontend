@@ -11,8 +11,9 @@ const mapBackendRoom = (room: any): Room => ({
   id: room.id,
   name: room.name,
   capacity: room.capacity,
-  center: room.center?.name || "Unknown Center",
-  status: room.status || "Available",
+  centerId: room.centerId ?? room.center?.id ?? "",
+  centerName: room.center?.name ?? "",
+  status: room.status ? room.status.toLowerCase().replace(/^./, (s: string) => s.toUpperCase()) as "Available" | "Maintenance" : "Available",
 });
 
 export const fetchRooms = async (): Promise<Room[]> => {
@@ -27,13 +28,17 @@ export const fetchRoom = async (id: string): Promise<Room> => {
 };
 
 export const createRoom = async (room: CreateRoomDto): Promise<Room> => {
-  const response = await axiosClient.post<ApiEnvelope<any>>("/rooms", room);
+  const { centerId, ...rest } = room;
+  const response = await axiosClient.post<ApiEnvelope<any>>("/rooms", { ...rest, centerId });
   if (!response.data?.data) throw new Error("Created room not found in API response");
   return mapBackendRoom(response.data.data);
 };
 
 export const updateRoom = async ({ id, data }: { id: string; data: UpdateRoomDto }): Promise<Room> => {
-  const response = await axiosClient.put<ApiEnvelope<any>>(`/rooms/${id}`, data);
+  const { centerId, ...rest } = data;
+  const payload: Record<string, unknown> = { ...rest };
+  if (centerId) payload.centerId = centerId;
+  const response = await axiosClient.put<ApiEnvelope<any>>(`/rooms/${id}`, payload);
   if (!response.data?.data) throw new Error("Updated room not found in API response");
   return mapBackendRoom(response.data.data);
 };
@@ -46,3 +51,4 @@ export const fetchAvailableRooms = async (): Promise<Room[]> => {
   const response = await axiosClient.get<ApiEnvelope<{ data: any[], meta?: unknown }>>("/rooms/available");
   return (response.data?.data?.data || []).map(mapBackendRoom);
 };
+
