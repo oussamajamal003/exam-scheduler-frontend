@@ -15,6 +15,7 @@ import { TimeSlotsPage } from '../pages/admin/TimeSlotsPage';
 import { DepartmentsPage } from '@/pages/admin/DepartmentsPage';
 import { CourseOfferingsPage } from '@/pages/admin/CourseOfferingsPage';
 import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage';
+import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
 import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
@@ -79,7 +80,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/semesters" element={<SemestersPage />} />
             <Route path="/course-offerings" element={<CourseOfferingsPage />} />
             <Route path="/course-offerings/:id" element={<CourseOfferingDetailPage />} />
-            <Route path="/enrollments" element={<PlaceholderPage title="Enrollments" />} />
+            <Route path="/enrollments" element={<EnrollmentsPage />} />
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
             <Route path="/rooms" element={<RoomsCentersPage />} />
             <Route path="/centers" element={<CentersPage />} />

@@ -1,22 +1,33 @@
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { studentSchema, Student } from "../../schemas/student";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import type { Program } from "../../schemas/program";
 
 interface StudentFormProps {
   initialData?: Student;
+  programs?: Program[];
+  isProgramsLoading?: boolean;
+  programsErrorMessage?: string;
   onSubmit: (data: Student) => void;
   isLoading?: boolean;
   submitErrorMessage?: string;
   submitValidationMessages?: Record<string, string[]>;
 }
 
-export function StudentForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: StudentFormProps) {
+export function StudentForm({ initialData, programs = [], isProgramsLoading, programsErrorMessage, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: StudentFormProps) {
   const form = useForm({
     resolver: zodResolver(studentSchema),
     defaultValues: initialData || {
@@ -24,6 +35,7 @@ export function StudentForm({ initialData, onSubmit, isLoading, submitErrorMessa
       firstName: "",
       lastName: "",
       email: "",
+      programId: undefined,
     },
     mode: "onChange",
   });
@@ -39,8 +51,15 @@ export function StudentForm({ initialData, onSubmit, isLoading, submitErrorMessa
       firstName: "",
       lastName: "",
       email: "",
+      programId: undefined,
     });
   }, [form, initialData]);
+
+  const selectedProgramId = useWatch({ control: form.control, name: "programId" });
+  const selectedProgram = useMemo(
+    () => programs.find((p) => p.id === selectedProgramId) ?? null,
+    [programs, selectedProgramId]
+  );
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
 
@@ -188,6 +207,50 @@ export function StudentForm({ initialData, onSubmit, isLoading, submitErrorMessa
             <p className="text-xs font-medium text-destructive leading-snug">
               {form.formState.errors.email?.message || submitValidationMessages?.email?.join(", ")}
             </p>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <Label htmlFor="programId" className="text-sm font-semibold text-zinc-950">
+          Program
+        </Label>
+        <Select
+          value={selectedProgramId || undefined}
+          onValueChange={(value) => {
+            const program = programs.find((p) => p.id === value);
+            form.setValue("programId", value, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+            form.setValue("program", program?.name ?? "", { shouldDirty: true });
+            form.setValue("department", program?.departmentName ?? program?.department?.name ?? "", { shouldDirty: true });
+          }}
+          disabled={isLoading || isProgramsLoading || programs.length === 0}
+        >
+          <SelectTrigger
+            id="programId"
+            className={cn(
+              "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
+              "hover:border-zinc-300 focus-visible:border-zinc-400"
+            )}
+          >
+            <SelectValue placeholder={isProgramsLoading ? "Loading programs..." : "Select a program"} />
+          </SelectTrigger>
+          <SelectContent>
+            {programs.map((program) => (
+              <SelectItem key={program.id} value={program.id ?? ""}>
+                {`${program.name} (${program.code})`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedProgram && (
+          <p className="text-xs text-zinc-500">
+            Department: {selectedProgram.departmentName ?? selectedProgram.department?.name ?? "Unassigned Department"}
+          </p>
+        )}
+        {programsErrorMessage && (
+          <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+            <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-xs font-medium text-destructive leading-snug">{programsErrorMessage}</p>
           </div>
         )}
       </div>

@@ -16,6 +16,8 @@ export const studentSchema = z.object({
     .regex(/^[a-zA-Z\s]+$/, { message: "Last name must contain only letters" }),
   email: z.string().email({ message: "Invalid email address" }),
   programId: z.string().uuid().optional(),
+  program: z.string().optional(),
+  department: z.string().optional(),
 });
 
 export type Student = z.infer<typeof studentSchema>;

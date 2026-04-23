@@ -7,6 +7,7 @@ import {
   useTimeSlots,
   useUpdateTimeSlot,
 } from "../../hooks/timeSlots/useTimeSlots";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -16,6 +17,7 @@ import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { CalendarCheck, Clock, ListChecks, Plus, RefreshCw, Search, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -43,7 +45,7 @@ const formatTimeForSearch = (value?: string) => {
 
 export function TimeSlotsPage() {
   const [search, setSearch] = useState("");
-  const { data: timeSlots = [], isLoading, isError, error, refetch } = useTimeSlots();
+  const { data: timeSlots = [], isLoading, isFetching, isError, error, refetch } = useTimeSlots();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null);
@@ -99,6 +101,14 @@ export function TimeSlotsPage() {
   const confirmDelete = () => {
     if (!deletingSlot?.id) return;
     deleteMutation.mutate(deletingSlot.id, { onSuccess: () => closeDeleteModal() });
+  };
+
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["timeSlots"] });
+    addToast({ type: "success", title: "Refreshed", description: "Time slot data has been refreshed." });
   };
 
   const filteredSlots = useMemo(() => {
@@ -180,10 +190,10 @@ export function TimeSlotsPage() {
         </Button>
         <Button
           variant="outline"
-          onClick={() => refetch()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
         <div className="relative sm:ml-auto sm:w-72">

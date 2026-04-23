@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { Building2, CalendarDays, Plus, RefreshCw, Search, TrendingUp } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,6 +11,7 @@ import { ProgramForm, type ProgramFormSubmitValues } from '@/forms/programs/Prog
 import { getApiErrorMessage, getApiValidationErrors } from '@/lib/apiError';
 import { useCreateDepartment, useDepartments, useUpdateDepartment } from '@/hooks/departments/useDepartments';
 import { useCreateProgram, useDeleteProgram, usePrograms, useUpdateProgram } from '@/hooks/programs/usePrograms';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Program } from '@/schemas/program';
 
 const formatDateTime = (value?: string) => {
@@ -33,14 +35,14 @@ export function DepartmentsPage() {
     isLoading: isDepartmentsLoading,
     isError: isDepartmentsError,
     error: departmentsError,
-    refetch: refetchDepartments,
+    isFetching: isFetchingDepartments,
   } = useDepartments('');
   const {
     data: programs = [],
     isLoading: isProgramsLoading,
     isError: isProgramsError,
     error: programsError,
-    refetch: refetchPrograms,
+    isFetching: isFetchingPrograms,
   } = usePrograms(deferredSearchTerm);
 
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
@@ -89,10 +91,18 @@ export function DepartmentsPage() {
     setIsProgramModalOpen(true);
   };
 
-  const handleRefresh = () => {
-    void refetchPrograms();
-    void refetchDepartments();
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['programs'] }),
+      queryClient.invalidateQueries({ queryKey: ['departments'] }),
+    ]);
+    addToast({ type: "success", title: "Refreshed", description: "Department data has been refreshed." });
   };
+
+  const isFetching = isFetchingDepartments || isFetchingPrograms;
 
   const submitErrorMessage = 
     createDepartmentMutation.isError ? getApiErrorMessage(createDepartmentMutation.error, 'Failed to create department.') :
@@ -225,7 +235,7 @@ export function DepartmentsPage() {
           onClick={handleRefresh}
           className="inline-flex h-10 items-center gap-2 rounded-none border-zinc-200 font-semibold text-zinc-950 transition-all hover:bg-zinc-50"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>

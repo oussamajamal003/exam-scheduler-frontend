@@ -69,21 +69,23 @@ export const fetchCourse = async (id: string): Promise<Course> => {
 };
 
 export const createCourse = async (course: CreateCourseDto): Promise<Course> => {
-  const payload = {
+  const payload: Record<string, unknown> = {
     code: course.code,
     title: course.name,
     programId: course.programId,
   };
+  if (course.semesterId) payload.semesterId = course.semesterId;
   const response = await axiosClient.post<ApiEnvelope<BackendCourse>>("/courses", payload);
   if (!response.data?.data) throw new Error("Created course not found in API response");
   return mapBackendCourse(response.data.data);
 };
 
 export const updateCourse = async ({ id, data }: { id: string; data: UpdateCourseDto }): Promise<Course> => {
-  const payload: Partial<Pick<BackendCourse, "code" | "title" | "programId">> = {};
+  const payload: Record<string, unknown> = {};
   if (data.code) payload.code = data.code;
   if (data.name) payload.title = data.name;
   if (data.programId) payload.programId = data.programId;
+  if (data.semesterId) payload.semesterId = data.semesterId;
   
   const response = await axiosClient.put<ApiEnvelope<BackendCourse>>(`/courses/${id}`, payload);
   if (!response.data?.data) throw new Error("Updated course not found in API response");

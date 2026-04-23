@@ -6,14 +6,16 @@ import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { Building2, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 import { RoomList } from "../../features/rooms/RoomList";
 import { RoomForm } from "../../forms/rooms/RoomForm";
 import { Room } from "../../schemas/room";
 import { useRooms, useCreateRoom, useUpdateRoom, useDeleteRoom } from "../../hooks/rooms/useRooms";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function RoomsCentersPage() {
-  const { data: rooms = [], isLoading, isError, error } = useRooms();
+  const { data: rooms = [], isLoading, isFetching, isError, error, refetch } = useRooms();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<Room | null>(null);
@@ -73,6 +75,14 @@ export function RoomsCentersPage() {
     }
   };
 
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    addToast({ type: "success", title: "Refreshed", description: "Room data has been refreshed." });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -86,7 +96,7 @@ export function RoomsCentersPage() {
       <div className="p-6">
         <Card className="p-6 space-y-3">
           <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load rooms.")}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -118,10 +128,10 @@ export function RoomsCentersPage() {
         </Button>
         <Button 
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>

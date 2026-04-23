@@ -7,6 +7,7 @@ import {
   useSemesters,
   useUpdateSemester,
 } from "../../hooks/semesters/useSemesters";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -16,10 +17,11 @@ import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { CalendarRange, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 export function SemestersPage() {
   const [search, setSearch] = useState("");
-  const { data: semesters = [], isLoading, isError, error, refetch } = useSemesters();
+  const { data: semesters = [], isLoading, isFetching, isError, error, refetch } = useSemesters();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
   const [deletingSemester, setDeletingSemester] = useState<Semester | null>(null);
@@ -75,6 +77,14 @@ export function SemestersPage() {
   const closeDeleteModal = () => {
     setDeletingSemester(null);
     deleteMutation.reset();
+  };
+
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["semesters"] });
+    addToast({ type: "success", title: "Refreshed", description: "Semester data has been refreshed." });
   };
 
   const confirmDelete = () => {
@@ -153,10 +163,10 @@ export function SemestersPage() {
         </Button>
         <Button
           variant="outline"
-          onClick={() => refetch()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
         <div className="relative sm:ml-auto sm:w-72">

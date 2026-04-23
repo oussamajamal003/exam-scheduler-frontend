@@ -6,6 +6,7 @@ import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
 import { BookOpen, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 import { CourseList } from "../../features/courses/CourseList";
 import { CourseForm } from "../../forms/courses/CourseForm";
@@ -13,9 +14,10 @@ import { Course } from "../../schemas/course";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "../../hooks/courses/useCourses";
 import { usePrograms } from "../../hooks/programs/usePrograms";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function CoursesPage() {
-  const { data: courses = [], isLoading, isError, error } = useCourses();
+  const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses();
   const programsQuery = usePrograms();
   const semestersQuery = useSemesters();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -84,6 +86,18 @@ export function CoursesPage() {
     }
   };
 
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["courses"] }),
+      queryClient.invalidateQueries({ queryKey: ["programs"] }),
+      queryClient.invalidateQueries({ queryKey: ["semesters"] }),
+    ]);
+    addToast({ type: "success", title: "Refreshed", description: "Course data has been refreshed." });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -97,7 +111,7 @@ export function CoursesPage() {
       <div className="p-6">
         <Card className="p-6 space-y-3">
           <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load courses.")}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -129,10 +143,10 @@ export function CoursesPage() {
         </Button>
         <Button 
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>

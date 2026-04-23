@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import {
@@ -30,6 +31,7 @@ import {
   useUpdateCourseOffering,
 } from "../../hooks/courseOfferings/useCourseOfferings";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   CourseOffering,
   CreateCourseOfferingDto,
@@ -125,11 +127,19 @@ export function CourseOfferingsPage() {
     navigate(`/course-offerings/${offering.id}`);
   };
 
-  const handleRefresh = () => {
-    void offeringsQuery.refetch();
-    void coursesQuery.refetch();
-    void semestersQuery.refetch();
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["course-offerings"] }),
+      queryClient.invalidateQueries({ queryKey: ["courses"] }),
+      queryClient.invalidateQueries({ queryKey: ["semesters"] }),
+    ]);
+    addToast({ type: "success", title: "Refreshed", description: "Course offering data has been refreshed." });
   };
+
+  const isFetching = offeringsQuery.isFetching || coursesQuery.isFetching || semestersQuery.isFetching;
 
   const handleSubmit = async (data: CreateCourseOfferingDto) => {
     if (editingOffering?.id) {
@@ -227,7 +237,7 @@ export function CourseOfferingsPage() {
           onClick={handleRefresh}
           className="inline-flex h-10 items-center gap-2 rounded-none border-zinc-200 font-semibold text-zinc-950 transition-all hover:bg-zinc-50 active:scale-95"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>

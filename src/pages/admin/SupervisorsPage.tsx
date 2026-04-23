@@ -6,14 +6,16 @@ import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
 import { Users, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 import { SupervisorList } from "../../features/supervisors/SupervisorList";
 import { SupervisorForm } from "../../forms/supervisors/SupervisorForm";
 import { Supervisor } from "../../schemas/supervisor";
 import { useSupervisors, useCreateSupervisor, useUpdateSupervisor, useDeleteSupervisor } from "../../hooks/supervisors/useSupervisors";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function SupervisorsPage() {
-  const { data: supervisors = [], isLoading, isError, error } = useSupervisors();
+  const { data: supervisors = [], isLoading, isFetching, isError, error, refetch } = useSupervisors();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null);
   const [workloadSupervisor, setWorkloadSupervisor] = useState<Supervisor | null>(null);
@@ -69,6 +71,14 @@ export function SupervisorsPage() {
     }
   };
 
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["supervisors"] });
+    addToast({ type: "success", title: "Refreshed", description: "Supervisor data has been refreshed." });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -82,7 +92,7 @@ export function SupervisorsPage() {
       <div className="p-6">
         <Card className="p-6 space-y-3">
           <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load supervisors.")}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -114,10 +124,10 @@ export function SupervisorsPage() {
         </Button>
         <Button 
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>

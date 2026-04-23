@@ -20,10 +20,21 @@ type PaginatedStudentsPayload = {
 type BackendStudent = {
   id: string;
   universityId: string;
+  programId?: string | null;
   user?: {
     name?: string;
     email?: string;
   };
+  program?: {
+    id?: string;
+    name?: string;
+    code?: string;
+    department?: {
+      id?: string;
+      name?: string;
+      code?: string;
+    } | null;
+  } | null;
 };
 
 export type StudentExam = {
@@ -49,6 +60,9 @@ const mapBackendStudent = (student: BackendStudent): Student => {
     firstName: firstName ?? "",
     lastName: lastNameParts.join(" ") || "",
     email: student.user?.email ?? "",
+    programId: student.program?.id ?? student.programId ?? undefined,
+    program: student.program?.name ?? "",
+    department: student.program?.department?.name ?? "",
   };
 };
 
@@ -82,10 +96,14 @@ export const createStudent = async (data: CreateStudentDto): Promise<Student> =>
 };
 
 export const updateStudent = async (id: string, data: UpdateStudentDto): Promise<Student> => {
-  const response = await axiosClient.put<ApiEnvelope<BackendStudent>>(`/students/${id}`, {
-    universityId: data.universityId,
-    ...(data.programId ? { programId: data.programId } : {}),
-  });
+  const payload: Record<string, unknown> = {};
+  if (data.universityId) payload.universityId = data.universityId;
+  if (data.firstName) payload.firstName = data.firstName;
+  if (data.lastName) payload.lastName = data.lastName;
+  if (data.email) payload.email = data.email;
+  if (data.programId) payload.programId = data.programId;
+
+  const response = await axiosClient.put<ApiEnvelope<BackendStudent>>(`/students/${id}`, payload);
   if (!response.data?.data) {
     throw new Error("Updated student payload is missing in API response");
   }

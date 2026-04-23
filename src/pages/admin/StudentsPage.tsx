@@ -2,6 +2,8 @@ import { useState } from "react";
 import { StudentList } from "../../features/students/StudentList";
 import { StudentForm } from "../../forms/students/StudentForm";
 import { useCreateStudent, useDeleteStudent, useStudentExams, useStudents, useUpdateStudent } from "../../hooks/students/useStudents";
+import { usePrograms } from "../../hooks/programs/usePrograms";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Student } from "../../schemas/student";
@@ -11,9 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { Users, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { useToast } from "../../components/ui/toast";
 
 export function StudentsPage() {
-  const { data: students = [], isLoading, isError, error } = useStudents();
+  const { data: students = [], isLoading, isFetching, isError, error, refetch } = useStudents();
+  const programsQuery = usePrograms();
+  const programs = programsQuery.data ?? [];
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [examStudent, setExamStudent] = useState<Student | null>(null);
@@ -79,6 +84,17 @@ export function StudentsPage() {
     });
   };
 
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["students"] }),
+      queryClient.invalidateQueries({ queryKey: ["programs"] }),
+    ]);
+    addToast({ type: "success", title: "Refreshed", description: "Student data has been refreshed." });
+  };
+
   const exams = examsQuery.data ?? [];
   const pageErrorMessage = getApiErrorMessage(error, "Failed to load students.");
   const examErrorMessage = getApiErrorMessage(examsQuery.error, "Failed to load student exams.");
@@ -96,7 +112,7 @@ export function StudentsPage() {
       <div className="p-6">
         <Card className="p-6 space-y-3">
           <p className="text-sm text-red-600">{pageErrorMessage}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -128,10 +144,10 @@ export function StudentsPage() {
         </Button>
         <Button 
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
@@ -219,6 +235,13 @@ export function StudentsPage() {
           <div className="mt-4">
             <StudentForm
               initialData={editingStudent ?? undefined}
+              programs={programs}
+              isProgramsLoading={programsQuery.isLoading}
+              programsErrorMessage={
+                programsQuery.isError
+                  ? getApiErrorMessage(programsQuery.error, "Failed to load programs.")
+                  : undefined
+              }
               onSubmit={handleSubmit}
               isLoading={isSaving}
               submitErrorMessage={
