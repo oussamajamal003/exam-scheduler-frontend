@@ -9,6 +9,7 @@ import {
   Calendar,
   CalendarClock,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock,
@@ -24,11 +25,11 @@ import {
   UserCog,
   UserRound,
   Users,
-  X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,7 @@ type NavItem = {
 
 type NavSection = {
   title: string;
+  icon: React.ComponentType<{ className?: string }>;
   items: NavItem[];
 };
 
@@ -81,11 +83,13 @@ const managementItems: NavItem[] = [
 const configurationItems: NavItem[] = [{ label: 'Settings', to: '/settings', icon: Settings }];
 
 const sidebarSections: NavSection[] = [
-  { title: 'Overview', items: overviewItems },
-  { title: 'Academic', items: academicItems },
-  { title: 'Management', items: managementItems },
-  { title: 'Configuration', items: configurationItems },
+  { title: 'Overview', icon: LayoutDashboard, items: overviewItems },
+  { title: 'Academic', icon: GraduationCap, items: academicItems },
+  { title: 'Management', icon: Users, items: managementItems },
+  { title: 'Configuration', icon: Settings, items: configurationItems },
 ];
+
+const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
 
 const routeMap: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Monitor scheduling operations and platform health in one command center.' },
@@ -143,17 +147,71 @@ const getTokenPayload = () => {
 const SectionGroup: React.FC<{
   section: NavSection;
   isOpen: boolean;
+  isCollapsed: boolean;
   onOpenChange: (open: boolean) => void;
   onItemSelect: () => void;
-}> = ({ section, isOpen, onOpenChange, onItemSelect }) => {
+}> = ({ section, isOpen, isCollapsed, onOpenChange, onItemSelect }) => {
   const location = useLocation();
   const hasActiveChild = section.items.some((item) => location.pathname === item.to);
+  const SectionIcon = section.icon;
 
   React.useEffect(() => {
     if (hasActiveChild && !isOpen) {
       onOpenChange(true);
     }
   }, [hasActiveChild, isOpen, onOpenChange]);
+
+  if (isCollapsed) {
+    return (
+      <DropdownMenu>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`${section.title} navigation`}
+                className={cn(
+                  'mx-auto flex size-11 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+                  hasActiveChild
+                    ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
+                    : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
+                )}
+              >
+                <SectionIcon className="size-5" />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={20} className="font-semibold">
+            {section.title}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl p-2">
+          <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {section.items.map((item) => {
+            const isActive = location.pathname === item.to;
+            return (
+              <DropdownMenuItem key={item.to} asChild className={cn(isActive && 'bg-zinc-950 text-white focus:bg-zinc-950 focus:text-white')}>
+                <NavLink
+                  to={item.to}
+                  onClick={onItemSelect}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
+                    isActive 
+                      ? 'bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white focus:bg-zinc-900 focus:text-white' 
+                      : 'text-zinc-700 hover:bg-zinc-100 focus:bg-zinc-100'
+                  )}
+                >
+                  <item.icon className="size-4 shrink-0" />
+                  <span>{item.label}</span>
+                </NavLink>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   return (
     <Collapsible open={isOpen} onOpenChange={onOpenChange}>
@@ -212,11 +270,17 @@ export const AdminLayout: React.FC = () => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true');
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(sidebarSections.map((section) => [section.title, true]))
   );
 
   const closeSidebar = () => setIsSidebarOpen(false);
+  const toggleSidebarCollapse = () => setIsCollapsed((prev) => !prev);
+
+  React.useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+  }, [isCollapsed]);
 
   React.useEffect(() => {
     setIsSidebarOpen(false);
@@ -237,42 +301,140 @@ export const AdminLayout: React.FC = () => {
     setOpenSections((prev) => ({ ...prev, [title]: open }));
   };
 
+  const sidebarAccountMenu = (
+    <DropdownMenu>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open account menu"
+              className={cn(
+                'group mt-4 flex shrink-0 items-center border border-zinc-200/80 bg-white/85 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+                isCollapsed ? 'mx-auto size-12 justify-center rounded-2xl p-0' : 'w-full gap-3 rounded-2xl px-3 py-3'
+              )}
+            >
+              <div className="flex size-9 shrink-0 transition-all duration-300 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15">
+                {userInitials}
+              </div>
+              <div
+                className={cn(
+                  'min-w-0 text-left transition-all duration-300 opacity-100 whitespace-nowrap overflow-hidden',
+                  isCollapsed ? 'w-0 px-0 opacity-0' : 'w-full'
+                )}
+              >
+                <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
+                <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        {isCollapsed && (
+          <TooltipContent side="right" sideOffset={14} className="font-medium">
+            {userName} &middot; {userRole}
+          </TooltipContent>
+        )}
+      </Tooltip>
+      <DropdownMenuContent
+        side={isCollapsed ? 'right' : 'top'}
+        align={isCollapsed ? 'center' : 'start'}
+        sideOffset={14}
+        className="w-64 rounded-2xl p-2"
+      >
+        <DropdownMenuLabel>
+          <div className="space-y-1 normal-case tracking-normal">
+            <p className="text-sm font-semibold tracking-tight text-zinc-950">{userName}</p>
+            <p className="text-xs font-medium text-zinc-500">{userRole}</p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings" className="cursor-pointer" onClick={closeSidebar}>
+            <UserRound className="size-4" />
+            <span>Manage Profile</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
+          <Trash2 className="size-4" />
+          <span>Delete Account</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
+          <LogOut className="size-4" />
+          <span>Logout</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const sidebarContent = (
     <>
-      <div className="shrink-0 flex items-center gap-3 px-2 pb-4 mb-1 border-b border-zinc-100">
+      <div
+        className={cn(
+          'mb-3 flex shrink-0 items-center border-b border-zinc-100 pb-4 transition-all duration-300',
+          isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'
+        )}
+      >
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm">
           <Sparkles className="size-4 text-zinc-50" />
         </div>
-        <div className="min-w-0">
+        <div
+          className={cn(
+            'min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300',
+            isCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'
+          )}
+        >
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
           <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!isCollapsed}
+          onClick={toggleSidebarCollapse}
+          className={cn(
+            'size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10',
+            isCollapsed ? 'absolute -right-4 top-4' : 'ml-auto'
+          )}
+        >
+          {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 pr-0.5 [scrollbar-gutter:stable]">
-        <div className="space-y-1.5">
+        <div className={cn('transition-all duration-300', isCollapsed ? 'space-y-2.5 pt-1' : 'space-y-1.5')}>
           {sidebarSections.map((section) => (
             <SectionGroup
               key={section.title}
               section={section}
               isOpen={openSections[section.title] ?? true}
+              isCollapsed={isCollapsed}
               onOpenChange={(open) => toggleSection(section.title, open)}
               onItemSelect={closeSidebar}
             />
           ))}
         </div>
       </div>
+      {sidebarAccountMenu}
     </>
   );
 
   return (
-    <div className="min-h-screen bg-zinc-50/60 text-zinc-950 selection:bg-zinc-200">
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <TooltipProvider delayDuration={200}>
+      <div className="min-h-screen bg-zinc-50/60 text-zinc-950 selection:bg-zinc-200">
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-zinc-200/30 blur-3xl" />
         <div className="absolute right-0 top-24 h-80 w-80 rounded-full bg-sky-100/40 blur-3xl" />
       </div>
 
-      <aside className="fixed inset-y-0 left-0 z-50 hidden w-[320px] flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl md:flex">
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex',
+          isCollapsed ? 'w-24' : 'w-80'
+        )}
+      >
         {sidebarContent}
       </aside>
 
@@ -287,26 +449,15 @@ export const AdminLayout: React.FC = () => {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[86vw] max-w-[320px] flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-transform duration-300 ease-out md:hidden',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,width,max-width] duration-300 ease-out md:hidden',
+          isCollapsed ? 'w-24 max-w-24' : 'w-[86vw] max-w-[320px]',
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="mb-3 flex items-center justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Close menu"
-            onClick={closeSidebar}
-            className="rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
-          >
-            <X className="size-5" />
-          </Button>
-        </div>
         {sidebarContent}
       </aside>
 
-      <div className="flex min-h-screen flex-col md:pl-80">
+      <div className={cn('flex min-h-screen flex-col transition-[padding-left] duration-300 ease-out', isCollapsed ? 'md:pl-24' : 'md:pl-80')}>
         <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/72 backdrop-blur-xl">
           <div className="flex h-19 items-center gap-4 px-4 sm:px-6 lg:px-8">
             <Button
@@ -444,5 +595,6 @@ export const AdminLayout: React.FC = () => {
         }}
       />
     </div>
+    </TooltipProvider>
   );
 };

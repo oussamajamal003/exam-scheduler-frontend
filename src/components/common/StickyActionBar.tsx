@@ -53,14 +53,15 @@ export function StickyActionBar({ children, className }: StickyActionBarProps) {
       ref={actionBarRef}
       data-stuck={isStuck ? "true" : "false"}
       className={cn(
-        "group sticky top-19 z-20 mb-8 border-y py-3 transition-[background-color,border-color,backdrop-filter]",
+        "group sticky top-[76px] z-20 mb-8 flex transition-all duration-200 items-center border-y",
         isStuck
-          ? "border-zinc-200/70 bg-stone-50/95 backdrop-blur supports-backdrop-filter:bg-stone-50/80"
-          : "border-transparent bg-transparent",
-        className
+          ? "h-[76px] border-zinc-200/70 bg-transparent backdrop-blur-md -mx-5 px-5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 shadow-sm"
+          : "py-2 border-transparent bg-transparent",
       )}
     >
-      {children}
+      <div className={cn("w-full", className)}>
+        {children}
+      </div>
     </div>
   );
 }
