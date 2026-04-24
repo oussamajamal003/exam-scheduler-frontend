@@ -42,6 +42,8 @@ type BackendCourse = {
       startDate?: string;
     } | null;
     _count?: { registrations?: number; exams?: number };
+    registrations?: unknown[];
+    exams?: unknown[];
   }>;
 };
 
@@ -68,9 +70,11 @@ const mapBackendCourse = (course: BackendCourse): Course => {
     name: course.title,
     credits: course.credits ?? undefined,
     programId: course.program?.id ?? course.programId ?? "",
+    programRef: course.program ?? null,
     program: course.program?.name ?? "Unassigned Program",
     semesterId,
     semester: semesterName,
+    courseOfferings: course.courseOfferings ?? [],
   };
 };
 
@@ -102,8 +106,8 @@ export const fetchCourseDetail = async (id: string): Promise<CourseDetail> => {
         id: o.id as string,
         semesterId: o.semester?.id ?? "",
         semesterName: o.semester?.name ?? "Unknown Semester",
-        registrationsCount: o._count?.registrations ?? 0,
-        examsCount: o._count?.exams ?? 0,
+        registrationsCount: o.registrations?.length ?? o._count?.registrations ?? 0,
+        examsCount: o.exams?.length ?? o._count?.exams ?? 0,
       })),
   };
 };

@@ -61,6 +61,8 @@ const mapBackendStudent = (student: BackendStudent): Student => {
     lastName: lastNameParts.join(" ") || "",
     email: student.user?.email ?? "",
     programId: student.program?.id ?? student.programId ?? undefined,
+    user: student.user ?? null,
+    programRef: student.program ?? null,
     program: student.program?.name ?? "",
     department: student.program?.department?.name ?? "",
   };

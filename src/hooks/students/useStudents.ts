@@ -25,7 +25,7 @@ export const useCreateStudent = () => {
         description: `${data.firstName} ${data.lastName} has been successfully added to the system.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Add Student",
@@ -49,7 +49,7 @@ export const useUpdateStudent = () => {
         description: `${data.firstName} ${data.lastName}'s information has been successfully updated.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Update Student",
@@ -74,7 +74,7 @@ export const useDeleteStudent = () => {
         description: "The student has been successfully removed from the system.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Delete Student",

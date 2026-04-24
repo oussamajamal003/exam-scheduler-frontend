@@ -21,6 +21,7 @@ type BackendSemester = {
   isCurrent?: boolean;
   academicYear?: string | null;
   status?: "ACTIVE" | "UPCOMING" | "PAST";
+  courseOfferings?: unknown[];
   _count?: {
     courseOfferings?: number;
   };
@@ -35,7 +36,8 @@ const mapBackendSemester = (semester: BackendSemester): Semester => ({
   isCurrent: semester.isCurrent ?? false,
   academicYear: semester.academicYear ?? undefined,
   status: semester.status,
-  courseOfferingsCount: semester._count?.courseOfferings ?? 0,
+  courseOfferings: semester.courseOfferings ?? [],
+  courseOfferingsCount: semester.courseOfferings?.length ?? semester._count?.courseOfferings ?? 0,
 });
 
 const toIsoDateTime = (value: string): string => {

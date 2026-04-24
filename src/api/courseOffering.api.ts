@@ -30,8 +30,9 @@ type BackendProgram = {
 
 type BackendCourse = {
   id: string;
+  name?: string;
   code: string;
-  title: string;
+  title?: string;
   credits?: number | null;
   description?: string | null;
   programId?: string | null;
@@ -90,7 +91,11 @@ type BackendOfferingList = {
   courseId: string;
   semesterId: string;
   course?: BackendCourse | null;
+  program?: BackendProgram | null;
   semester?: BackendSemester | null;
+  enrollments?: BackendRegistration[] | null;
+  registrations?: BackendRegistration[] | null;
+  exams?: BackendExam[] | null;
   section?: string | null;
   instructor?: string | null;
   expectedStudents?: number;
@@ -117,10 +122,12 @@ type BackendOfferingDetail = BackendOfferingList & {
 
 const mapBackendCourse = (course?: BackendCourse | null): OfferingCourse | null => {
   if (!course) return null;
+  const title = course.title ?? course.name ?? "Untitled course";
   return {
     id: course.id,
+    name: course.name ?? title,
     code: course.code,
-    title: course.title,
+    title,
     credits: course.credits ?? null,
     description: course.description ?? null,
     program: course.program
@@ -152,33 +159,42 @@ const mergeOfferingCourse = (
 const mapBackendOffering = (
   offering: BackendOfferingList,
   fallbackCourse?: OfferingCourse | null
-): CourseOffering => ({
-  id: offering.id,
-  courseId: offering.courseId,
-  semesterId: offering.semesterId,
-  course: mergeOfferingCourse(offering.course, fallbackCourse),
-  semester: offering.semester
-    ? {
-        id: offering.semester.id,
-        name: offering.semester.name,
-        startDate: offering.semester.startDate,
-        endDate: offering.semester.endDate,
-      }
-    : null,
-  section: offering.section ?? null,
-  instructor: offering.instructor ?? null,
-  expectedStudents: offering.expectedStudents ?? 0,
-  capacity: offering.capacity ?? null,
-  day: offering.day ?? null,
-  time: offering.time ?? null,
-  roomLabel: offering.roomLabel ?? null,
-  notes: offering.notes ?? null,
-  status: offering.status ?? "ACTIVE",
-  createdAt: offering.createdAt,
-  updatedAt: offering.updatedAt,
-  registrationsCount: offering._count?.registrations ?? 0,
-  examsCount: offering._count?.exams ?? 0,
-});
+): CourseOffering => {
+  const course = mergeOfferingCourse(offering.course, fallbackCourse);
+  const enrollments = offering.enrollments ?? offering.registrations ?? [];
+  const exams = offering.exams ?? [];
+
+  return {
+    id: offering.id,
+    courseId: offering.courseId,
+    semesterId: offering.semesterId,
+    course,
+    program: offering.program ?? course?.program ?? null,
+    semester: offering.semester
+      ? {
+          id: offering.semester.id,
+          name: offering.semester.name,
+          startDate: offering.semester.startDate,
+          endDate: offering.semester.endDate,
+        }
+      : null,
+    section: offering.section ?? null,
+    instructor: offering.instructor ?? null,
+    expectedStudents: offering.expectedStudents ?? 0,
+    capacity: offering.capacity ?? null,
+    day: offering.day ?? null,
+    time: offering.time ?? null,
+    roomLabel: offering.roomLabel ?? null,
+    notes: offering.notes ?? null,
+    status: offering.status ?? "ACTIVE",
+    createdAt: offering.createdAt,
+    updatedAt: offering.updatedAt,
+    enrollments,
+    exams,
+    registrationsCount: enrollments.length || offering._count?.registrations || 0,
+    examsCount: exams.length || offering._count?.exams || 0,
+  };
+};
 
 const mapBackendRegistration = (
   registration: BackendRegistration
@@ -244,18 +260,15 @@ const fetchCourseForOffering = async (courseId: string): Promise<OfferingCourse 
 // ===== Public API =====
 
 export const fetchCourseOfferings = async (search = ""): Promise<CourseOffering[]> => {
-  const [offeringsResponse, coursesById] = await Promise.all([
-    axiosClient.get<ApiEnvelope<PaginatedResponse<BackendOfferingList>>>(
-      "/course-offerings",
-      {
-        params: { limit: 100, search: search || undefined },
-      }
-    ),
-    fetchCoursesIndex(),
-  ]);
+  const offeringsResponse = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendOfferingList>>>(
+    "/course-offerings",
+    {
+      params: { limit: 100, search: search || undefined },
+    }
+  );
 
   return (offeringsResponse.data?.data?.data ?? []).map((offering) =>
-    mapBackendOffering(offering, coursesById.get(offering.courseId) ?? null)
+    mapBackendOffering(offering)
   );
 };
 
@@ -265,11 +278,7 @@ export const fetchCourseOffering = async (id: string): Promise<CourseOfferingDet
   );
   if (!response.data?.data) throw new Error("Course offering not found in API response");
 
-  const relatedCourse = response.data.data.courseId
-    ? await fetchCourseForOffering(response.data.data.courseId)
-    : null;
-
-  return mapBackendOfferingDetail(response.data.data, relatedCourse);
+  return mapBackendOfferingDetail(response.data.data);
 };
 
 export const createCourseOffering = async (

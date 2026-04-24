@@ -147,11 +147,15 @@ export function EnrollmentList({
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="flex items-center gap-3">
                         <div className="flex size-9 items-center justify-center rounded-none bg-zinc-100 text-xs font-bold text-zinc-700">
-                          {(enrollment.student?.user?.name?.[0] ?? "?").toUpperCase()}
+                          {(
+                            enrollment.student?.fullName?.[0] ??
+                            enrollment.student?.user?.name?.[0] ??
+                            "?"
+                          ).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-zinc-950">
-                            {enrollment.student?.user?.name ?? "Unknown student"}
+                            {enrollment.student?.fullName ?? enrollment.student?.user?.name ?? "Unknown student"}
                           </div>
                           <p className="mt-0.5 truncate text-xs text-zinc-500">
                             {enrollment.student?.user?.email ??
@@ -163,7 +167,7 @@ export function EnrollmentList({
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950">
-                        {enrollment.courseOffering?.course?.title ?? "Untitled course"}
+                        {enrollment.courseOffering?.course?.title ?? enrollment.courseOffering?.course?.name ?? "Untitled course"}
                       </div>
                       <p className="mt-0.5 text-xs text-zinc-500">
                         {enrollment.courseOffering?.section
@@ -177,10 +181,10 @@ export function EnrollmentList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
-                      {enrollment.courseOffering?.course?.program?.name ?? "Unassigned"}
+                      {enrollment.program?.name ?? enrollment.courseOffering?.program?.name ?? enrollment.courseOffering?.course?.program?.name ?? "Unassigned"}
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
-                      {enrollment.courseOffering?.semester?.name ?? "—"}
+                      {enrollment.semester?.name ?? enrollment.courseOffering?.semester?.name ?? "—"}
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <span

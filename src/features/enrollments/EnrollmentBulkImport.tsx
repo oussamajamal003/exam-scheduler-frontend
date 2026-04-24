@@ -112,7 +112,7 @@ export function EnrollmentBulkImport({
 
       if (idx.studentEmail === -1) {
         setParseError(
-          'CSV must include a "studentEmail" column, plus either "courseOfferingId" or both "courseCode" and "semester".'
+          'CSV must include "studentEmail", "courseCode", and "semester" columns.'
         );
         setParsedRows([]);
         return;
@@ -120,7 +120,7 @@ export function EnrollmentBulkImport({
 
       if (idx.courseOfferingId === -1 && (idx.courseCode === -1 || idx.semester === -1)) {
         setParseError(
-          'Provide either "courseOfferingId" OR both "courseCode" and "semester" columns.'
+          'Provide both "courseCode" and "semester" columns so offerings can be matched by relational data.'
         );
         setParsedRows([]);
         return;
@@ -160,17 +160,17 @@ export function EnrollmentBulkImport({
         if (studentEmail && !student) errors.push(`Student "${studentEmail}" not found`);
 
         let offering: CourseOffering | undefined;
-        if (offeringId) {
-          offering = offeringById.get(offeringId);
-          if (!offering) errors.push(`courseOfferingId "${offeringId}" not found`);
-        } else if (courseCode && semester) {
+        if (courseCode && semester) {
           offering = offeringByCodeSem.get(
             `${normalize(courseCode)}::${normalize(semester)}`
           );
           if (!offering)
             errors.push(`Offering for ${courseCode} (${semester}) not found`);
+        } else if (offeringId) {
+          offering = offeringById.get(offeringId);
+          if (!offering) errors.push("Course offering reference was not found");
         } else {
-          errors.push("Provide courseOfferingId OR (courseCode + semester)");
+          errors.push("Provide courseCode and semester");
         }
 
         if (student && offering) {
@@ -195,7 +195,7 @@ export function EnrollmentBulkImport({
           resolvedStudentName: student
             ? `${student.firstName} ${student.lastName}`.trim()
             : undefined,
-          resolvedCourseTitle: offering?.course?.title,
+          resolvedCourseTitle: offering?.course?.title ?? offering?.course?.name,
           status: errors.length === 0 ? "valid" : "invalid",
           errors,
         };
@@ -247,9 +247,7 @@ export function EnrollmentBulkImport({
               Required column: <code className="rounded-none bg-white px-1 py-0.5 text-xs font-semibold">studentEmail</code>
             </p>
             <p>
-              Plus either <code className="rounded-none bg-white px-1 py-0.5 text-xs font-semibold">courseOfferingId</code>{" "}
-              OR both{" "}
-              <code className="rounded-none bg-white px-1 py-0.5 text-xs font-semibold">courseCode</code>{" "}
+              Plus <code className="rounded-none bg-white px-1 py-0.5 text-xs font-semibold">courseCode</code>{" "}
               and{" "}
               <code className="rounded-none bg-white px-1 py-0.5 text-xs font-semibold">semester</code>
             </p>
@@ -263,6 +261,7 @@ export function EnrollmentBulkImport({
           ref={fileInputRef}
           type="file"
           accept=".csv,text/csv"
+          title="Choose enrollment CSV file"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -286,6 +285,8 @@ export function EnrollmentBulkImport({
             <button
               type="button"
               onClick={reset}
+              aria-label="Clear selected CSV file"
+              title="Clear selected CSV file"
               className="ml-1 text-zinc-400 hover:text-zinc-700"
             >
               <X className="size-3.5" />
@@ -332,7 +333,7 @@ export function EnrollmentBulkImport({
             </div>
           </div>
 
-          <div className="max-h-[340px] overflow-y-auto overflow-x-auto rounded-none border border-zinc-200/80">
+          <div className="max-h-85 overflow-y-auto overflow-x-auto rounded-none border border-zinc-200/80">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b border-zinc-200/60 bg-zinc-50/40">
@@ -374,8 +375,7 @@ export function EnrollmentBulkImport({
                       <div className="font-semibold text-zinc-950">
                         {row.resolvedCourseTitle ??
                           row.courseCode ??
-                          row.courseOfferingId ??
-                          "—"}
+                          "Unknown offering"}
                       </div>
                       {row.semester && (
                         <p className="text-xs text-zinc-500">{row.semester}</p>

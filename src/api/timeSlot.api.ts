@@ -28,7 +28,8 @@ const mapBackendTimeSlot = (slot: BackendTimeSlot): TimeSlot => ({
   startTime: slot.startTime,
   endTime: slot.endTime,
   duration: slot.duration ?? undefined,
-  assignmentsCount: slot._count?.assignments ?? slot.assignments?.length ?? 0,
+  assignments: slot.assignments ?? [],
+  assignmentsCount: slot.assignments?.length ?? slot._count?.assignments ?? 0,
 });
 
 const combineDateTime = (date: string, time: string): string => {

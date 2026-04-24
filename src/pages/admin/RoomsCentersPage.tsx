@@ -86,7 +86,7 @@ export function RoomsCentersPage() {
     const term = deferredSearch.toLowerCase();
     if (!term) return rooms;
     return rooms.filter((r) =>
-      [r.name, r.centerName, r.status]
+      [r.name, r.center?.name, r.centerName, r.status]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term))
     );
@@ -250,7 +250,7 @@ export function RoomsCentersPage() {
         onCancel={() => setDeletingRoom(null)}
         onConfirm={confirmDelete}
         title="Delete Room"
-        description={`Are you sure you want to completely remove ${deletingRoom?.name} at ${deletingRoom?.centerName ?? "this center"}? This could result in scheduling conflicts for active exams.`}
+        description={`Are you sure you want to completely remove ${deletingRoom?.name} at ${deletingRoom?.center?.name ?? deletingRoom?.centerName ?? "this center"}? This could result in scheduling conflicts for active exams.`}
         isLoading={deleteMutation.isPending}
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete room.") : undefined}
       />

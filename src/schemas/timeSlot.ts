@@ -6,6 +6,7 @@ export const timeSlotSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   duration: z.number().optional(),
+  assignments: z.array(z.unknown()).optional(),
   assignmentsCount: z.number().optional().default(0),
 });
 

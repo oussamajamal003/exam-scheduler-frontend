@@ -149,6 +149,7 @@ export function TimeSlotList({
               ) : (
                 slotRows.map((slot, idx) => {
                   const inConflict = conflictIds.has(slot.id);
+                  const assignmentsCount = slot?.assignments?.length ?? slot?.assignmentsCount ?? 0;
                   return (
                     <TableRow
                       key={slot.id}
@@ -179,7 +180,7 @@ export function TimeSlotList({
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">
                         <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-10">
-                          {slot?.assignmentsCount ?? 0}
+                          {assignmentsCount}
                         </span>
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">

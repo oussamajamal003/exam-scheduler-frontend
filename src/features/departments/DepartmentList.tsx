@@ -129,7 +129,7 @@ export function DepartmentList({
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="inline-flex items-center rounded-none bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                         <BookOpen className="mr-1.5 size-3.5" />
-                        {program.courses?.length ?? 0} Courses
+                        {program.courses?.length ?? program.totalCourses ?? 0} Courses
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{formatDate(program.createdAt)}</TableCell>

@@ -5,6 +5,7 @@ export type OfferingStatus = z.infer<typeof offeringStatusSchema>;
 
 export const offeringCourseSchema = z.object({
   id: z.string(),
+  name: z.string().optional(),
   code: z.string(),
   title: z.string(),
   credits: z.number().nullable().optional(),
@@ -35,6 +36,14 @@ export const courseOfferingSchema = z.object({
   courseId: z.string(),
   semesterId: z.string(),
   course: offeringCourseSchema.nullable().optional(),
+  program: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
   semester: offeringSemesterSchema.nullable().optional(),
   section: z.string().nullable().optional(),
   instructor: z.string().nullable().optional(),
@@ -49,6 +58,8 @@ export const courseOfferingSchema = z.object({
   updatedAt: z.string().optional(),
   registrationsCount: z.number().optional().default(0),
   examsCount: z.number().optional().default(0),
+  enrollments: z.array(z.unknown()).optional(),
+  exams: z.array(z.unknown()).optional(),
 });
 
 export type CourseOffering = z.infer<typeof courseOfferingSchema>;
@@ -95,7 +106,7 @@ export type OfferingExam = {
   assignments: OfferingExamAssignment[];
 };
 
-export type CourseOfferingDetail = CourseOffering & {
+export type CourseOfferingDetail = Omit<CourseOffering, "exams"> & {
   registrations: OfferingRegistrationStudent[];
   exams: OfferingExam[];
   conflictsCount?: number;

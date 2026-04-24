@@ -20,6 +20,7 @@ type BackendSupervisor = {
     id?: string;
     name?: string;
   } | string;
+  assignments?: unknown[];
   _count?: {
     assignments?: number;
   };
@@ -56,7 +57,10 @@ const mapBackendSupervisor = (supervisor: BackendSupervisor): Supervisor => ({
   email: supervisor.user?.email || supervisor.email || "Unknown",
   department: supervisor.department || "—",
   centerId: typeof supervisor.center === "string" ? "" : supervisor.center?.id || "",
+  user: supervisor.user ?? null,
   center: typeof supervisor.center === "string" ? supervisor.center : supervisor.center?.name || "Unknown",
+  centerRef: typeof supervisor.center === "string" ? null : supervisor.center ?? null,
+  assignments: supervisor.assignments ?? [],
 });
 
 export const fetchSupervisors = async (): Promise<Supervisor[]> => {

@@ -67,8 +67,10 @@ export function CourseOfferingsPage() {
     return offerings.filter((offering) => {
       const haystack = [
         offering.course?.title,
+        offering.course?.name,
         offering.course?.code,
         offering.instructor,
+        offering.program?.name,
         offering.course?.program?.name,
         offering.semester?.name,
       ]
@@ -81,7 +83,7 @@ export function CourseOfferingsPage() {
 
   const getRegistrationCount = (offering: CourseOffering) => {
     return (
-      (offering as CourseOffering & { registrations?: Array<unknown> }).registrations?.length ??
+      offering.enrollments?.length ??
       offering.registrationsCount ??
       0
     );
@@ -340,7 +342,7 @@ export function CourseOfferingsPage() {
         description={
           deletingOffering
             ? `This will permanently delete the offering for ${
-                deletingOffering.course?.title ?? "this course"
+                deletingOffering.course?.title ?? deletingOffering.course?.name ?? "this course"
               } in ${deletingOffering.semester?.name ?? "this semester"}.`
             : "This action cannot be undone."
         }

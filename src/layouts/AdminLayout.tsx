@@ -244,7 +244,7 @@ export const AdminLayout: React.FC = () => {
           <Sparkles className="size-4 text-zinc-50" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
           <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
         </div>
       </div>

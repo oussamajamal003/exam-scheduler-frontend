@@ -132,7 +132,7 @@ export function TimeSlotsPage() {
     let todayCount = 0;
     for (const slot of timeSlots) {
       if (dateKey(slot) === today) todayCount += 1;
-      if ((slot.assignmentsCount ?? 0) > 0) used += 1;
+      if ((slot.assignments?.length ?? slot.assignmentsCount ?? 0) > 0) used += 1;
     }
     return {
       total: timeSlots.length,

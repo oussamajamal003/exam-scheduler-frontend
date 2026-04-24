@@ -56,6 +56,10 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
   }, [form, initialData]);
 
   const selectedProgramId = useWatch({ control: form.control, name: "programId" });
+  const watchedUniversityId = useWatch({ control: form.control, name: "universityId" });
+  const watchedFirstName = useWatch({ control: form.control, name: "firstName" });
+  const watchedLastName = useWatch({ control: form.control, name: "lastName" });
+  const watchedEmail = useWatch({ control: form.control, name: "email" });
   const selectedProgram = useMemo(
     () => programs.find((p) => p.id === selectedProgramId) ?? null,
     [programs, selectedProgramId]
@@ -92,7 +96,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
           {(form.formState.errors.universityId || submitValidationMessages?.universityId) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.universityId && !submitValidationMessages?.universityId && !!form.watch("universityId") && (
+          {!form.formState.errors.universityId && !submitValidationMessages?.universityId && !!watchedUniversityId && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -127,7 +131,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
             {(form.formState.errors.firstName || submitValidationMessages?.firstName) && (
               <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
             )}
-          {!form.formState.errors.firstName && !submitValidationMessages?.firstName && !!form.watch("firstName") && (
+          {!form.formState.errors.firstName && !submitValidationMessages?.firstName && !!watchedFirstName && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
           </div>
@@ -161,7 +165,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
             {(form.formState.errors.lastName || submitValidationMessages?.lastName) && (
               <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
             )}
-          {!form.formState.errors.lastName && !submitValidationMessages?.lastName && !!form.watch("lastName") && (
+          {!form.formState.errors.lastName && !submitValidationMessages?.lastName && !!watchedLastName && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
           </div>
@@ -197,7 +201,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
           {(form.formState.errors.email || submitValidationMessages?.email) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !submitValidationMessages?.email && !!form.watch("email") && (
+          {!form.formState.errors.email && !submitValidationMessages?.email && !!watchedEmail && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>

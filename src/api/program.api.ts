@@ -44,13 +44,9 @@ const mapBackendProgram = (program: ProgramRecord): Program => ({
         code: program.department.code,
       }
     : null,
-  courses:
-    program.courses ??
-    Array.from({ length: program._count?.courses ?? 0 }, (_, index) => ({
-      id: `${program.id}-course-${index}`,
-    })),
+  courses: program.courses ?? [],
   departmentName: program.department?.name ?? 'Unassigned Department',
-  totalCourses: program._count?.courses ?? 0,
+  totalCourses: program.courses?.length ?? program._count?.courses ?? 0,
   createdAt: program.createdAt,
   isActive: program.isActive ?? true,
 });

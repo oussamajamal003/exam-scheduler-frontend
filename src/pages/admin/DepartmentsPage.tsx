@@ -57,11 +57,14 @@ export function DepartmentsPage() {
   const updateProgramMutation = useUpdateProgram();
   const deleteProgramMutation = useDeleteProgram();
 
-  const totalPrograms = useMemo(() => programs.length, [programs]);
+  const totalPrograms = useMemo(
+    () => allDepartments.reduce((sum, department) => sum + (department.programs?.length ?? department.programsCount ?? 0), 0),
+    [allDepartments]
+  );
   const totalDepartments = useMemo(() => allDepartments.length, [allDepartments]);
   const totalCourses = useMemo(
-    () => programs.reduce((sum, program) => sum + (program.courses?.length ?? 0), 0),
-    [programs]
+    () => allDepartments.reduce((sum, department) => sum + (department.courses?.length ?? department.totalCourses ?? 0), 0),
+    [allDepartments]
   );
 
   const isLoading = isProgramsLoading || isDepartmentsLoading;
@@ -255,7 +258,7 @@ export function DepartmentsPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Total Programs</p>
                 <p className="mt-2 text-3xl font-bold text-zinc-950">{totalPrograms}</p>
-                <p className="mt-2 text-xs text-zinc-500">Programs matching the current query</p>
+                <p className="mt-2 text-xs text-zinc-500">Connected through departments</p>
               </div>
               <div className="rounded-none bg-blue-50 p-2">
                 <TrendingUp className="size-5 text-blue-600" />
@@ -270,7 +273,7 @@ export function DepartmentsPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Total Departments</p>
                 <p className="mt-2 text-3xl font-bold text-zinc-950">{totalDepartments}</p>
-                <p className="mt-2 text-xs text-zinc-500">Available for selection in the modal</p>
+                <p className="mt-2 text-xs text-zinc-500">Academic ownership groups</p>
               </div>
               <div className="rounded-none bg-green-50 p-2">
                 <GraduationCap className="size-5 text-green-600" />
@@ -283,7 +286,7 @@ export function DepartmentsPage() {
           <CardContent className="p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Course Coverage</p>
             <p className="mt-2 text-sm text-zinc-600">
-              The table uses relational data only: department labels come from program.department?.name and course totals come from program.courses?.length.
+              Program and course coverage is synced from each department relationship.
             </p>
             <div className="mt-3 flex gap-2">
               <div className="h-2 w-2 rounded-full bg-green-500" />
@@ -396,7 +399,7 @@ export function DepartmentsPage() {
                     </div>
                     <div className="inline-flex items-center rounded-none bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                       <CalendarDays className="mr-1.5 size-3.5" />
-                      {selectedProgram?.courses?.length ?? 0} Courses
+                      {selectedProgram?.courses?.length ?? selectedProgram?.totalCourses ?? 0} Courses
                     </div>
                   </div>
                 </div>

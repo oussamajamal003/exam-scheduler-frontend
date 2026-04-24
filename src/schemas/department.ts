@@ -6,6 +6,8 @@ export const departmentSchema = z.object({
   code: z.string().min(2, { message: 'Department code must be at least 2 characters' }).max(12, { message: 'Department code must be 12 characters or less' }),
   totalCourses: z.number().optional().default(0),
   programsCount: z.number().optional().default(0),
+  programs: z.array(z.unknown()).optional().default([]),
+  courses: z.array(z.unknown()).optional().default([]),
   createdAt: z.string().optional(),
 });
 

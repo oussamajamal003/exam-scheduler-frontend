@@ -134,6 +134,7 @@ export function SemesterList({
                   const status = computeStatus(semester);
                   const isActiveRow = status === "ACTIVE";
                   const isPastRow = status === "PAST";
+                  const offeringsCount = semester?.courseOfferings?.length ?? semester?.courseOfferingsCount ?? 0;
 
                   return (
                     <TableRow
@@ -169,7 +170,7 @@ export function SemesterList({
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">
                         <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-10">
-                          {semester?.courseOfferingsCount ?? 0}
+                          {offeringsCount}
                         </span>
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">

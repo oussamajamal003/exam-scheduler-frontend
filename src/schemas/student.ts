@@ -16,6 +16,16 @@ export const studentSchema = z.object({
     .regex(/^[a-zA-Z\s]+$/, { message: "Last name must contain only letters" }),
   email: z.string().email({ message: "Invalid email address" }),
   programId: z.string().uuid().optional(),
+  user: z.object({ name: z.string().optional(), email: z.string().optional() }).nullable().optional(),
+  programRef: z
+    .object({
+      id: z.string().optional(),
+      name: z.string().optional(),
+      code: z.string().optional(),
+      department: z.object({ id: z.string().optional(), name: z.string().optional(), code: z.string().optional() }).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   program: z.string().optional(),
   department: z.string().optional(),
 });

@@ -236,7 +236,7 @@ export function CourseOfferingForm({
           <SelectContent>
             {courses.map((course) => (
               <SelectItem key={course.id} value={course.id}>
-                {`${course.title} (${course.code})`}
+                {`${course.name ?? course.title} (${course.code})`}
               </SelectItem>
             ))}
           </SelectContent>
@@ -436,6 +436,8 @@ export function CourseOfferingForm({
           <Building2 className="mt-0.5 size-4 shrink-0 text-zinc-600" />
           <div className="min-w-0 text-xs text-zinc-600">
             <span className="font-semibold text-zinc-950">{selectedCourse.code}</span>
+            <span className="mx-1">·</span>
+            <span>{selectedCourse.name ?? selectedCourse.title}</span>
             <span className="mx-1">·</span>
             <span>{selectedCourse.credits ?? "—"} credits</span>
             <span className="mx-1">·</span>

@@ -9,6 +9,7 @@ export const semesterSchema = z.object({
   isCurrent: z.boolean().optional().default(false),
   academicYear: z.string().optional(),
   status: z.enum(["ACTIVE", "UPCOMING", "PAST"]).optional(),
+  courseOfferings: z.array(z.unknown()).optional(),
   courseOfferingsCount: z.number().optional().default(0),
 });
 

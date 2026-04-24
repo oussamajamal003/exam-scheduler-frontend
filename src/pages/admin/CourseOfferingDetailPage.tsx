@@ -108,7 +108,7 @@ export function CourseOfferingDetailPage() {
                 Course Offering
               </p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">
-                {offering.course?.title ?? "Untitled course"}
+                {offering.course?.title ?? offering.course?.name ?? "Untitled course"}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-zinc-600">
                 <span className="inline-flex items-center gap-1.5 rounded-none bg-zinc-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
@@ -126,7 +126,7 @@ export function CourseOfferingDetailPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <GraduationCap className="size-3.5 text-zinc-400" />
-                  {offering.course?.program?.name ?? "Unassigned program"}
+                  {offering.program?.name ?? offering.course?.program?.name ?? "Unassigned program"}
                 </span>
               </div>
             </div>
@@ -239,7 +239,7 @@ export function CourseOfferingDetailPage() {
                 <BookOpenText className="mt-0.5 size-4 shrink-0 text-zinc-500" />
                 <div>
                   <p className="font-semibold text-zinc-950">
-                    {offering.course?.title ?? "—"}
+                    {offering.course?.title ?? offering.course?.name ?? "—"}
                   </p>
                   <p className="text-xs text-zinc-500">{offering.course?.code ?? "—"}</p>
                 </div>
@@ -259,7 +259,7 @@ export function CourseOfferingDetailPage() {
                 <GraduationCap className="mt-0.5 size-4 shrink-0 text-zinc-500" />
                 <div>
                   <p className="font-semibold text-zinc-950">
-                    {offering.course?.program?.name ?? "Unassigned"}
+                    {offering.program?.name ?? offering.course?.program?.name ?? "Unassigned"}
                   </p>
                   <p className="text-xs text-zinc-500">Owning program</p>
                 </div>

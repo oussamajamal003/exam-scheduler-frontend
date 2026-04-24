@@ -91,12 +91,12 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
                       <span className="font-bold text-zinc-950 text-sm">{student.universityId}</span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <div className="font-semibold text-zinc-950 text-sm">{student.firstName} {student.lastName}</div>
+                      <div className="font-semibold text-zinc-950 text-sm">{student.user?.name ?? `${student.firstName} ${student.lastName}`}</div>
                       <p className="text-xs text-zinc-500 mt-0.5">Active student</p>
                     </TableCell>
-                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{student.email}</TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{student.user?.email ?? student.email}</TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700">
-                      {student.program?.trim() ? student.program : <span className="text-zinc-400">Unassigned</span>}
+                      {student.programRef?.name ?? (student.program?.trim() ? student.program : <span className="text-zinc-400">Unassigned</span>)}
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700">
                       {student.department?.trim() ? student.department : <span className="text-zinc-400">—</span>}

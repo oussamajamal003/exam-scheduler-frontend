@@ -99,7 +99,7 @@ export function EnrollmentForm({
   });
 
   const programName =
-    selectedOffering?.course?.program?.name ?? "—";
+    selectedOffering?.program?.name ?? selectedOffering?.course?.program?.name ?? "—";
   const semesterName = selectedOffering?.semester?.name ?? "—";
 
   return (
@@ -195,7 +195,7 @@ export function EnrollmentForm({
               ) : (
                 offerings.map((o) => (
                   <SelectItem key={o.id} value={o.id}>
-                    {o.course?.code ?? "—"} · {o.course?.title ?? "Untitled"}
+                    {o.course?.code ?? "—"} · {o.course?.title ?? o.course?.name ?? "Untitled"}
                     <span className="ml-1 text-xs text-zinc-400">
                       — {o.semester?.name ?? "—"}
                     </span>

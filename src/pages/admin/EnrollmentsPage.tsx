@@ -67,12 +67,17 @@ export function EnrollmentsPage() {
     const needle = deferredSearch.toLowerCase();
     return enrollments.filter((e) => {
       const haystack = [
+        e.student?.fullName,
         e.student?.user?.name,
         e.student?.user?.email,
         e.student?.universityId,
+        e.courseOffering?.course?.name,
         e.courseOffering?.course?.title,
         e.courseOffering?.course?.code,
+        e.program?.name,
+        e.courseOffering?.program?.name,
         e.courseOffering?.course?.program?.name,
+        e.semester?.name,
         e.courseOffering?.semester?.name,
         e.status,
       ]
@@ -383,8 +388,8 @@ export function EnrollmentsPage() {
         title="Remove Enrollment"
         description={
           deleting
-            ? `Remove ${deleting.student?.user?.name ?? "this student"} from ${
-                deleting.courseOffering?.course?.title ?? "this offering"
+            ? `Remove ${deleting.student?.fullName ?? deleting.student?.user?.name ?? "this student"} from ${
+              deleting.courseOffering?.course?.title ?? deleting.courseOffering?.course?.name ?? "this offering"
               }?`
             : "This action cannot be undone."
         }

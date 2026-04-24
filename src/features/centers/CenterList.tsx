@@ -113,12 +113,12 @@ export function CenterList({
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
                       <span className="inline-flex items-center justify-center rounded-none bg-blue-50 text-blue-700 px-2.5 py-1 text-xs font-bold min-w-10">
-                        {center?.roomsCount ?? 0}
+                        {center?.rooms?.length ?? center?.roomsCount ?? 0}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
                       <span className="inline-flex items-center justify-center rounded-none bg-violet-50 text-violet-700 px-2.5 py-1 text-xs font-bold min-w-10">
-                        {center?.supervisorsCount ?? 0}
+                        {center?.supervisors?.length ?? center?.supervisorsCount ?? 0}
                       </span>
                     </TableCell>
                     <TableCell

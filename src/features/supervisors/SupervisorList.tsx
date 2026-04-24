@@ -86,13 +86,13 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
                     )}
                   >
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <div className="font-semibold text-zinc-950 text-sm">{sup.name}</div>
+                      <div className="font-semibold text-zinc-950 text-sm">{sup.user?.name ?? sup.name}</div>
                       <p className="text-xs text-zinc-500 mt-0.5">Active</p>
                     </TableCell>
-                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{sup.email}</TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{sup.user?.email ?? sup.email}</TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-medium text-zinc-900 text-sm">{sup.department}</div>
-                      <p className="text-xs text-zinc-500 mt-0.5">{sup.center}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{sup.centerRef?.name ?? sup.center}</p>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
                       <Button

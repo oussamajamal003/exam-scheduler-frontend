@@ -108,8 +108,8 @@ export function CentersPage() {
     let totalSupervisors = 0;
     let active = 0;
     for (const c of centers) {
-      totalRooms += c?.roomsCount ?? 0;
-      totalSupervisors += c?.supervisorsCount ?? 0;
+      totalRooms += c?.rooms?.length ?? c?.roomsCount ?? 0;
+      totalSupervisors += c?.supervisors?.length ?? c?.supervisorsCount ?? 0;
       if (c?.isActive !== false) active += 1;
     }
     return { total: centers.length, totalRooms, totalSupervisors, active };

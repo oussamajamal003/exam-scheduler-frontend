@@ -105,7 +105,7 @@ export function SemestersPage() {
       if (status === "ACTIVE") counts.active += 1;
       else if (status === "UPCOMING") counts.upcoming += 1;
       else counts.past += 1;
-      counts.totalOfferings += semester?.courseOfferingsCount ?? 0;
+      counts.totalOfferings += semester?.courseOfferings?.length ?? semester?.courseOfferingsCount ?? 0;
     }
     return counts;
   }, [semesters]);

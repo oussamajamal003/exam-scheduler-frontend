@@ -34,6 +34,8 @@ type BackendCenter = {
   isActive?: boolean;
   rooms?: BackendRoom[];
   supervisors?: BackendSupervisor[];
+  roomsCount?: number;
+  supervisorsCount?: number;
   _count?: { rooms?: number; supervisors?: number };
 };
 
@@ -44,8 +46,8 @@ const mapBackendCenter = (center: BackendCenter): Center => ({
   code: center.code ?? undefined,
   description: center.description ?? undefined,
   isActive: center.isActive ?? true,
-  roomsCount: center._count?.rooms ?? center.rooms?.length ?? 0,
-  supervisorsCount: center._count?.supervisors ?? center.supervisors?.length ?? 0,
+  roomsCount: center.rooms?.length ?? center.roomsCount ?? center._count?.rooms ?? 0,
+  supervisorsCount: center.supervisors?.length ?? center.supervisorsCount ?? center._count?.supervisors ?? 0,
   rooms: center.rooms?.map((r) => ({
     id: r.id,
     name: r.name,

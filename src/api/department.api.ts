@@ -12,6 +12,10 @@ type DepartmentRecord = {
   name: string;
   code: string;
   createdAt?: string;
+  programs?: unknown[];
+  courses?: unknown[];
+  totalCourses?: number;
+  programsCount?: number;
   _count?: {
     programs?: number;
   };
@@ -27,8 +31,10 @@ const mapBackendDepartment = (department: DepartmentRecord): Department => ({
   name: department.name,
   code: department.code,
   createdAt: department.createdAt,
-  programsCount: department._count?.programs ?? 0,
-  totalCourses: 0,
+  programs: department.programs ?? [],
+  courses: department.courses ?? [],
+  programsCount: department.programs?.length ?? department.programsCount ?? department._count?.programs ?? 0,
+  totalCourses: department.courses?.length ?? department.totalCourses ?? 0,
 });
 
 export const fetchDepartments = async (search = ''): Promise<Department[]> => {

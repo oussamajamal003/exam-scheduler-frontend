@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supervisorSchema, Supervisor } from "../../schemas/supervisor";
 import { Input } from "../../components/ui/input";
@@ -46,8 +46,8 @@ export function SupervisorForm({
 
   const departmentsQuery = useDepartments("");
   const centersQuery = useCenters("");
-  const departments = departmentsQuery.data ?? [];
-  const centers = centersQuery.data ?? [];
+  const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
+  const centers = useMemo(() => centersQuery.data ?? [], [centersQuery.data]);
 
   useEffect(() => {
     if (initialData) {
@@ -64,8 +64,10 @@ export function SupervisorForm({
     });
   }, [form, initialData]);
 
-  const selectedDepartment = form.watch("department");
-  const selectedCenterId = form.watch("centerId");
+  const watchedName = useWatch({ control: form.control, name: "name" });
+  const watchedEmail = useWatch({ control: form.control, name: "email" });
+  const selectedDepartment = useWatch({ control: form.control, name: "department" });
+  const selectedCenterId = useWatch({ control: form.control, name: "centerId" });
   const selectedCenter = useMemo(
     () => centers.find((center) => center.id === selectedCenterId) ?? null,
     [centers, selectedCenterId]
@@ -120,7 +122,7 @@ export function SupervisorForm({
           {(form.formState.errors.name || submitValidationMessages?.name) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.name && !submitValidationMessages?.name && !!form.watch("name") && (
+          {!form.formState.errors.name && !submitValidationMessages?.name && !!watchedName && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -155,7 +157,7 @@ export function SupervisorForm({
           {(form.formState.errors.email || submitValidationMessages?.email) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !submitValidationMessages?.email && !!form.watch("email") && (
+          {!form.formState.errors.email && !submitValidationMessages?.email && !!watchedEmail && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>

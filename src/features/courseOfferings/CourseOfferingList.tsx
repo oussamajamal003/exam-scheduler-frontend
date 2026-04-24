@@ -1,4 +1,4 @@
-import { Edit2, Eye, Layers, Trash2, Users } from "lucide-react";
+import { ClipboardList, Edit2, Eye, Layers, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -114,6 +114,9 @@ export function CourseOfferingList({
                   Enrolled
                 </TableHead>
                 <TableHead className="px-4 py-4 text-xs font-bold uppercase tracking-[0.12em] text-zinc-600 sm:px-6">
+                  Exams
+                </TableHead>
+                <TableHead className="px-4 py-4 text-xs font-bold uppercase tracking-[0.12em] text-zinc-600 sm:px-6">
                   Status
                 </TableHead>
                 <TableHead className="px-4 py-4 text-right text-xs font-bold uppercase tracking-[0.12em] text-zinc-600 sm:px-6">
@@ -124,13 +127,13 @@ export function CourseOfferingList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="p-0">
-                    <TableSkeletonRows columns={11} rows={8} />
+                  <TableCell colSpan={12} className="p-0">
+                    <TableSkeletonRows columns={12} rows={8} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="p-0">
+                  <TableCell colSpan={12} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Layers}
@@ -153,9 +156,11 @@ export function CourseOfferingList({
               ) : (
                 rows.map((offering, index) => (
                   (() => {
-                    const registrationCount = (
-                      offering as CourseOffering & { registrations?: Array<unknown> }
-                    ).registrations?.length ?? offering.registrationsCount ?? 0;
+                    const registrationCount =
+                      offering.enrollments?.length ??
+                      offering.registrationsCount ??
+                      0;
+                    const examsCount = offering.exams?.length ?? offering.examsCount ?? 0;
 
                     return (
                   <TableRow
@@ -167,7 +172,7 @@ export function CourseOfferingList({
                   >
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950">
-                        {offering.course?.title ?? "Untitled course"}
+                        {offering.course?.title ?? offering.course?.name ?? "Untitled course"}
                       </div>
                       <p className="mt-0.5 text-xs text-zinc-500">
                         {offering.section ? `Section ${offering.section}` : "Default section"}
@@ -194,7 +199,7 @@ export function CourseOfferingList({
                       {offering.semester?.name ?? "—"}
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
-                      {offering.course?.program?.name ?? "Unassigned"}
+                      {offering.program?.name ?? offering.course?.program?.name ?? "Unassigned"}
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
                       {offering.capacity !== null && offering.capacity !== undefined ? (
@@ -207,6 +212,12 @@ export function CourseOfferingList({
                       <span className="inline-flex items-center rounded-none bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
                         <Users className="mr-1.5 size-3.5" />
                         {registrationCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6">
+                      <span className="inline-flex items-center rounded-none bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                        <ClipboardList className="mr-1.5 size-3.5" />
+                        {examsCount}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">

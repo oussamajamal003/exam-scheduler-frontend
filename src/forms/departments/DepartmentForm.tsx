@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, CheckCircle2, Building } from 'lucide-react';
 import { z } from 'zod';
@@ -46,6 +46,8 @@ export function DepartmentForm({ initialData, onSubmit, isLoading, submitErrorMe
     });
   }, [form, initialData]);
 
+  const watchedName = useWatch({ control: form.control, name: 'name' });
+  const watchedCode = useWatch({ control: form.control, name: 'code' });
   const hasErrors = Object.keys(form.formState.errors).length > 0;
 
   return (
@@ -81,7 +83,7 @@ export function DepartmentForm({ initialData, onSubmit, isLoading, submitErrorMe
           />
           {form.formState.errors.name || submitValidationMessages?.name ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
-          ) : form.watch('name') ? (
+          ) : watchedName ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>
@@ -111,7 +113,7 @@ export function DepartmentForm({ initialData, onSubmit, isLoading, submitErrorMe
           />
           {form.formState.errors.code || submitValidationMessages?.code ? (
             <AlertCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-destructive" />
-          ) : form.watch('code') ? (
+          ) : watchedCode ? (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           ) : null}
         </div>

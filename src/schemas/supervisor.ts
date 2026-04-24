@@ -6,7 +6,10 @@ export const supervisorSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
   department: z.string().min(2, { message: "Department is required" }),
   centerId: z.string().min(1, { message: "Center is required" }),
+  user: z.object({ id: z.string().optional(), name: z.string().optional(), email: z.string().optional(), role: z.string().optional() }).nullable().optional(),
   center: z.string().optional().default(""),
+  centerRef: z.object({ id: z.string().optional(), name: z.string().optional() }).nullable().optional(),
+  assignments: z.array(z.unknown()).optional(),
 });
 
 export type Supervisor = z.infer<typeof supervisorSchema>;

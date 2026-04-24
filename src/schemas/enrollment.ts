@@ -15,6 +15,7 @@ export type EnrollmentSemester = {
 
 export type EnrollmentCourse = {
   id: string;
+  name?: string;
   code: string;
   title: string;
   program?: EnrollmentProgram | null;
@@ -25,11 +26,13 @@ export type EnrollmentCourseOffering = {
   section?: string | null;
   instructor?: string | null;
   course?: EnrollmentCourse | null;
+  program?: EnrollmentProgram | null;
   semester?: EnrollmentSemester | null;
 };
 
 export type EnrollmentStudent = {
   id: string;
+  fullName?: string | null;
   universityId?: string;
   user?: { id?: string; name?: string; email?: string } | null;
   program?: EnrollmentProgram | null;
@@ -42,6 +45,8 @@ export type Enrollment = {
   updatedAt?: string;
   student?: EnrollmentStudent | null;
   courseOffering?: EnrollmentCourseOffering | null;
+  program?: EnrollmentProgram | null;
+  semester?: EnrollmentSemester | null;
 };
 
 // ===== Form / DTOs =====
