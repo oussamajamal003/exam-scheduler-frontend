@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import {
@@ -19,10 +18,11 @@ import {
 } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { PageSpinner } from "../../components/shared/PageSpinner";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { CourseOfferingList } from "../../features/courseOfferings/CourseOfferingList";
 import { CourseOfferingForm } from "../../forms/courseOfferings/CourseOfferingForm";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
+import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import {
   useCoursesForOfferings,
   useCourseOfferings,
@@ -31,7 +31,7 @@ import {
   useUpdateCourseOffering,
 } from "../../hooks/courseOfferings/useCourseOfferings";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
-import { useQueryClient } from "@tanstack/react-query";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import type {
   CourseOffering,
   CreateCourseOfferingDto,
@@ -127,35 +127,32 @@ export function CourseOfferingsPage() {
     navigate(`/course-offerings/${offering.id}`);
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] }),
-      queryClient.invalidateQueries({ queryKey: ["courses"] }),
-      queryClient.invalidateQueries({ queryKey: ["semesters"] }),
-    ]);
-    addToast({ type: "success", title: "Refreshed", description: "Course offering data has been refreshed." });
+  const handleRefresh = () => {
+    offeringsQuery.refetch();
   };
 
   const isFetching = offeringsQuery.isFetching || coursesQuery.isFetching || semestersQuery.isFetching;
+  const isSearching = searchTerm.trim() !== deferredSearchTerm;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
+  const showPageLoading = useDelayedLoading(offeringsQuery.isLoading, 1000);
 
   const handleSubmit = async (data: CreateCourseOfferingDto) => {
-    if (editingOffering?.id) {
-      await updateMutation.mutateAsync({ id: editingOffering.id, data });
+    try {
+      if (editingOffering?.id) {
+        await updateMutation.mutateAsync({ id: editingOffering.id, data });
+      } else {
+        await createMutation.mutateAsync(data);
+      }
       closeFormModal();
-      return;
+    } catch {
+      // Hooks already surface a toast on error; keep modal open.
     }
-    await createMutation.mutateAsync(data);
-    closeFormModal();
   };
 
   const confirmDelete = () => {
     if (!deletingOffering?.id) return;
-    deleteMutation.mutate(deletingOffering.id, {
-      onSuccess: closeDeleteModal,
-    });
+    deleteMutation.mutate(deletingOffering.id, { onSuccess: closeDeleteModal });
   };
 
   const isPageError = offeringsQuery.isError;
@@ -182,10 +179,10 @@ export function CourseOfferingsPage() {
       )
     : undefined;
   const submitValidationMessages = submitMutation.isError
-    ? getApiValidationMessages(submitMutation.error)
-    : [];
+    ? getApiValidationErrors(submitMutation.error)
+    : {};
 
-  if (offeringsQuery.isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading course offerings" />
@@ -205,7 +202,7 @@ export function CourseOfferingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header Section */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -224,10 +221,11 @@ export function CourseOfferingsPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="mb-8 flex gap-3">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Button
           onClick={openCreateModal}
-          className="inline-flex h-10 items-center gap-2 rounded-none bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
+          disabled={isFetching || isSaving}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Offering
@@ -240,20 +238,18 @@ export function CourseOfferingsPage() {
           <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
-
-      {/* Search */}
-      <div className="mb-8 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Filter by course, instructor, semester…"
-            className="h-10 rounded-none border-zinc-200 bg-white/50 pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300"
-          />
+        <div className="max-w-md sm:ml-auto sm:w-full sm:max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Filter by course, instructor, semester…"
+              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/50"
+            />
+          </div>
         </div>
-      </div>
+      </StickyActionBar>
 
       {/* Metrics Grid */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -328,8 +324,9 @@ export function CourseOfferingsPage() {
       <div className="mb-8">
         <CourseOfferingList
           offerings={filteredOfferings}
-          isLoading={offeringsQuery.isLoading}
+          isLoading={showTableLoading}
           isDeleting={deleteMutation.isPending}
+          search={searchTerm}
           onCreateOffering={openCreateModal}
           onEditOffering={openEditModal}
           onViewOffering={handleViewDetails}

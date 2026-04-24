@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { cn } from "../../lib/utils";
 import type { Enrollment } from "../../schemas/enrollment";
@@ -23,6 +23,7 @@ interface EnrollmentListProps {
   enrollments: Enrollment[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onCreate: () => void;
   onDelete: (enrollment: Enrollment) => void;
 }
@@ -47,14 +48,11 @@ export function EnrollmentList({
   enrollments,
   isLoading,
   isDeleting,
+  search,
   onCreate,
   onDelete,
 }: EnrollmentListProps) {
   const rows = Array.isArray(enrollments) ? enrollments : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={6} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -112,15 +110,29 @@ export function EnrollmentList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-0">
-                    <EmptyState
-                      icon={ClipboardList}
-                      title="No enrollments yet"
-                      description="Add the first enrollment or import a CSV to connect students with course offerings."
-                      action={{ label: "Add Enrollment", onClick: onCreate }}
-                    />
+                    <TableSkeletonRows columns={7} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={ClipboardList}
+                        title="No results found"
+                        description={`No enrollments match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={ClipboardList}
+                        title="No enrollments yet"
+                        description="Add the first enrollment or import a CSV to connect students with course offerings."
+                        action={{ label: "Add Enrollment", onClick: onCreate }}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

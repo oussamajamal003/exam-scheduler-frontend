@@ -2,7 +2,7 @@ import { BookOpen, Edit2, Eye, Layers, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { TableSkeletonRows } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { cn } from '@/lib/utils';
 import type { Program } from '@/schemas/program';
@@ -11,6 +11,7 @@ interface DepartmentListProps {
   programs: Program[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onEditProgram: (program: Program) => void;
   onDeleteProgram: (program: Program) => void;
   onViewProgram: (program: Program) => void;
@@ -32,16 +33,13 @@ export function DepartmentList({
   programs,
   isLoading,
   isDeleting,
+  search,
   onEditProgram,
   onDeleteProgram,
   onViewProgram,
   onCreateProgram,
 }: DepartmentListProps) {
   const programRows = Array.isArray(programs) ? programs : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={6} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -79,18 +77,32 @@ export function DepartmentList({
             </TableHeader>
 
             <TableBody>
-              {programRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <EmptyState
-                      icon={Layers}
-                      title="No programs found"
-                      description="Create your first program to connect departments and course coverage in one polished workflow."
-                      action={{
-                        label: 'Add Program',
-                        onClick: onCreateProgram,
-                      }}
-                    />
+                    <TableSkeletonRows columns={6} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : programRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={Layers}
+                        title="No results found"
+                        description={`No programs match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Layers}
+                        title="No programs yet"
+                        description="Create your first program to connect departments and course coverage in one polished workflow."
+                        action={{
+                          label: 'Add Program',
+                          onClick: onCreateProgram,
+                        }}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

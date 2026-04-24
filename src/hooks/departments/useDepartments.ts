@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createDepartment, deleteDepartment, fetchDepartments, updateDepartment } from '@/api/department.api';
 import { CreateDepartmentDto, UpdateDepartmentDto } from '@/schemas/department';
 import { useToast } from '@/components/ui/toast';
+import { getSmartErrorDescription } from '@/lib/apiError';
 
 export const useDepartments = (search = '') => {
   return useQuery({
@@ -16,19 +17,14 @@ export const useCreateDepartment = () => {
 
   return useMutation({
     mutationFn: (data: CreateDepartmentDto) => createDepartment(data),
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
-      addToast({
-        type: 'success',
-        title: 'Department Added',
-        description: `${data.name} has been successfully created.`,
-      });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       addToast({
         type: 'error',
         title: 'Failed to Add Department',
-        description: error.message || 'An error occurred while adding the department.',
+        description: getSmartErrorDescription(error, 'An error occurred while adding the department.'),
       });
     },
   });
@@ -40,19 +36,14 @@ export const useUpdateDepartment = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateDepartmentDto }) => updateDepartment({ id, data }),
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
-      addToast({
-        type: 'success',
-        title: 'Department Updated',
-        description: `${data.name} has been successfully updated.`,
-      });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       addToast({
         type: 'error',
         title: 'Failed to Update Department',
-        description: error.message || 'An error occurred while updating the department.',
+        description: getSmartErrorDescription(error, 'An error occurred while updating the department.'),
       });
     },
   });
@@ -77,7 +68,7 @@ export const useDeleteDepartment = () => {
       addToast({
         type: 'error',
         title: 'Failed to Delete Department',
-        description: error.message || 'An error occurred while deleting the department.',
+        description: getSmartErrorDescription(error, 'An error occurred while deleting the department.'),
       });
     },
   });

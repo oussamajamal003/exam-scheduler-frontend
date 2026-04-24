@@ -1,12 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createProgram, fetchPrograms, updateProgram, deleteProgram } from '@/api/program.api';
 import { CreateProgramDto, UpdateProgramDto } from '@/schemas/program';
 import { useToast } from '@/components/ui/toast';
+import { getSmartErrorDescription } from '@/lib/apiError';
 
 export const usePrograms = (search = '') => {
   return useQuery({
     queryKey: ['programs', search],
     queryFn: () => fetchPrograms(search),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -29,7 +31,7 @@ export const useCreateProgram = () => {
       addToast({
         type: 'error',
         title: 'Failed to Add Program',
-        description: error.message || 'An error occurred while adding the program.',
+        description: getSmartErrorDescription(error, 'An error occurred while adding the program.'),
       });
     },
   });
@@ -54,7 +56,7 @@ export const useUpdateProgram = () => {
       addToast({
         type: 'error',
         title: 'Failed to Update Program',
-        description: error.message || 'An error occurred while updating the program.',
+        description: getSmartErrorDescription(error, 'An error occurred while updating the program.'),
       });
     },
   });
@@ -79,7 +81,7 @@ export const useDeleteProgram = () => {
       addToast({
         type: 'error',
         title: 'Failed to Delete Program',
-        description: error.message || 'An error occurred while deleting the program.',
+        description: getSmartErrorDescription(error, 'An error occurred while deleting the program.'),
       });
     },
   });

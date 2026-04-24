@@ -4,24 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Supervisor } from "../../schemas/supervisor";
 import { Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface SupervisorListProps {
   supervisors: Supervisor[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
+  onAdd?: () => void;
   onEditSupervisor: (supervisor: Supervisor) => void;
   onViewWorkload: (supervisor: Supervisor) => void;
   onDeleteSupervisor: (supervisor: Supervisor) => void;
 }
 
-export function SupervisorList({ supervisors, isLoading, isDeleting, onEditSupervisor, onViewWorkload, onDeleteSupervisor }: SupervisorListProps) {
+export function SupervisorList({ supervisors, isLoading, isDeleting, search, onAdd, onEditSupervisor, onViewWorkload, onDeleteSupervisor }: SupervisorListProps) {
   const supervisorRows = Array.isArray(supervisors) ? supervisors : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={5} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -53,18 +51,29 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, onEditSuper
               </TableRow>
             </TableHeader>
             <TableBody>
-              {supervisorRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
-                    <EmptyState
-                      icon={ShieldAlert}
-                      title="No supervisors found"
-                      description="Add a supervisor record to start assigning workloads"
-                      action={{
-                        label: "Add Supervisor",
-                        onClick: () => {},
-                      }}
-                    />
+                    <TableSkeletonRows columns={5} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : supervisorRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={ShieldAlert}
+                        title="No results found"
+                        description={`No supervisors match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={ShieldAlert}
+                        title="No supervisors yet"
+                        description="Add a supervisor record to start assigning workloads."
+                        action={onAdd ? { label: "Add Supervisor", onClick: onAdd } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

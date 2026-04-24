@@ -58,7 +58,7 @@ export const AuthLayout: React.FC = () => {
 
     const splashTimer = window.setTimeout(() => {
       setStage('splash');
-    }, 500);
+    }, 1000);
 
     const contentTimer = window.setTimeout(() => {
       setStage('content');

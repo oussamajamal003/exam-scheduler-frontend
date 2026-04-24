@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { TimeSlot } from "../../schemas/timeSlot";
 import { AlertTriangle, Clock, Edit2, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface TimeSlotListProps {
   timeSlots: TimeSlot[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onEditTimeSlot: (slot: TimeSlot) => void;
   onDeleteTimeSlot: (slot: TimeSlot) => void;
   onAddTimeSlot?: () => void;
@@ -77,16 +78,13 @@ export function TimeSlotList({
   timeSlots,
   isLoading,
   isDeleting,
+  search,
   onEditTimeSlot,
   onDeleteTimeSlot,
   onAddTimeSlot,
 }: TimeSlotListProps) {
   const slotRows = Array.isArray(timeSlots) ? timeSlots : [];
   const conflictIds = detectConflicts(slotRows);
-
-  if (isLoading) {
-    return <TableSkeleton columns={6} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -123,15 +121,29 @@ export function TimeSlotList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {slotRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <EmptyState
-                      icon={Clock}
-                      title="No time slots yet"
-                      description="Create your first time slot to begin scheduling exams."
-                      action={onAddTimeSlot ? { label: "Add Time Slot", onClick: onAddTimeSlot } : undefined}
-                    />
+                    <TableSkeletonRows columns={6} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : slotRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={Clock}
+                        title="No results found"
+                        description={`No time slots match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Clock}
+                        title="No time slots yet"
+                        description="Create your first time slot to begin scheduling exams."
+                        action={onAddTimeSlot ? { label: "Add Time Slot", onClick: onAddTimeSlot } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -150,7 +162,7 @@ export function TimeSlotList({
                         <div className="font-semibold text-zinc-950 text-sm flex items-center gap-2">
                           {formatDate(slot.date ?? slot.startTime)}
                           {inConflict && (
-                            <span className="inline-flex items-center gap-1 rounded-none border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-none border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
                               <AlertTriangle className="size-3" /> Conflict
                             </span>
                           )}
@@ -166,7 +178,7 @@ export function TimeSlotList({
                         {computeDuration(slot)} min
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">
-                        <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-[2.5rem]">
+                        <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-10">
                           {slot?.assignmentsCount ?? 0}
                         </span>
                       </TableCell>
@@ -204,5 +216,3 @@ export function TimeSlotList({
     </Card>
   );
 }
-
-export { detectConflicts };

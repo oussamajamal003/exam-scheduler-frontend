@@ -25,7 +25,7 @@ const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const timer = window.setTimeout(() => setIsLoading(false), 450);
+    const timer = window.setTimeout(() => setIsLoading(false), 1000);
     return () => window.clearTimeout(timer);
   }, []);
 

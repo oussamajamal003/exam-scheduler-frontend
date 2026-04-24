@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createCenter, deleteCenter, fetchCenter, fetchCenters, updateCenter } from "../../api/center.api";
 import { CreateCenterDto, UpdateCenterDto } from "../../schemas/center";
 import { useToast } from "../../components/ui/toast";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useCenters = (search = "") => {
   return useQuery({
@@ -33,7 +33,7 @@ export const useCreateCenter = () => {
       addToast({
         type: "error",
         title: "Failed to Add Center",
-        description: getApiErrorMessage(error, "An error occurred while adding the center."),
+        description: getSmartErrorDescription(error, "An error occurred while adding the center."),
       });
     },
   });
@@ -53,7 +53,7 @@ export const useUpdateCenter = () => {
       addToast({
         type: "error",
         title: "Failed to Update Center",
-        description: getApiErrorMessage(error, "An error occurred while updating the center."),
+        description: getSmartErrorDescription(error, "An error occurred while updating the center."),
       });
     },
   });
@@ -73,7 +73,7 @@ export const useDeleteCenter = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Center",
-        description: getApiErrorMessage(error, "An error occurred while deleting the center."),
+        description: getSmartErrorDescription(error, "An error occurred while deleting the center."),
       });
     },
   });

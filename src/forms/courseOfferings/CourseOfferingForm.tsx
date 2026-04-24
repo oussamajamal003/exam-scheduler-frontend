@@ -62,7 +62,7 @@ export interface CourseOfferingFormProps {
   coursesErrorMessage?: string;
   semestersErrorMessage?: string;
   submitErrorMessage?: string;
-  submitValidationMessages?: string[];
+  submitValidationMessages?: Record<string, string[]>;
   isLoading?: boolean;
   onSubmit: (data: CreateCourseOfferingDto) => void | Promise<void>;
 }
@@ -199,16 +199,10 @@ export function CourseOfferingForm({
         </div>
       )}
 
-      {(submitErrorMessage || (submitValidationMessages?.length ?? 0) > 0) && (
-        <div className="space-y-2 rounded-none border border-red-200 bg-red-50 px-3 py-3 text-red-900">
-          {submitErrorMessage && <p className="text-sm font-semibold">{submitErrorMessage}</p>}
-          {(submitValidationMessages?.length ?? 0) > 0 && (
-            <ul className="list-disc space-y-1 pl-5 text-xs">
-              {submitValidationMessages?.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          )}
+      {submitErrorMessage && (
+        <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+          <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm font-medium text-destructive leading-snug">{submitErrorMessage}</p>
         </div>
       )}
 
@@ -232,7 +226,7 @@ export function CourseOfferingForm({
             id="offering-course"
             className={cn(
               "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.courseId
+              form.formState.errors.courseId || submitValidationMessages?.courseId
                 ? "border-destructive/60 bg-destructive/5"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400"
             )}
@@ -247,9 +241,9 @@ export function CourseOfferingForm({
             ))}
           </SelectContent>
         </Select>
-        {form.formState.errors.courseId && (
+        {(form.formState.errors.courseId || submitValidationMessages?.courseId) && (
           <p className="text-xs font-medium text-destructive">
-            {form.formState.errors.courseId.message}
+            {form.formState.errors.courseId?.message ?? submitValidationMessages?.courseId?.[0]}
           </p>
         )}
       </div>
@@ -292,7 +286,7 @@ export function CourseOfferingForm({
             id="offering-semester"
             className={cn(
               "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.semesterId
+              form.formState.errors.semesterId || submitValidationMessages?.semesterId
                 ? "border-destructive/60 bg-destructive/5"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400"
             )}
@@ -307,9 +301,9 @@ export function CourseOfferingForm({
             ))}
           </SelectContent>
         </Select>
-        {form.formState.errors.semesterId && (
+        {(form.formState.errors.semesterId || submitValidationMessages?.semesterId) && (
           <p className="text-xs font-medium text-destructive">
-            {form.formState.errors.semesterId.message}
+            {form.formState.errors.semesterId?.message ?? submitValidationMessages?.semesterId?.[0]}
           </p>
         )}
       </div>

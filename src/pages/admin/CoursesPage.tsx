@@ -1,25 +1,29 @@
-import { useState } from "react";
+import { useDeferredValue, useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
-import { BookOpen, Plus, RefreshCw, TrendingUp } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
+import { BookOpen, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
 
 import { CourseList } from "../../features/courses/CourseList";
 import { CourseForm } from "../../forms/courses/CourseForm";
+import { CourseDetailDialog } from "../../features/courses/CourseDetailDialog";
 import { Course } from "../../schemas/course";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "../../hooks/courses/useCourses";
 import { usePrograms } from "../../hooks/programs/usePrograms";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
-import { useQueryClient } from "@tanstack/react-query";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 
 export function CoursesPage() {
   const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses();
   const programsQuery = usePrograms();
   const semestersQuery = useSemesters();
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [detailCourse, setDetailCourse] = useState<Course | null>(null);
@@ -39,7 +43,7 @@ export function CoursesPage() {
     ? getApiErrorMessage(submitError, `Failed to ${editingCourse ? "update" : "create"} course.`) 
     : undefined;
   const submitValidationMessages = isSubmitError 
-    ? getApiValidationMessages(submitError) 
+    ? getApiValidationErrors(submitError) 
     : undefined;
 
   const openCreateModal = () => {
@@ -86,19 +90,26 @@ export function CoursesPage() {
     }
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["courses"] }),
-      queryClient.invalidateQueries({ queryKey: ["programs"] }),
-      queryClient.invalidateQueries({ queryKey: ["semesters"] }),
-    ]);
-    addToast({ type: "success", title: "Refreshed", description: "Course data has been refreshed." });
+  const handleRefresh = () => {
+    refetch();
   };
 
-  if (isLoading) {
+  const filteredCourses = useMemo(() => {
+    const term = deferredSearch.toLowerCase();
+    if (!term) return courses;
+    return courses.filter((c) =>
+      [c.name, c.code, c.program, c.semester]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term))
+    );
+  }, [deferredSearch, courses]);
+
+  const isSearching = search.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
+
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading courses..." />
@@ -118,7 +129,7 @@ export function CoursesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header Section */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -133,10 +144,10 @@ export function CoursesPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 mb-8">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button 
           onClick={openCreateModal}
-          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Course
@@ -149,7 +160,16 @@ export function CoursesPage() {
           <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
+        <div className="relative sm:ml-auto sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title, code or dept."
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+          />
+        </div>
+      </StickyActionBar>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -221,9 +241,11 @@ export function CoursesPage() {
       )}
 
       <CourseList
-        courses={courses}
-        isLoading={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
+        courses={filteredCourses}
+        isLoading={showTableLoading}
         isDeleting={deleteMutation.isPending}
+        search={search}
+        onAdd={openCreateModal}
         onEditCourse={openEditModal}
         onDeleteCourse={setDeletingCourse}
         onViewDetails={setDetailCourse}
@@ -270,39 +292,7 @@ export function CoursesPage() {
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete course.") : undefined}
       />
 
-      <Dialog open={!!detailCourse} onOpenChange={(open) => !open && setDetailCourse(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Course Details</DialogTitle>
-          </DialogHeader>
-          <div className="mt-4 space-y-4">
-            <Card className="border border-zinc-200 shadow-sm rounded-none">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center pb-4 border-b border-zinc-100">
-                  <div>
-                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-1">Course Code</p>
-                    <h3 className="text-zinc-950 text-lg font-bold">{detailCourse?.code}</h3>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-1">Program</p>
-                    <p className="text-zinc-900 font-semibold">{detailCourse?.program}</p>
-                  </div>
-                </div>
-                <div className="pt-4 flex flex-col gap-2">
-                  <p className="text-sm font-medium text-zinc-500">Course Name: <strong className="text-zinc-900">{detailCourse?.name}</strong></p>
-                  <p className="text-sm font-medium text-zinc-500">Semester Term: <strong className="text-zinc-900">{detailCourse?.semester}</strong></p>
-                  <p className="text-sm font-medium text-zinc-500 mt-2 italic">* Student enrollments and attached exams are fetched dynamically on schedule processing.</p>
-                </div>
-              </CardContent>
-            </Card>
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setDetailCourse(null)} className="rounded-none font-semibold shadow-sm">
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CourseDetailDialog course={detailCourse} open={!!detailCourse} onClose={() => setDetailCourse(null)} />
     </div>
   );
 }

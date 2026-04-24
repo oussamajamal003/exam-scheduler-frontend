@@ -4,15 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Semester } from "../../schemas/semester";
 import { CalendarRange, Edit2, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
-
-export type DerivedSemesterStatus = "ACTIVE" | "UPCOMING" | "PAST";
+import { computeStatus, DerivedSemesterStatus } from "../../schemas/semester";
 
 interface SemesterListProps {
   semesters: Semester[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onEditSemester: (semester: Semester) => void;
   onDeleteSemester: (semester: Semester) => void;
   onAddSemester?: () => void;
@@ -29,16 +29,6 @@ const formatDate = (value?: string) => {
   });
 };
 
-export const computeStatus = (semester: Semester): DerivedSemesterStatus => {
-  if (semester.status) return semester.status;
-  const now = Date.now();
-  const start = semester.startDate ? new Date(semester.startDate).getTime() : NaN;
-  const end = semester.endDate ? new Date(semester.endDate).getTime() : NaN;
-  if (!Number.isNaN(start) && now < start) return "UPCOMING";
-  if (!Number.isNaN(end) && now > end) return "PAST";
-  return "ACTIVE";
-};
-
 const STATUS_STYLES: Record<DerivedSemesterStatus, string> = {
   ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
   UPCOMING: "bg-blue-50 text-blue-700 border-blue-200",
@@ -48,7 +38,7 @@ const STATUS_STYLES: Record<DerivedSemesterStatus, string> = {
 const StatusBadge = ({ status }: { status: DerivedSemesterStatus }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1 text-xs font-bold uppercase tracking-[0.1em]",
+      "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1 text-xs font-bold uppercase tracking-widest",
       STATUS_STYLES[status]
     )}
   >
@@ -68,15 +58,12 @@ export function SemesterList({
   semesters,
   isLoading,
   isDeleting,
+  search,
   onEditSemester,
   onDeleteSemester,
   onAddSemester,
 }: SemesterListProps) {
   const semesterRows = Array.isArray(semesters) ? semesters : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={5} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -113,19 +100,33 @@ export function SemesterList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {semesterRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <EmptyState
-                      icon={CalendarRange}
-                      title="No semesters yet"
-                      description="Create your first semester to start scheduling course offerings and exams."
-                      action={
-                        onAddSemester
-                          ? { label: "Add Semester", onClick: onAddSemester }
-                          : undefined
-                      }
-                    />
+                    <TableSkeletonRows columns={6} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : semesterRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={CalendarRange}
+                        title="No results found"
+                        description={`No semesters match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={CalendarRange}
+                        title="No semesters yet"
+                        description="Create your first semester to start scheduling course offerings and exams."
+                        action={
+                          onAddSemester
+                            ? { label: "Add Semester", onClick: onAddSemester }
+                            : undefined
+                        }
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -148,7 +149,7 @@ export function SemesterList({
                         <div className="font-semibold text-zinc-950 text-sm flex items-center gap-2">
                           {semester?.name ?? "Untitled"}
                           {semester?.isCurrent && (
-                            <span className="inline-flex items-center rounded-none border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700">
+                            <span className="inline-flex items-center rounded-none border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
                               Current
                             </span>
                           )}
@@ -167,7 +168,7 @@ export function SemesterList({
                         <StatusBadge status={status} />
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">
-                        <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-[2.5rem]">
+                        <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-10">
                           {semester?.courseOfferingsCount ?? 0}
                         </span>
                       </TableCell>

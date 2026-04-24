@@ -4,24 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Student } from "../../schemas/student";
 import { Edit2, Trash2, BookOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface StudentListProps {
   students: Student[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
+  onAdd?: () => void;
   onEditStudent: (student: Student) => void;
   onViewExams: (student: Student) => void;
   onDeleteStudent: (student: Student) => void;
 }
 
-export function StudentList({ students, isLoading, isDeleting, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
+export function StudentList({ students, isLoading, isDeleting, search, onAdd, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
   const studentRows = Array.isArray(students) ? students : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={7} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -55,18 +53,29 @@ export function StudentList({ students, isLoading, isDeleting, onEditStudent, on
               </TableRow>
             </TableHeader>
             <TableBody>
-              {studentRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-0">
-                    <EmptyState
-                      icon={BookOpen}
-                      title="No students found"
-                      description="Create your first student record to get started with exam scheduling."
-                      action={{
-                        label: "Add Student",
-                        onClick: () => {},
-                      }}
-                    />
+                    <TableSkeletonRows columns={7} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : studentRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={BookOpen}
+                        title="No results found"
+                        description={`No students match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={BookOpen}
+                        title="No students yet"
+                        description="Create your first student record to get started with exam scheduling."
+                        action={onAdd ? { label: "Add Student", onClick: onAdd } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

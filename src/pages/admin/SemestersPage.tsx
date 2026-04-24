@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { SemesterList, computeStatus } from "../../features/semesters/SemesterList";
+import { useDeferredValue, useMemo, useState } from "react";
+import { SemesterList } from "../../features/semesters/SemesterList";
+import { computeStatus } from "../../schemas/semester";
 import { SemesterForm } from "../../forms/semesters/SemesterForm";
 import {
   useCreateSemester,
@@ -7,7 +8,6 @@ import {
   useSemesters,
   useUpdateSemester,
 } from "../../hooks/semesters/useSemesters";
-import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -16,11 +16,13 @@ import { Semester, SemesterFormValues } from "../../schemas/semester";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { CalendarRange, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { Calendar, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
 
 export function SemestersPage() {
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const { data: semesters = [], isLoading, isFetching, isError, error, refetch } = useSemesters();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
@@ -57,16 +59,12 @@ export function SemestersPage() {
     if (editingSemester?.id) {
       updateMutation.mutate(
         { id: editingSemester.id, data },
-        {
-          onSuccess: () => closeFormModal(),
-        }
+        { onSuccess: closeFormModal }
       );
       return;
     }
 
-    createMutation.mutate(data, {
-      onSuccess: () => closeFormModal(),
-    });
+    createMutation.mutate(data, { onSuccess: closeFormModal });
   };
 
   const handleDelete = (semester: Semester) => {
@@ -79,28 +77,26 @@ export function SemestersPage() {
     deleteMutation.reset();
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["semesters"] });
-    addToast({ type: "success", title: "Refreshed", description: "Semester data has been refreshed." });
+  const handleRefresh = () => {
+    refetch();
   };
 
   const confirmDelete = () => {
     if (!deletingSemester?.id) return;
-    deleteMutation.mutate(deletingSemester.id, {
-      onSuccess: () => closeDeleteModal(),
-    });
+    deleteMutation.mutate(deletingSemester.id, { onSuccess: closeDeleteModal });
   };
 
   const filteredSemesters = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = deferredSearch.toLowerCase();
     if (!term) return semesters;
     return semesters.filter((s) =>
       [s?.name, s?.academicYear].filter(Boolean).some((v) => String(v).toLowerCase().includes(term))
     );
-  }, [search, semesters]);
+  }, [deferredSearch, semesters]);
+
+  const isSearching = search.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
     const counts = { active: 0, upcoming: 0, past: 0, totalOfferings: 0 };
@@ -115,8 +111,9 @@ export function SemestersPage() {
   }, [semesters]);
 
   const pageErrorMessage = getApiErrorMessage(error, "Failed to load semesters.");
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
 
-  if (isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading semesters" />
@@ -136,12 +133,12 @@ export function SemestersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header Section */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-none bg-zinc-950 text-white shadow-sm">
-            <CalendarRange className="size-5" />
+            <Calendar className="size-5" />
           </div>
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Semesters</h1>
@@ -153,10 +150,11 @@ export function SemestersPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button
           onClick={openCreateModal}
-          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+          disabled={isFetching || isSaving}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Semester
@@ -175,10 +173,10 @@ export function SemestersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or year"
-            className="h-10 pl-9 rounded-none border-zinc-200 bg-white text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
           />
         </div>
-      </div>
+      </StickyActionBar>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -191,7 +189,7 @@ export function SemestersPage() {
                 <p className="text-xs text-zinc-500 mt-2">All defined terms</p>
               </div>
               <div className="p-2 rounded-none bg-blue-50">
-                <CalendarRange className="size-5 text-blue-600" />
+                <Calendar className="size-5 text-blue-600" />
               </div>
             </div>
           </CardContent>
@@ -247,8 +245,9 @@ export function SemestersPage() {
       <div className="mb-8">
         <SemesterList
           semesters={filteredSemesters}
-          isLoading={isSaving || deleteMutation.isPending}
+          isLoading={showTableLoading}
           isDeleting={deleteMutation.isPending}
+          search={search}
           onEditSemester={openEditModal}
           onDeleteSemester={handleDelete}
           onAddSemester={openCreateModal}

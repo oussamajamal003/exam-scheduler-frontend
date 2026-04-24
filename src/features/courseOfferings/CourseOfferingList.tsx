@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { cn } from "../../lib/utils";
 import type { CourseOffering, OfferingStatus } from "../../schemas/courseOffering";
@@ -23,6 +23,7 @@ interface CourseOfferingListProps {
   offerings: CourseOffering[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onCreateOffering: () => void;
   onEditOffering: (offering: CourseOffering) => void;
   onViewOffering: (offering: CourseOffering) => void;
@@ -46,16 +47,13 @@ export function CourseOfferingList({
   offerings,
   isLoading,
   isDeleting,
+  search,
   onCreateOffering,
   onEditOffering,
   onViewOffering,
   onDeleteOffering,
 }: CourseOfferingListProps) {
   const rows = Array.isArray(offerings) ? offerings : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={7} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -124,18 +122,32 @@ export function CourseOfferingList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={11} className="p-0">
-                    <EmptyState
-                      icon={Layers}
-                      title="No course offerings found"
-                      description="Create your first offering to connect courses, semesters, instructors, and enrollments."
-                      action={{
-                        label: "Add Offering",
-                        onClick: onCreateOffering,
-                      }}
-                    />
+                    <TableSkeletonRows columns={11} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={Layers}
+                        title="No results found"
+                        description={`No course offerings match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Layers}
+                        title="No course offerings yet"
+                        description="Create your first offering to connect courses, semesters, instructors, and enrollments."
+                        action={{
+                          label: "Add Offering",
+                          onClick: onCreateOffering,
+                        }}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

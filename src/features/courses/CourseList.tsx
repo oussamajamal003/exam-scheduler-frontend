@@ -4,24 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Course } from "../../schemas/course";
 import { Edit2, Trash2, Library, BookOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface CourseListProps {
   courses: Course[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
+  onAdd?: () => void;
   onEditCourse: (course: Course) => void;
   onViewDetails: (course: Course) => void;
   onDeleteCourse: (course: Course) => void;
 }
 
-export function CourseList({ courses, isLoading, isDeleting, onEditCourse, onViewDetails, onDeleteCourse }: CourseListProps) {
+export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEditCourse, onViewDetails, onDeleteCourse }: CourseListProps) {
   const courseRows = Array.isArray(courses) ? courses : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={5} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -47,24 +45,36 @@ export function CourseList({ courses, isLoading, isDeleting, onEditCourse, onVie
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Code</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Course Name</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Credits</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Program / Semester</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Details</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {courseRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
-                    <EmptyState
-                      icon={Library}
-                      title="No courses found"
-                      description="Create a curriculum block to link students and exams."
-                      action={{
-                        label: "Add Course",
-                        onClick: () => {},
-                      }}
-                    />
+                  <TableCell colSpan={6} className="p-0">
+                    <TableSkeletonRows columns={6} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : courseRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={Library}
+                        title="No results found"
+                        description={`No courses match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Library}
+                        title="No courses yet"
+                        description="Create a curriculum block to link students and exams."
+                        action={onAdd ? { label: "Add Course", onClick: onAdd } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -81,6 +91,9 @@ export function CourseList({ courses, isLoading, isDeleting, onEditCourse, onVie
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950 text-sm">{course.name}</div>
+                    </TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700">
+                      {course.credits ?? "—"}
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-medium text-zinc-800 text-sm">{course.program}</div>

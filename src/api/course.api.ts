@@ -7,16 +7,33 @@ type ApiEnvelope<T> = {
   data?: T;
 };
 
+export type CourseDetailOffering = {
+  id: string;
+  semesterId: string;
+  semesterName: string;
+  registrationsCount: number;
+  examsCount: number;
+};
+
+export type CourseDetail = Course & {
+  description?: string | null;
+  credits?: number | null;
+  offerings: CourseDetailOffering[];
+};
+
 type BackendCourse = {
   id: string;
   code: string;
   title: string;
+  description?: string | null;
+  credits?: number | null;
   programId?: string | null;
   program?: {
     id: string;
     name: string;
   } | null;
   courseOfferings?: Array<{
+    id?: string;
     semester?: {
       id: string;
       name: string;
@@ -24,6 +41,7 @@ type BackendCourse = {
       isCurrent?: boolean;
       startDate?: string;
     } | null;
+    _count?: { registrations?: number; exams?: number };
   }>;
 };
 
@@ -48,6 +66,7 @@ const mapBackendCourse = (course: BackendCourse): Course => {
     id: course.id,
     code: course.code,
     name: course.title,
+    credits: course.credits ?? undefined,
     programId: course.program?.id ?? course.programId ?? "",
     program: course.program?.name ?? "Unassigned Program",
     semesterId,
@@ -68,12 +87,34 @@ export const fetchCourse = async (id: string): Promise<Course> => {
   return mapBackendCourse(response.data.data);
 };
 
+export const fetchCourseDetail = async (id: string): Promise<CourseDetail> => {
+  const response = await axiosClient.get<ApiEnvelope<BackendCourse>>(`/courses/${id}`);
+  if (!response.data?.data) throw new Error("Course not found in API response");
+  const c = response.data.data;
+  const base = mapBackendCourse(c);
+  return {
+    ...base,
+    description: c.description ?? null,
+    credits: c.credits ?? undefined,
+    offerings: (c.courseOfferings ?? [])
+      .filter((o) => o.id)
+      .map((o) => ({
+        id: o.id as string,
+        semesterId: o.semester?.id ?? "",
+        semesterName: o.semester?.name ?? "Unknown Semester",
+        registrationsCount: o._count?.registrations ?? 0,
+        examsCount: o._count?.exams ?? 0,
+      })),
+  };
+};
+
 export const createCourse = async (course: CreateCourseDto): Promise<Course> => {
   const payload: Record<string, unknown> = {
     code: course.code,
     title: course.name,
     programId: course.programId,
   };
+  if (course.credits !== undefined) payload.credits = course.credits;
   if (course.semesterId) payload.semesterId = course.semesterId;
   const response = await axiosClient.post<ApiEnvelope<BackendCourse>>("/courses", payload);
   if (!response.data?.data) throw new Error("Created course not found in API response");
@@ -84,6 +125,7 @@ export const updateCourse = async ({ id, data }: { id: string; data: UpdateCours
   const payload: Record<string, unknown> = {};
   if (data.code) payload.code = data.code;
   if (data.name) payload.title = data.name;
+  if (data.credits !== undefined) payload.credits = data.credits;
   if (data.programId) payload.programId = data.programId;
   if (data.semesterId) payload.semesterId = data.semesterId;
   

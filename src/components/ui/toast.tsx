@@ -79,7 +79,7 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
         <div className="flex-1">
           <p className="text-sm font-semibold text-zinc-950">{toast.title}</p>
           {toast.description && (
-            <p className="mt-1 text-sm text-zinc-600">{toast.description}</p>
+            <p className="mt-1 text-sm text-zinc-600 whitespace-pre-line">{toast.description}</p>
           )}
         </div>
       </div>
@@ -109,7 +109,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col space-y-2">
+      <div className="fixed bottom-4 right-4 z-9999 flex max-w-sm flex-col space-y-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
         ))}

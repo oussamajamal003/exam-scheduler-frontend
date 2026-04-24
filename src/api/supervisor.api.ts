@@ -11,26 +11,51 @@ type BackendSupervisor = {
   id: string;
   name?: string;
   email?: string;
+  department?: string | null;
   user?: {
     name?: string;
     email?: string;
   };
   center?: {
+    id?: string;
     name?: string;
   } | string;
+  _count?: {
+    assignments?: number;
+  };
 };
 
-type SupervisorWorkload = {
-  supervisorId: string;
-  totalAssignments: number;
-  assignments: unknown[];
+export type SupervisorWorkloadAssignment = {
+  id?: string;
+  timeSlot?: {
+    label?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  } | null;
+  room?: {
+    id?: string;
+    name?: string;
+  } | null;
+  exam?: {
+    courseOffering?: {
+      course?: { code?: string; title?: string } | null;
+      semester?: { name?: string } | null;
+    } | null;
+  } | null;
+};
+
+export type SupervisorWorkload = {
+  workloadCount: number;
+  assignments: SupervisorWorkloadAssignment[];
 };
 
 const mapBackendSupervisor = (supervisor: BackendSupervisor): Supervisor => ({
   id: supervisor.id,
   name: supervisor.user?.name || supervisor.name || "Unknown",
   email: supervisor.user?.email || supervisor.email || "Unknown",
-  department: "General",
+  department: supervisor.department || "—",
+  centerId: typeof supervisor.center === "string" ? "" : supervisor.center?.id || "",
   center: typeof supervisor.center === "string" ? supervisor.center : supervisor.center?.name || "Unknown",
 });
 

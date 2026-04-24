@@ -13,7 +13,7 @@ export const LoginPage: React.FC = () => {
 
     const timer = window.setTimeout(() => {
       setStage('form');
-    }, 1200);
+    }, 1000);
 
     return () => {
       window.clearTimeout(timer);

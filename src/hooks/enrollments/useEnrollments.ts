@@ -6,6 +6,7 @@ import {
   fetchEnrollments,
 } from "../../api/enrollment.api";
 import { useToast } from "../../components/ui/toast";
+import { getSmartErrorDescription } from "../../lib/apiError";
 import type { CreateEnrollmentDto } from "../../schemas/enrollment";
 
 export const useEnrollments = (search = "") =>
@@ -35,7 +36,7 @@ export const useCreateEnrollment = () => {
       addToast({
         type: "error",
         title: "Failed to Add Enrollment",
-        description: error?.message || "An error occurred while creating the enrollment.",
+        description: getSmartErrorDescription(error, "An error occurred while creating the enrollment."),
       });
     },
   });
@@ -60,7 +61,7 @@ export const useDeleteEnrollment = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Enrollment",
-        description: error?.message || "An error occurred while removing the enrollment.",
+        description: getSmartErrorDescription(error, "An error occurred while removing the enrollment."),
       });
     },
   });
@@ -85,7 +86,7 @@ export const useBulkImportEnrollments = () => {
       addToast({
         type: "error",
         title: "Bulk Import Failed",
-        description: error?.message || "An error occurred during bulk import.",
+        description: getSmartErrorDescription(error, "An error occurred during bulk import."),
       });
     },
   });

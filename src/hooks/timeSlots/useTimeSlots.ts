@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createTimeSlot, deleteTimeSlot, fetchTimeSlots, updateTimeSlot } from "../../api/timeSlot.api";
 import { CreateTimeSlotDto, UpdateTimeSlotDto } from "../../schemas/timeSlot";
 import { useToast } from "../../components/ui/toast";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useTimeSlots = () => {
   return useQuery({
@@ -25,7 +25,7 @@ export const useCreateTimeSlot = () => {
       addToast({
         type: "error",
         title: "Failed to Add Time Slot",
-        description: getApiErrorMessage(error, "An error occurred while adding the time slot."),
+        description: getSmartErrorDescription(error, "An error occurred while adding the time slot."),
       });
     },
   });
@@ -45,7 +45,7 @@ export const useUpdateTimeSlot = () => {
       addToast({
         type: "error",
         title: "Failed to Update Time Slot",
-        description: getApiErrorMessage(error, "An error occurred while updating the time slot."),
+        description: getSmartErrorDescription(error, "An error occurred while updating the time slot."),
       });
     },
   });
@@ -65,7 +65,7 @@ export const useDeleteTimeSlot = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Time Slot",
-        description: getApiErrorMessage(error, "An error occurred while deleting the time slot."),
+        description: getSmartErrorDescription(error, "An error occurred while deleting the time slot."),
       });
     },
   });

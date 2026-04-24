@@ -20,6 +20,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { getApiErrorMessage } from "../../lib/apiError";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import { useCourseOffering } from "../../hooks/courseOfferings/useCourseOfferings";
 import { cn } from "../../lib/utils";
 import type { CourseOfferingDetail, OfferingStatus } from "../../schemas/courseOffering";
@@ -41,8 +42,9 @@ export function CourseOfferingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: offering, isLoading, isError, error } = useCourseOffering(id);
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
 
-  if (isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading offering" />
@@ -73,7 +75,7 @@ export function CourseOfferingDetailPage() {
   const hasConflicts = (offering.conflictsCount ?? 0) > 0;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
         <Button

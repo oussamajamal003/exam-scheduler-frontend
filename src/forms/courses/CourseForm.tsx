@@ -18,8 +18,6 @@ import { cn } from "../../lib/utils";
 import type { Program } from "../../schemas/program";
 import type { Semester } from "../../schemas/semester";
 
-type CourseFormValues = z.input<typeof courseSchema>;
-
 interface CourseFormProps {
   initialData?: Course;
   programs: Program[];
@@ -29,10 +27,13 @@ interface CourseFormProps {
   programsErrorMessage?: string;
   semestersErrorMessage?: string;
   submitErrorMessage?: string;
-  submitValidationMessages?: string[];
+  submitValidationMessages?: Record<string, string[]>;
   onSubmit: (data: Course) => void;
   isLoading?: boolean;
 }
+
+type CourseFormValues = z.input<typeof courseSchema>;
+type CourseFormOutput = z.output<typeof courseSchema>;
 
 export function CourseForm({
   initialData,
@@ -47,11 +48,12 @@ export function CourseForm({
   onSubmit,
   isLoading,
 }: CourseFormProps) {
-  const form = useForm<CourseFormValues>({
+  const form = useForm<CourseFormValues, unknown, CourseFormOutput>({
     resolver: zodResolver(courseSchema),
     defaultValues: initialData || {
       code: "",
       name: "",
+      credits: undefined,
       programId: "",
       program: "",
       semesterId: "",
@@ -69,6 +71,7 @@ export function CourseForm({
     form.reset({
       code: "",
       name: "",
+      credits: undefined,
       programId: "",
       program: "",
       semesterId: "",
@@ -80,6 +83,7 @@ export function CourseForm({
   const selectedSemesterId = useWatch({ control: form.control, name: "semesterId" });
   const enteredCode = useWatch({ control: form.control, name: "code" });
   const enteredName = useWatch({ control: form.control, name: "name" });
+  const enteredCredits = useWatch({ control: form.control, name: "credits" });
 
   const selectedProgram = useMemo(
     () => programs.find((program) => program.id === selectedProgramId) ?? null,
@@ -90,7 +94,6 @@ export function CourseForm({
     [semesters, selectedSemesterId]
   );
 
-  const isGlobalError = !!submitErrorMessage || (submitValidationMessages && submitValidationMessages.length > 0);
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const isSubmitDisabled =
     Boolean(isLoading) ||
@@ -99,11 +102,12 @@ export function CourseForm({
     Boolean(programsErrorMessage) ||
     programs.length === 0;
 
-  const handleSubmit = (values: CourseFormValues) => {
+  const handleSubmit = (values: CourseFormOutput) => {
     onSubmit({
       id: initialData?.id,
       code: values.code,
       name: values.name,
+      credits: values.credits,
       programId: values.programId,
       program: values.program ?? selectedProgram?.name ?? "",
       semesterId: values.semesterId,
@@ -134,16 +138,10 @@ export function CourseForm({
         </div>
       )}
 
-      {(submitErrorMessage || (submitValidationMessages?.length ?? 0) > 0) && (
-        <div className="space-y-2 rounded-none border border-red-200 bg-red-50 px-3 py-3 text-red-900">
-          {submitErrorMessage && <p className="text-sm font-semibold">{submitErrorMessage}</p>}
-          {(submitValidationMessages?.length ?? 0) > 0 && (
-            <ul className="list-disc space-y-1 pl-5 text-xs">
-              {submitValidationMessages?.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          )}
+      {submitErrorMessage && (
+        <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+          <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm font-medium text-destructive leading-snug">{submitErrorMessage}</p>
         </div>
       )}
 
@@ -157,25 +155,25 @@ export function CourseForm({
             {...form.register("code")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.code || isGlobalError
+              form.formState.errors.code || submitValidationMessages?.code
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., CSCI301"
             disabled={isLoading}
           />
-          {form.formState.errors.code && (
+          {(form.formState.errors.code || submitValidationMessages?.code) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.code && !!enteredCode && (
+          {!form.formState.errors.code && !submitValidationMessages?.code && !!enteredCode && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.code && (
+        {(form.formState.errors.code || submitValidationMessages?.code) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.code.message as string}
+              {(form.formState.errors.code?.message ?? submitValidationMessages?.code?.[0]) as string}
             </p>
           </div>
         )}
@@ -191,25 +189,64 @@ export function CourseForm({
             {...form.register("name")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.name || isGlobalError
+              form.formState.errors.name || submitValidationMessages?.name
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., Data Structures"
             disabled={isLoading}
           />
-          {form.formState.errors.name && (
+          {(form.formState.errors.name || submitValidationMessages?.name) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.name && !!enteredName && (
+          {!form.formState.errors.name && !submitValidationMessages?.name && !!enteredName && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {form.formState.errors.name && (
+        {(form.formState.errors.name || submitValidationMessages?.name) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.name.message as string}
+              {(form.formState.errors.name?.message ?? submitValidationMessages?.name?.[0]) as string}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <Label htmlFor="credits" className="text-sm font-semibold text-zinc-950">
+          Credits
+        </Label>
+        <div className="relative">
+          <Input
+            id="credits"
+            type="number"
+            min={0}
+            step={1}
+            {...form.register("credits", {
+              setValueAs: (value) => (value === "" ? undefined : Number(value)),
+            })}
+            className={cn(
+              "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
+              form.formState.errors.credits || submitValidationMessages?.credits
+                ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
+                : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+            )}
+            placeholder="e.g., 3"
+            disabled={isLoading}
+          />
+          {(form.formState.errors.credits || submitValidationMessages?.credits) && (
+            <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
+          )}
+          {!form.formState.errors.credits && !submitValidationMessages?.credits && enteredCredits !== undefined && enteredCredits !== null && (
+            <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
+          )}
+        </div>
+        {(form.formState.errors.credits || submitValidationMessages?.credits) && (
+          <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+            <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-xs font-medium text-destructive leading-snug">
+              {(form.formState.errors.credits?.message ?? submitValidationMessages?.credits?.[0]) as string}
             </p>
           </div>
         )}
@@ -238,7 +275,7 @@ export function CourseForm({
             id="program"
             className={cn(
               "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.programId || isGlobalError
+              form.formState.errors.programId || submitValidationMessages?.programId
                 ? "border-destructive/60 bg-destructive/5"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400"
             )}
@@ -258,11 +295,11 @@ export function CourseForm({
             Linked department: {selectedProgram.departmentName ?? "Unassigned Department"}
           </p>
         )}
-        {form.formState.errors.programId && (
+        {(form.formState.errors.programId || submitValidationMessages?.programId) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.programId.message as string}
+              {(form.formState.errors.programId?.message ?? submitValidationMessages?.programId?.[0]) as string}
             </p>
           </div>
         )}
@@ -290,7 +327,7 @@ export function CourseForm({
             id="semester"
             className={cn(
               "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              isGlobalError
+              submitValidationMessages?.semesterId
                 ? "border-destructive/60 bg-destructive/5"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400"
             )}

@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Center } from "../../schemas/center";
 import { Building2, Edit2, Eye, MapPin, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface CenterListProps {
   centers: Center[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
   onEditCenter: (center: Center) => void;
   onDeleteCenter: (center: Center) => void;
   onViewCenter: (center: Center) => void;
@@ -21,16 +22,13 @@ export function CenterList({
   centers,
   isLoading,
   isDeleting,
+  search,
   onEditCenter,
   onDeleteCenter,
   onViewCenter,
   onAddCenter,
 }: CenterListProps) {
   const rows = Array.isArray(centers) ? centers : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={5} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -66,15 +64,29 @@ export function CenterList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
-                    <EmptyState
-                      icon={Building2}
-                      title="No centers yet"
-                      description="Add your first exam center to start allocating rooms and supervisors."
-                      action={onAddCenter ? { label: "Add Center", onClick: onAddCenter } : undefined}
-                    />
+                    <TableSkeletonRows columns={5} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={Building2}
+                        title="No results found"
+                        description={`No centers match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Building2}
+                        title="No centers yet"
+                        description="Add your first exam center to start allocating rooms and supervisors."
+                        action={onAddCenter ? { label: "Add Center", onClick: onAddCenter } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -100,12 +112,12 @@ export function CenterList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
-                      <span className="inline-flex items-center justify-center rounded-none bg-blue-50 text-blue-700 px-2.5 py-1 text-xs font-bold min-w-[2.5rem]">
+                      <span className="inline-flex items-center justify-center rounded-none bg-blue-50 text-blue-700 px-2.5 py-1 text-xs font-bold min-w-10">
                         {center?.roomsCount ?? 0}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
-                      <span className="inline-flex items-center justify-center rounded-none bg-violet-50 text-violet-700 px-2.5 py-1 text-xs font-bold min-w-[2.5rem]">
+                      <span className="inline-flex items-center justify-center rounded-none bg-violet-50 text-violet-700 px-2.5 py-1 text-xs font-bold min-w-10">
                         {center?.supervisorsCount ?? 0}
                       </span>
                     </TableCell>

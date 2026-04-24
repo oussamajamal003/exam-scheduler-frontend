@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
@@ -157,36 +156,23 @@ const SectionGroup: React.FC<{
   }, [hasActiveChild, isOpen, onOpenChange]);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onOpenChange} className="rounded-2xl border border-zinc-200/80 bg-white/80 shadow-sm shadow-zinc-200/40 backdrop-blur-md">
+    <Collapsible open={isOpen} onOpenChange={onOpenChange}>
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className={cn(
-            'flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-200',
-            hasActiveChild ? 'bg-zinc-100/80 shadow-inner shadow-zinc-200/40' : 'hover:bg-zinc-50/80'
-          )}
+          className="group flex w-full items-center justify-between rounded-md bg-zinc-100 px-2.5 py-1.5 mb-1 hover:bg-zinc-200/70 transition-colors duration-150"
           aria-label={`${section.title} navigation group`}
         >
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">{section.title}</p>
-            {!isOpen ? (
-              <p className="mt-1 text-sm font-semibold text-zinc-900">{section.items.length} destinations</p>
-            ) : (
-              <p className="mt-1 text-xs font-medium text-zinc-500">Choose a destination</p>
-            )}
-          </div>
-          <div
-            className={cn(
-              'flex size-8 shrink-0 items-center justify-center rounded-full border bg-white text-zinc-500 shadow-sm transition-colors',
-              hasActiveChild ? 'border-zinc-300 text-zinc-900' : 'border-zinc-200'
-            )}
-          >
-            <ChevronDown className={cn('size-4 transition-transform duration-200', isOpen ? 'rotate-180' : 'rotate-0')} />
-          </div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 group-hover:text-zinc-700 transition-colors duration-150">
+            {section.title}
+          </span>
+          <ChevronDown
+            className={cn('size-3 text-zinc-400 transition-transform duration-200', isOpen ? 'rotate-180' : '')}
+          />
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1">
-        <div className="space-y-1 px-3 pb-3 pt-0.5">
+        <div className="space-y-0.5 pb-3">
           {section.items.map((item) => (
             <NavLink
               key={item.to}
@@ -194,17 +180,17 @@ const SectionGroup: React.FC<{
               onClick={onItemSelect}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                  'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
                   isActive
-                    ? 'border-zinc-900 bg-zinc-900 text-zinc-50 shadow-md shadow-zinc-900/10'
-                    : 'border-transparent text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900'
+                    ? 'bg-zinc-950 text-white shadow-sm'
+                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && <span className="absolute inset-y-2 left-1.5 w-1 rounded-full bg-white/80" />}
-                  <item.icon className="size-4.5 shrink-0" />
+                  {isActive && <span className="absolute inset-y-2 left-1.5 w-0.5 rounded-full bg-white/60" />}
+                  <item.icon className="size-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
                 </>
               )}
@@ -252,35 +238,35 @@ export const AdminLayout: React.FC = () => {
   };
 
   const sidebarContent = (
-    <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-3 pr-1 [scrollbar-gutter:stable]">
-      <div className="rounded-3xl border border-zinc-200/80 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),rgba(244,244,245,0.88),rgba(228,228,231,0.72))] p-4 shadow-lg shadow-zinc-200/50">
-        <div className="flex items-start gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 shadow-sm shadow-zinc-900/20">
-            <Sparkles className="size-5 text-zinc-50" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">Smart Exam Scheduler</p>
-            <h2 className="mt-1 truncate text-[15px] font-semibold tracking-tight text-zinc-950">Admin Dashboard</h2>
-          </div>
+    <>
+      <div className="shrink-0 flex items-center gap-3 px-2 pb-4 mb-1 border-b border-zinc-100">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm">
+          <Sparkles className="size-4 text-zinc-50" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam</p>
+          <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
         </div>
       </div>
 
-      <div className="space-y-3 pb-2">
-        {sidebarSections.map((section) => (
-          <SectionGroup
-            key={section.title}
-            section={section}
-            isOpen={openSections[section.title] ?? true}
-            onOpenChange={(open) => toggleSection(section.title, open)}
-            onItemSelect={closeSidebar}
-          />
-        ))}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 pr-0.5 [scrollbar-gutter:stable]">
+        <div className="space-y-1.5">
+          {sidebarSections.map((section) => (
+            <SectionGroup
+              key={section.title}
+              section={section}
+              isOpen={openSections[section.title] ?? true}
+              onOpenChange={(open) => toggleSection(section.title, open)}
+              onItemSelect={closeSidebar}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(250,250,250,1)_0%,rgba(244,244,245,0.96)_100%)] text-zinc-950 selection:bg-zinc-200">
+    <div className="min-h-screen bg-zinc-50/60 text-zinc-950 selection:bg-zinc-200">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-zinc-200/30 blur-3xl" />
         <div className="absolute right-0 top-24 h-80 w-80 rounded-full bg-sky-100/40 blur-3xl" />
@@ -398,29 +384,20 @@ export const AdminLayout: React.FC = () => {
           </div>
         </header>
 
-        <section className="px-4 pt-5 sm:px-6 lg:px-8">
-          <Card className="overflow-hidden rounded-[28px] border-zinc-200/80 bg-white/78 shadow-lg shadow-zinc-200/45 backdrop-blur-xl">
-            <CardContent className="p-5 sm:p-6">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400">
-                  <span>Admin</span>
-                  <ChevronRight className="size-3.5" />
-                  <span>{currentPage.title}</span>
-                </div>
-                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">{currentPage.title}</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">{currentPage.subtitle}</p>
-              </div>
-            </CardContent>
-          </Card>
+        <section className="px-5 pt-4 pb-0 sm:px-6 lg:px-8">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400"
+          >
+            <span>Admin</span>
+            <ChevronRight className="size-3" />
+            <span className="text-zinc-500">{currentPage.title}</span>
+          </nav>
         </section>
 
-        <main className="flex-1 px-4 pb-8 pt-6 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-360 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="rounded-[28px] border border-zinc-200/70 bg-white/58 p-2 shadow-[0_20px_60px_rgba(24,24,27,0.06)] backdrop-blur-sm sm:p-3">
-              <div className="min-h-[calc(100vh-240px)] rounded-[22px] bg-transparent">
-                <Outlet />
-              </div>
-            </div>
+        <main className="flex-1">
+          <div className="animate-in fade-in duration-300">
+            <Outlet />
           </div>
         </main>
       </div>

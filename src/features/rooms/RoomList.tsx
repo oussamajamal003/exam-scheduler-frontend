@@ -4,23 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Room } from "../../schemas/room";
 import { Edit2, Trash2, MapPin } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { TableSkeleton } from "../../components/ui/skeleton";
+import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
 interface RoomListProps {
   rooms: Room[];
   isLoading?: boolean;
   isDeleting?: boolean;
+  search?: string;
+  onAdd?: () => void;
   onEditRoom: (room: Room) => void;
   onDeleteRoom: (room: Room) => void;
 }
 
-export function RoomList({ rooms, isLoading, isDeleting, onEditRoom, onDeleteRoom }: RoomListProps) {
+export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRoom, onDeleteRoom }: RoomListProps) {
   const roomRows = Array.isArray(rooms) ? rooms : [];
-
-  if (isLoading) {
-    return <TableSkeleton columns={5} rows={8} />;
-  }
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -52,18 +50,29 @@ export function RoomList({ rooms, isLoading, isDeleting, onEditRoom, onDeleteRoo
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roomRows.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
-                    <EmptyState
-                      icon={MapPin}
-                      title="No rooms found"
-                      description="Configure spaces to generate functional exam schedules."
-                      action={{
-                        label: "Add Room",
-                        onClick: () => {},
-                      }}
-                    />
+                    <TableSkeletonRows columns={5} rows={8} />
+                  </TableCell>
+                </TableRow>
+              ) : roomRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="p-0">
+                    {search?.trim() ? (
+                      <EmptyState
+                        icon={MapPin}
+                        title="No results found"
+                        description={`No rooms match "${search.trim()}". Try a different search term.`}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={MapPin}
+                        title="No rooms yet"
+                        description="Configure spaces to generate functional exam schedules."
+                        action={onAdd ? { label: "Add Room", onClick: onAdd } : undefined}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

@@ -12,12 +12,14 @@ export const useLogout = () => {
     mutationFn: logoutUser,
     onSuccess: () => {
       localStorage.removeItem('token');
+      localStorage.removeItem('token_expires_at');
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       queryClient.clear();
       navigate('/login');
     },
     onError: () => {
       localStorage.removeItem('token');
+      localStorage.removeItem('token_expires_at');
       localStorage.removeItem(AUTH_USER_STORAGE_KEY);
       queryClient.clear();
       navigate('/login');

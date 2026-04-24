@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { CenterList } from "../../features/centers/CenterList";
 import { CenterForm } from "../../forms/centers/CenterForm";
 import { CenterDetailDialog } from "../../features/centers/CenterDetailDialog";
@@ -8,7 +8,6 @@ import {
   useDeleteCenter,
   useUpdateCenter,
 } from "../../hooks/centers/useCenters";
-import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -17,11 +16,13 @@ import { Center, CenterFormValues } from "../../schemas/center";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { Building2, CheckCircle2, DoorOpen, Plus, RefreshCw, Search, ShieldCheck } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { Building, CheckCircle2, DoorOpen, Plus, RefreshCw, Search, ShieldCheck } from "lucide-react";
 
 export function CentersPage() {
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const { data: centers = [], isLoading, isFetching, isError, error, refetch } = useCenters();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCenter, setEditingCenter] = useState<Center | null>(null);
@@ -64,11 +65,11 @@ export function CentersPage() {
     if (editingCenter?.id) {
       updateMutation.mutate(
         { id: editingCenter.id, data: payload },
-        { onSuccess: () => closeFormModal() }
+        { onSuccess: closeFormModal }
       );
       return;
     }
-    createMutation.mutate(payload, { onSuccess: () => closeFormModal() });
+    createMutation.mutate(payload, { onSuccess: closeFormModal });
   };
 
   const handleDelete = (center: Center) => {
@@ -81,26 +82,26 @@ export function CentersPage() {
     deleteMutation.reset();
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["centers"] });
-    addToast({ type: "success", title: "Refreshed", description: "Center data has been refreshed." });
+  const handleRefresh = () => {
+    refetch();
   };
 
   const confirmDelete = () => {
     if (!deletingCenter?.id) return;
-    deleteMutation.mutate(deletingCenter.id, { onSuccess: () => closeDeleteModal() });
+    deleteMutation.mutate(deletingCenter.id, { onSuccess: closeDeleteModal });
   };
 
   const filteredCenters = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = deferredSearch.toLowerCase();
     if (!term) return centers;
     return centers.filter((c) =>
       [c?.name, c?.location, c?.code].filter(Boolean).some((v) => String(v).toLowerCase().includes(term))
     );
-  }, [search, centers]);
+  }, [deferredSearch, centers]);
+
+  const isSearching = search.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
     let totalRooms = 0;
@@ -115,8 +116,9 @@ export function CentersPage() {
   }, [centers]);
 
   const pageErrorMessage = getApiErrorMessage(error, "Failed to load centers.");
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
 
-  if (isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading centers" />
@@ -136,12 +138,12 @@ export function CentersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-none bg-zinc-950 text-white shadow-sm">
-            <Building2 className="size-5" />
+            <Building className="size-5" />
           </div>
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Centers</h1>
@@ -153,10 +155,11 @@ export function CentersPage() {
       </div>
 
       {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button
           onClick={openCreateModal}
-          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+          disabled={isFetching || isSaving}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Center
@@ -175,10 +178,10 @@ export function CentersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or location"
-            className="h-10 pl-9 rounded-none border-zinc-200 bg-white text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
           />
         </div>
-      </div>
+      </StickyActionBar>
 
       {/* Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -191,7 +194,7 @@ export function CentersPage() {
                 <p className="text-xs text-zinc-500 mt-2">All centers</p>
               </div>
               <div className="p-2 rounded-none bg-blue-50">
-                <Building2 className="size-5 text-blue-600" />
+                <Building className="size-5 text-blue-600" />
               </div>
             </div>
           </CardContent>
@@ -247,7 +250,8 @@ export function CentersPage() {
       <div className="mb-8">
         <CenterList
           centers={filteredCenters}
-          isLoading={isSaving || deleteMutation.isPending}
+          isLoading={showTableLoading}
+          search={search}
           isDeleting={deleteMutation.isPending}
           onEditCenter={openEditModal}
           onDeleteCenter={handleDelete}

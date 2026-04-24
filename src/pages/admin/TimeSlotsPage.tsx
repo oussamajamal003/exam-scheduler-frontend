@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { TimeSlotList } from "../../features/timeslots/TimeSlotList";
 import { TimeSlotForm } from "../../forms/timeSlots/TimeSlotForm";
 import {
@@ -7,7 +7,6 @@ import {
   useTimeSlots,
   useUpdateTimeSlot,
 } from "../../hooks/timeSlots/useTimeSlots";
-import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -16,8 +15,9 @@ import { TimeSlot, TimeSlotFormValues } from "../../schemas/timeSlot";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import { CalendarCheck, Clock, ListChecks, Plus, RefreshCw, Search, TrendingUp } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -45,6 +45,7 @@ const formatTimeForSearch = (value?: string) => {
 
 export function TimeSlotsPage() {
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const { data: timeSlots = [], isLoading, isFetching, isError, error, refetch } = useTimeSlots();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
@@ -81,11 +82,11 @@ export function TimeSlotsPage() {
     if (editingSlot?.id) {
       updateMutation.mutate(
         { id: editingSlot.id, data },
-        { onSuccess: () => closeFormModal() }
+        { onSuccess: closeFormModal }
       );
       return;
     }
-    createMutation.mutate(data, { onSuccess: () => closeFormModal() });
+    createMutation.mutate(data, { onSuccess: closeFormModal });
   };
 
   const handleDelete = (slot: TimeSlot) => {
@@ -100,19 +101,15 @@ export function TimeSlotsPage() {
 
   const confirmDelete = () => {
     if (!deletingSlot?.id) return;
-    deleteMutation.mutate(deletingSlot.id, { onSuccess: () => closeDeleteModal() });
+    deleteMutation.mutate(deletingSlot.id, { onSuccess: closeDeleteModal });
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["timeSlots"] });
-    addToast({ type: "success", title: "Refreshed", description: "Time slot data has been refreshed." });
+  const handleRefresh = () => {
+    refetch();
   };
 
   const filteredSlots = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = deferredSearch.toLowerCase();
     if (!term) return timeSlots;
     return timeSlots.filter((s) => {
       const haystack = [
@@ -123,7 +120,11 @@ export function TimeSlotsPage() {
       ].filter(Boolean).join(" ");
       return haystack.includes(term);
     });
-  }, [search, timeSlots]);
+  }, [deferredSearch, timeSlots]);
+
+  const isSearching = search.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
     const today = todayKey();
@@ -142,8 +143,9 @@ export function TimeSlotsPage() {
   }, [timeSlots]);
 
   const pageErrorMessage = getApiErrorMessage(error, "Failed to load time slots.");
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
 
-  if (isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading time slots" />
@@ -163,7 +165,7 @@ export function TimeSlotsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -180,10 +182,11 @@ export function TimeSlotsPage() {
       </div>
 
       {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button
           onClick={openCreateModal}
-          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+          disabled={isFetching || isSaving}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Time Slot
@@ -202,10 +205,10 @@ export function TimeSlotsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by date or time"
-            className="h-10 pl-9 rounded-none border-zinc-200 bg-white text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
           />
         </div>
-      </div>
+      </StickyActionBar>
 
       {/* Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -274,8 +277,9 @@ export function TimeSlotsPage() {
       <div className="mb-8">
         <TimeSlotList
           timeSlots={filteredSlots}
-          isLoading={isSaving || deleteMutation.isPending}
+          isLoading={showTableLoading}
           isDeleting={deleteMutation.isPending}
+          search={search}
           onEditTimeSlot={openEditModal}
           onDeleteTimeSlot={handleDelete}
           onAddTimeSlot={openCreateModal}

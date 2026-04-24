@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchSupervisors, fetchSupervisor, createSupervisor, updateSupervisor, deleteSupervisor, fetchSupervisorWorkload } from "../../api/supervisor.api";
 import { CreateSupervisorDto, UpdateSupervisorDto } from "../../schemas/supervisor";
 import { useToast } from "../../components/ui/toast";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useSupervisors = () => {
   return useQuery({
@@ -32,11 +33,11 @@ export const useCreateSupervisor = () => {
         description: `${data.name} has been successfully added as a supervisor.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast({
         type: "error",
         title: "Failed to Add Supervisor",
-        description: error?.message || "An error occurred while adding the supervisor.",
+        description: getSmartErrorDescription(error, "An error occurred while adding the supervisor."),
       });
     },
   });
@@ -57,11 +58,11 @@ export const useUpdateSupervisor = () => {
         description: `${data.name}'s information has been successfully updated.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast({
         type: "error",
         title: "Failed to Update Supervisor",
-        description: error?.message || "An error occurred while updating the supervisor.",
+        description: getSmartErrorDescription(error, "An error occurred while updating the supervisor."),
       });
     },
   });
@@ -82,11 +83,11 @@ export const useDeleteSupervisor = () => {
         description: "The supervisor has been successfully removed from the system.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast({
         type: "error",
         title: "Failed to Remove Supervisor",
-        description: error?.message || "An error occurred while removing the supervisor.",
+        description: getSmartErrorDescription(error, "An error occurred while removing the supervisor."),
       });
     },
   });

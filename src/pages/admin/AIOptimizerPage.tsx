@@ -9,7 +9,7 @@ export const AIOptimizerPage: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const timer = window.setTimeout(() => setIsLoading(false), 700);
+    const timer = window.setTimeout(() => setIsLoading(false), 1000);
     return () => window.clearTimeout(timer);
   }, []);
 

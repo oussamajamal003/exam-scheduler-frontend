@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCourseOffering,
   deleteCourseOffering,
@@ -13,11 +13,13 @@ import {
   UpdateCourseOfferingDto,
 } from "../../schemas/courseOffering";
 import { useToast } from "../../components/ui/toast";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useCourseOfferings = (search = "") => {
   return useQuery({
     queryKey: ["course-offerings", search],
     queryFn: () => fetchCourseOfferings(search),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -62,7 +64,7 @@ export const useCreateCourseOffering = () => {
       addToast({
         type: "error",
         title: "Failed to Add Offering",
-        description: error?.message || "An error occurred while adding the offering.",
+        description: getSmartErrorDescription(error, "An error occurred while adding the offering."),
       });
     },
   });
@@ -88,7 +90,7 @@ export const useUpdateCourseOffering = () => {
       addToast({
         type: "error",
         title: "Failed to Update Offering",
-        description: error?.message || "An error occurred while updating the offering.",
+        description: getSmartErrorDescription(error, "An error occurred while updating the offering."),
       });
     },
   });
@@ -112,7 +114,7 @@ export const useDeleteCourseOffering = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Offering",
-        description: error?.message || "An error occurred while deleting the offering.",
+        description: getSmartErrorDescription(error, "An error occurred while deleting the offering."),
       });
     },
   });

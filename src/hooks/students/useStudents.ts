@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getStudents, createStudent, updateStudent, deleteStudent, getStudentExams } from "../../api/student.api";
 import { CreateStudentDto, UpdateStudentDto } from "../../schemas/student";
 import { useToast } from "../../components/ui/toast";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useStudents = () => {
   return useQuery({
@@ -28,7 +29,7 @@ export const useCreateStudent = () => {
       addToast({
         type: "error",
         title: "Failed to Add Student",
-        description: error?.message || "An error occurred while adding the student.",
+        description: getSmartErrorDescription(error, "An error occurred while adding the student."),
       });
     },
   });
@@ -52,7 +53,7 @@ export const useUpdateStudent = () => {
       addToast({
         type: "error",
         title: "Failed to Update Student",
-        description: error?.message || "An error occurred while updating the student.",
+        description: getSmartErrorDescription(error, "An error occurred while updating the student."),
       });
     },
   });
@@ -77,7 +78,7 @@ export const useDeleteStudent = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Student",
-        description: error?.message || "An error occurred while deleting the student.",
+        description: getSmartErrorDescription(error, "An error occurred while deleting the student."),
       });
     },
   });

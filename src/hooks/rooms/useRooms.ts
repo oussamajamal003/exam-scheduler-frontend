@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchRooms, fetchRoom, fetchAvailableRooms, createRoom, updateRoom, deleteRoom } from "../../api/room.api";
 import { CreateRoomDto, UpdateRoomDto } from "../../schemas/room";
 import { useToast } from "../../components/ui/toast";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useRooms = () => {
   return useQuery({
@@ -33,17 +34,18 @@ export const useCreateRoom = () => {
     mutationFn: (data: CreateRoomDto) => createRoom(data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
       addToast({
         type: "success",
         title: "Room Added",
         description: `Room ${data.name} has been successfully added to the system.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Add Room",
-        description: error?.message || "An error occurred while adding the room.",
+        description: getSmartErrorDescription(error, "An error occurred while adding the room."),
       });
     },
   });
@@ -58,17 +60,18 @@ export const useUpdateRoom = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
       queryClient.invalidateQueries({ queryKey: ["rooms", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
       addToast({
         type: "success",
         title: "Room Updated",
         description: `Room ${data.name} has been successfully updated.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Update Room",
-        description: error?.message || "An error occurred while updating the room.",
+        description: getSmartErrorDescription(error, "An error occurred while updating the room."),
       });
     },
   });
@@ -83,17 +86,18 @@ export const useDeleteRoom = () => {
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
       queryClient.invalidateQueries({ queryKey: ["rooms", id] });
+      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
       addToast({
         type: "success",
         title: "Room Deleted",
         description: "The room has been successfully removed from the system.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       addToast({
         type: "error",
         title: "Failed to Delete Room",
-        description: error?.message || "An error occurred while deleting the room.",
+        description: getSmartErrorDescription(error, "An error occurred while deleting the room."),
       });
     },
   });

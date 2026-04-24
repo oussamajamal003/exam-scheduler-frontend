@@ -85,7 +85,7 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                           {room.status && (
                             <span
                               className={cn(
-                                "inline-flex items-center rounded-none border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em]",
+                                "inline-flex items-center rounded-none border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest",
                                 STATUS_STYLES[room.status.toUpperCase()] ?? "bg-zinc-100 text-zinc-600 border-zinc-200"
                               )}
                             >

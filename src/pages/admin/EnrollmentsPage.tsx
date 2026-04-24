@@ -9,7 +9,6 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import {
@@ -21,6 +20,7 @@ import {
 import { Input } from "../../components/ui/input";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { EnrollmentList } from "../../features/enrollments/EnrollmentList";
 import { EnrollmentBulkImport } from "../../features/enrollments/EnrollmentBulkImport";
 import { EnrollmentForm } from "../../forms/enrollments/EnrollmentForm";
@@ -33,7 +33,7 @@ import {
 } from "../../hooks/enrollments/useEnrollments";
 import { useStudents } from "../../hooks/students/useStudents";
 import { useCourseOfferings } from "../../hooks/courseOfferings/useCourseOfferings";
-import { useQueryClient } from "@tanstack/react-query";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import type { CreateEnrollmentDto, Enrollment } from "../../schemas/enrollment";
 
 export function EnrollmentsPage() {
@@ -115,28 +115,32 @@ export function EnrollmentsPage() {
     deleteMutation.reset();
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["enrollments"] }),
-      queryClient.invalidateQueries({ queryKey: ["students"] }),
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] }),
-    ]);
-    addToast({ type: "success", title: "Refreshed", description: "Enrollment data has been refreshed." });
+  const handleRefresh = () => {
+    enrollmentsQuery.refetch();
   };
 
   const isFetching = enrollmentsQuery.isFetching || studentsQuery.isFetching || offeringsQuery.isFetching;
+  const isSearching = searchTerm.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || deleteMutation.isPending || bulkMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
+  const showPageLoading = useDelayedLoading(enrollmentsQuery.isLoading, 1000);
 
   const handleCreate = async (data: CreateEnrollmentDto) => {
-    await createMutation.mutateAsync(data);
-    closeForm();
+    try {
+      await createMutation.mutateAsync(data);
+      closeForm();
+    } catch {
+      // Hooks already surface a toast on error; keep modal open.
+    }
   };
 
   const handleBulk = async (rows: CreateEnrollmentDto[]) => {
-    await bulkMutation.mutateAsync(rows);
-    closeBulk();
+    try {
+      await bulkMutation.mutateAsync(rows);
+      closeBulk();
+    } catch {
+      // Hooks already surface a toast on error; keep modal open.
+    }
   };
 
   const confirmDelete = () => {
@@ -144,7 +148,7 @@ export function EnrollmentsPage() {
     deleteMutation.mutate(deleting.id, { onSuccess: closeDelete });
   };
 
-  if (enrollmentsQuery.isLoading) {
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading enrollments" />
@@ -174,7 +178,7 @@ export function EnrollmentsPage() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -193,10 +197,11 @@ export function EnrollmentsPage() {
       </div>
 
       {/* Actions */}
-      <div className="mb-8 flex flex-wrap gap-3">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Button
           onClick={() => setIsFormOpen(true)}
-          className="inline-flex h-10 items-center gap-2 rounded-none bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
+          disabled={isPageLoading || createMutation.isPending}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Enrollment
@@ -204,6 +209,7 @@ export function EnrollmentsPage() {
         <Button
           variant="outline"
           onClick={() => setIsBulkOpen(true)}
+          disabled={isPageLoading || bulkMutation.isPending}
           className="inline-flex h-10 items-center gap-2 rounded-none border-zinc-200 font-semibold text-zinc-950 transition-all hover:bg-zinc-50 active:scale-95"
         >
           <Upload className="size-4" />
@@ -217,20 +223,18 @@ export function EnrollmentsPage() {
           <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
-
-      {/* Search */}
-      <div className="mb-8 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Filter by student, course, program, semester…"
-            className="h-10 rounded-none border-zinc-200 bg-white/50 pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300"
-          />
+        <div className="max-w-md sm:ml-auto sm:w-full sm:max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Filter by student, course, program, semester…"
+              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/50"
+            />
+          </div>
         </div>
-      </div>
+      </StickyActionBar>
 
       {/* Metrics */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -307,8 +311,9 @@ export function EnrollmentsPage() {
       <div className="mb-8">
         <EnrollmentList
           enrollments={filtered}
-          isLoading={isPageLoading}
+          isLoading={showTableLoading}
           isDeleting={deleteMutation.isPending}
+          search={searchTerm}
           onCreate={() => setIsFormOpen(true)}
           onDelete={setDeleting}
         />

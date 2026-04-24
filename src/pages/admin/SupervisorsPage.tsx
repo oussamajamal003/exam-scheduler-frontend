@@ -1,21 +1,87 @@
-import { useState } from "react";
+import { useDeferredValue, useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
-import { getApiErrorMessage, getApiValidationMessages } from "../../lib/apiError";
-import { Users, Plus, RefreshCw, TrendingUp } from "lucide-react";
-import { useToast } from "../../components/ui/toast";
+import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
+import { ClipboardList, Users, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
+import { EmptyState } from "../../components/shared/EmptyState";
+import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 
 import { SupervisorList } from "../../features/supervisors/SupervisorList";
 import { SupervisorForm } from "../../forms/supervisors/SupervisorForm";
 import { Supervisor } from "../../schemas/supervisor";
-import { useSupervisors, useCreateSupervisor, useUpdateSupervisor, useDeleteSupervisor } from "../../hooks/supervisors/useSupervisors";
-import { useQueryClient } from "@tanstack/react-query";
+import { useSupervisors, useCreateSupervisor, useUpdateSupervisor, useDeleteSupervisor, useSupervisorWorkload } from "../../hooks/supervisors/useSupervisors";
+
+function WorkloadContent({ supervisor, onClose }: { supervisor: Supervisor | null; onClose: () => void }) {
+  const { data, isLoading, isError, error } = useSupervisorWorkload(supervisor?.id ?? null);
+
+  if (isLoading) return <PageSpinner label="Loading workload" className="min-h-32" />;
+  if (isError) return (
+    <div className="rounded-none border border-destructive/30 bg-destructive/5 px-3 py-3 text-sm text-destructive">
+      {getApiErrorMessage(error, "Failed to load workload.")}
+    </div>
+  );
+
+  return (
+    <div className="mt-2 space-y-5">
+      <div className="flex items-center gap-4 rounded-none border border-zinc-200/60 bg-zinc-50 px-4 py-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Supervisor</p>
+          <p className="mt-0.5 truncate text-base font-bold text-zinc-950">{supervisor?.name}</p>
+          <p className="text-xs text-zinc-500">{supervisor?.center}</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-none bg-indigo-50 px-4 py-3">
+          <ClipboardList className="size-5 text-indigo-600" />
+          <div className="text-right">
+            <p className="text-2xl font-black text-indigo-700">{data?.workloadCount ?? 0}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">exams</p>
+          </div>
+        </div>
+      </div>
+
+      {!data || data.assignments.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No assignments" description="This supervisor has no exam assignments." />
+      ) : (
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">Assignments</p>
+          {data.assignments.map((a, i) => {
+            const course = a.exam?.courseOffering?.course;
+            const semester = a.exam?.courseOffering?.semester;
+            const slot = a.timeSlot;
+            return (
+              <div key={a.id ?? i} className="rounded-none border border-zinc-200/60 bg-white px-4 py-3">
+                <p className="text-sm font-semibold text-zinc-950">
+                  {course?.code ? `[${course.code}] ` : ""}{course?.title ?? "Unknown Course"}
+                </p>
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500">
+                  {semester?.name && <span>{semester.name}</span>}
+                  {slot?.date && <span>{slot.date}</span>}
+                  {(slot?.startTime || slot?.endTime) && (
+                    <span>{slot.startTime ?? ""}{slot.startTime && slot.endTime ? " – " : ""}{slot.endTime ?? ""}</span>
+                  )}
+                  {slot?.label && !slot?.date && <span>{slot.label}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Button variant="outline" onClick={onClose} className="rounded-none font-semibold">Close</Button>
+      </div>
+    </div>
+  );
+}
 
 export function SupervisorsPage() {
   const { data: supervisors = [], isLoading, isFetching, isError, error, refetch } = useSupervisors();
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null);
   const [workloadSupervisor, setWorkloadSupervisor] = useState<Supervisor | null>(null);
@@ -71,15 +137,26 @@ export function SupervisorsPage() {
     }
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["supervisors"] });
-    addToast({ type: "success", title: "Refreshed", description: "Supervisor data has been refreshed." });
+  const handleRefresh = () => {
+    refetch();
   };
 
-  if (isLoading) {
+  const filteredSupervisors = useMemo(() => {
+    const term = deferredSearch.toLowerCase();
+    if (!term) return supervisors;
+    return supervisors.filter((s) =>
+      [s.name, s.email, s.department, s.center]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term))
+    );
+  }, [deferredSearch, supervisors]);
+
+  const isSearching = search.trim() !== deferredSearch;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const showTableLoading = useDelayedLoading(isTableLoading);
+
+  if (showPageLoading) {
     return (
       <div className="p-6">
         <PageSpinner label="Loading supervisors..." />
@@ -99,7 +176,7 @@ export function SupervisorsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       {/* Header Section */}
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
@@ -114,10 +191,10 @@ export function SupervisorsPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 mb-8">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button 
           onClick={openCreateModal}
-          className="h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm hover:bg-zinc-900 active:scale-95 transition-all inline-flex items-center gap-2"
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Supervisor
@@ -130,7 +207,16 @@ export function SupervisorsPage() {
           <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
+        <div className="relative sm:ml-auto sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email or center"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+          />
+        </div>
+      </StickyActionBar>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -177,9 +263,11 @@ export function SupervisorsPage() {
       </div>
 
       <SupervisorList
-        supervisors={supervisors}
-        isLoading={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
+        supervisors={filteredSupervisors}
+        isLoading={showTableLoading}
         isDeleting={deleteMutation.isPending}
+        search={search}
+        onAdd={openCreateModal}
         onEditSupervisor={openEditModal}
         onDeleteSupervisor={setDeletingSupervisor}
         onViewWorkload={setWorkloadSupervisor}
@@ -201,9 +289,9 @@ export function SupervisorsPage() {
                 null
               }
               submitValidationMessages={
-                createMutation.isError ? getApiValidationMessages(createMutation.error) :
-                updateMutation.isError ? getApiValidationMessages(updateMutation.error) :
-                []
+                createMutation.isError ? getApiValidationErrors(createMutation.error) :
+                updateMutation.isError ? getApiValidationErrors(updateMutation.error) :
+                {}
               }
             />
           </div>
@@ -221,37 +309,11 @@ export function SupervisorsPage() {
       />
 
       <Dialog open={!!workloadSupervisor} onOpenChange={(open) => !open && setWorkloadSupervisor(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Workload Details</DialogTitle>
+            <DialogTitle>Supervisor Workload</DialogTitle>
           </DialogHeader>
-          <div className="mt-4 space-y-4">
-            <Card className="border border-zinc-200 shadow-sm rounded-none">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center pb-4 border-b border-zinc-100">
-                  <div>
-                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-1">Supervisor</p>
-                    <h3 className="text-zinc-950 text-lg font-bold">{workloadSupervisor?.name}</h3>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-1">Assigned Center</p>
-                    <p className="text-zinc-900 font-semibold">{workloadSupervisor?.center}</p>
-                  </div>
-                </div>
-                <div className="pt-4 flex flex-col items-center justify-center py-6 gap-2">
-                  <div className="size-16 rounded-none bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                    <span className="text-2xl font-black text-indigo-600">0</span>
-                  </div>
-                  <p className="text-sm font-medium text-zinc-500">Exams Supervised</p>
-                </div>
-              </CardContent>
-            </Card>
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setWorkloadSupervisor(null)} className="rounded-none font-semibold shadow-sm">
-                Close
-              </Button>
-            </div>
-          </div>
+          <WorkloadContent supervisor={workloadSupervisor} onClose={() => setWorkloadSupervisor(null)} />
         </DialogContent>
       </Dialog>
     </div>

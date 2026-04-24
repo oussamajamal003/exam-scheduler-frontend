@@ -1,17 +1,17 @@
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Building2, CalendarDays, Plus, RefreshCw, Search, TrendingUp } from 'lucide-react';
-import { useToast } from '@/components/ui/toast';
+import { GraduationCap, CalendarDays, Plus, RefreshCw, Search, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
+import { StickyActionBar } from '@/components/common/StickyActionBar';
 import { DepartmentList } from '@/features/departments/DepartmentList';
 import { ProgramForm, type ProgramFormSubmitValues } from '@/forms/programs/ProgramForm';
 import { getApiErrorMessage, getApiValidationErrors } from '@/lib/apiError';
 import { useCreateDepartment, useDepartments, useUpdateDepartment } from '@/hooks/departments/useDepartments';
 import { useCreateProgram, useDeleteProgram, usePrograms, useUpdateProgram } from '@/hooks/programs/usePrograms';
-import { useQueryClient } from '@tanstack/react-query';
+import { useDelayedLoading } from '@/hooks/common/useDelayedLoading';
 import type { Program } from '@/schemas/program';
 
 const formatDateTime = (value?: string) => {
@@ -43,6 +43,7 @@ export function DepartmentsPage() {
     isError: isProgramsError,
     error: programsError,
     isFetching: isFetchingPrograms,
+    refetch: refetchPrograms,
   } = usePrograms(deferredSearchTerm);
 
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
@@ -91,18 +92,14 @@ export function DepartmentsPage() {
     setIsProgramModalOpen(true);
   };
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['programs'] }),
-      queryClient.invalidateQueries({ queryKey: ['departments'] }),
-    ]);
-    addToast({ type: "success", title: "Refreshed", description: "Department data has been refreshed." });
+  const handleRefresh = () => {
+    refetchPrograms();
   };
 
   const isFetching = isFetchingDepartments || isFetchingPrograms;
+  const isSearching = searchTerm.trim() !== deferredSearchTerm;
+  const isTableLoading = isSearching || isFetching || createProgramMutation.isPending || updateProgramMutation.isPending || deleteProgramMutation.isPending;
+  const showTableLoading = useDelayedLoading(isTableLoading);
 
   const submitErrorMessage = 
     createDepartmentMutation.isError ? getApiErrorMessage(createDepartmentMutation.error, 'Failed to create department.') :
@@ -141,56 +138,55 @@ export function DepartmentsPage() {
   }, [createDepartmentMutation.error, updateDepartmentMutation.error, createProgramMutation.error, updateProgramMutation.error]);
 
   const handleProgramSubmit = async (data: ProgramFormSubmitValues) => {
-    let departmentId = data.departmentId;
+    try {
+      let departmentId = data.departmentId;
 
-    if (data.newDepartment) {
-      const createdDepartment = await createDepartmentMutation.mutateAsync({
-        name: data.newDepartment.name,
-        code: data.newDepartment.code,
-      });
+      if (data.newDepartment) {
+        const createdDepartment = await createDepartmentMutation.mutateAsync({
+          name: data.newDepartment.name,
+          code: data.newDepartment.code,
+        });
 
-      departmentId = createdDepartment.id ?? '';
-    }
+        departmentId = createdDepartment.id ?? '';
+      }
 
-    if (data.editDepartment && editingProgram?.departmentId) {
-      await updateDepartmentMutation.mutateAsync({
-        id: editingProgram.departmentId,
-        data: {
-          name: data.editDepartment.name,
-          code: data.editDepartment.code,
-        },
-      });
-    }
+      if (data.editDepartment && editingProgram?.departmentId) {
+        await updateDepartmentMutation.mutateAsync({
+          id: editingProgram.departmentId,
+          data: {
+            name: data.editDepartment.name,
+            code: data.editDepartment.code,
+          },
+        });
+      }
 
-    const payload = {
-      name: data.name,
-      code: data.code,
-      departmentId: departmentId ?? '',
-    };
+      const payload = {
+        name: data.name,
+        code: data.code,
+        departmentId: departmentId ?? '',
+      };
 
-    if (!payload.departmentId) {
-      throw new Error('Department is required to save the program.');
-    }
+      if (!payload.departmentId) {
+        throw new Error('Department is required to save the program.');
+      }
 
-    if (editingProgram?.id) {
-      await updateProgramMutation.mutateAsync({
-        id: editingProgram.id,
-        data: payload,
-      });
+      if (editingProgram?.id) {
+        await updateProgramMutation.mutateAsync({
+          id: editingProgram.id,
+          data: payload,
+        });
+      } else {
+        await createProgramMutation.mutateAsync(payload);
+      }
       closeProgramModal();
-      return;
+    } catch {
+      // Hooks already surface a toast on error; keep modal open.
     }
-
-    await createProgramMutation.mutateAsync(payload);
-    closeProgramModal();
   };
 
   const confirmDeleteProgram = () => {
     if (!deletingProgram?.id) return;
-
-    deleteProgramMutation.mutate(deletingProgram.id, {
-      onSuccess: closeDeleteModal,
-    });
+    deleteProgramMutation.mutate(deletingProgram.id, { onSuccess: closeDeleteModal });
   };
 
   if (isError) {
@@ -207,11 +203,11 @@ export function DepartmentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-50/50 p-4 sm:p-6 lg:p-8">
+    <div className="p-5 sm:p-6 lg:p-8">
       <div className="mb-8 space-y-1">
         <div className="flex items-center gap-3">
           <div className="rounded-none bg-zinc-950 p-2.5 text-white shadow-sm">
-            <Building2 className="size-5" />
+            <GraduationCap className="size-5" />
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">Programs / Departments</h1>
@@ -222,10 +218,11 @@ export function DepartmentsPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-3">
+      <StickyActionBar className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Button
           onClick={openCreateProgramModal}
-          className="inline-flex h-10 items-center gap-2 rounded-none bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900"
+          disabled={isFetching || isLoading}
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
         >
           <Plus className="size-4" />
           Add Program
@@ -238,19 +235,18 @@ export function DepartmentsPage() {
           <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
-
-      <div className="mb-8 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Filter by program name"
-            className="h-10 rounded-none border-zinc-200 bg-white/50 pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300"
-          />
+        <div className="max-w-md sm:ml-auto sm:w-full sm:max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Filter by program name"
+              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/50"
+            />
+          </div>
         </div>
-      </div>
+      </StickyActionBar>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm transition-shadow hover:shadow-md">
@@ -277,7 +273,7 @@ export function DepartmentsPage() {
                 <p className="mt-2 text-xs text-zinc-500">Available for selection in the modal</p>
               </div>
               <div className="rounded-none bg-green-50 p-2">
-                <Building2 className="size-5 text-green-600" />
+                <GraduationCap className="size-5 text-green-600" />
               </div>
             </div>
           </CardContent>
@@ -300,8 +296,9 @@ export function DepartmentsPage() {
       <div className="mb-8">
         <DepartmentList
           programs={programs}
-          isLoading={isLoading}
+          isLoading={showTableLoading}
           isDeleting={deleteProgramMutation.isPending}
+          search={searchTerm}
           onCreateProgram={openCreateProgramModal}
           onEditProgram={openEditProgramModal}
           onDeleteProgram={setDeletingProgram}

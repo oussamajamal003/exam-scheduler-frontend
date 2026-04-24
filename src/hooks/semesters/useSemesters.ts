@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createSemester, deleteSemester, fetchSemesters, updateSemester } from "../../api/semester.api";
 import { CreateSemesterDto, UpdateSemesterDto } from "../../schemas/semester";
 import { useToast } from "../../components/ui/toast";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getSmartErrorDescription } from "../../lib/apiError";
 
 export const useSemesters = (search = "") => {
   return useQuery({
@@ -29,7 +29,7 @@ export const useCreateSemester = () => {
       addToast({
         type: "error",
         title: "Failed to Add Semester",
-        description: getApiErrorMessage(error, "An error occurred while adding the semester."),
+        description: getSmartErrorDescription(error, "An error occurred while adding the semester."),
       });
     },
   });
@@ -53,7 +53,7 @@ export const useUpdateSemester = () => {
       addToast({
         type: "error",
         title: "Failed to Update Semester",
-        description: getApiErrorMessage(error, "An error occurred while updating the semester."),
+        description: getSmartErrorDescription(error, "An error occurred while updating the semester."),
       });
     },
   });
@@ -77,7 +77,7 @@ export const useDeleteSemester = () => {
       addToast({
         type: "error",
         title: "Failed to Delete Semester",
-        description: getApiErrorMessage(error, "An error occurred while deleting the semester."),
+        description: getSmartErrorDescription(error, "An error occurred while deleting the semester."),
       });
     },
   });
