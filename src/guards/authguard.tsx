@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { getHomePathForRole } from '@/lib/authRoutes';
 
 interface AuthGuardProps {
   children?: React.ReactNode;
@@ -46,7 +47,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) 
   }
 
   if (!role || !allowedRoles.includes(role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getHomePathForRole(role)} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

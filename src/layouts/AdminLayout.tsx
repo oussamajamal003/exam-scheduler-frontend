@@ -9,7 +9,6 @@ import {
   Calendar,
   CalendarClock,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock,
@@ -17,6 +16,8 @@ import {
   LayoutDashboard,
   Layers,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Menu,
   Search,
   Settings,
@@ -399,7 +400,7 @@ export const AdminLayout: React.FC = () => {
             isCollapsed ? 'absolute -right-4 top-4' : 'ml-auto'
           )}
         >
-          {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+          {isCollapsed ? <PanelLeftOpen className="size-4.5" /> : <PanelLeftClose className="size-4.5" />}
         </Button>
       </div>
 

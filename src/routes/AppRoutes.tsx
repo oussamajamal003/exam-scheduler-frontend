@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
+import StudentLayout from '@/layouts/StudentLayout';
+import SupervisorLayout from '@/layouts/SupervisorLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
@@ -20,6 +22,7 @@ import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard } from '@/guards/authguard';
+import { ADMIN_ROLES } from '@/lib/authRoutes';
 
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   const [isLoading, setIsLoading] = React.useState(true);
@@ -59,7 +62,13 @@ export const AppRoutes: React.FC = () => {
 
         {/* Protected Admin/Dashboard Routes */}
         <Route element={<AuthGuard />}>
-          <Route element={<AdminLayout />}>
+          <Route
+            element={
+              <RoleGuard allowedRoles={[...ADMIN_ROLES]}>
+                <AdminLayout />
+              </RoleGuard>
+            }
+          >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
           
@@ -90,6 +99,34 @@ export const AppRoutes: React.FC = () => {
             <Route path="/scheduling" element={<PlaceholderPage title="Schedule Generation" />} />
             <Route path="/conflicts" element={<PlaceholderPage title="Conflicts Detection" />} />
             <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
+          </Route>
+
+          <Route
+            element={
+              <RoleGuard allowedRoles={['STUDENT']}>
+                <StudentLayout />
+              </RoleGuard>
+            }
+          >
+            <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
+            <Route path="/student/dashboard" element={<PlaceholderPage title="Student Dashboard" />} />
+            <Route path="/student/schedule" element={<PlaceholderPage title="Student Exam Schedule" />} />
+            <Route path="/student/courses" element={<PlaceholderPage title="Student Courses" />} />
+            <Route path="/student/settings" element={<PlaceholderPage title="Student Settings" />} />
+          </Route>
+
+          <Route
+            element={
+              <RoleGuard allowedRoles={['SUPERVISOR']}>
+                <SupervisorLayout />
+              </RoleGuard>
+            }
+          >
+            <Route path="/supervisor" element={<Navigate to="/supervisor/dashboard" replace />} />
+            <Route path="/supervisor/dashboard" element={<PlaceholderPage title="Supervisor Dashboard" />} />
+            <Route path="/supervisor/schedule" element={<PlaceholderPage title="Supervisor Exam Schedule" />} />
+            <Route path="/supervisor/students" element={<PlaceholderPage title="Assigned Students" />} />
+            <Route path="/supervisor/settings" element={<PlaceholderPage title="Supervisor Settings" />} />
           </Route>
         </Route>
 
