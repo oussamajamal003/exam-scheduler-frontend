@@ -5,7 +5,6 @@ import { AdminLayout } from '@/layouts/AdminLayout';
 import StudentLayout from '@/layouts/StudentLayout';
 import SupervisorLayout from '@/layouts/SupervisorLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
-import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { StudentsPage } from '@/pages/admin/StudentsPage';
 import { AIOptimizerPage } from '@/pages/admin/AIOptimizerPage';
@@ -21,8 +20,8 @@ import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
 import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
-import { AuthGuard, RoleGuard } from '@/guards/authguard';
-import { ADMIN_ROLES } from '@/lib/authRoutes';
+import { AuthGuard, RoleGuard, GuestGuard } from '@/guards/authguard';
+import { ADMIN_ROLES, getHomePathForRole, normalizeRole } from '@/lib/authRoutes';
 
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   const [isLoading, setIsLoading] = React.useState(true);
@@ -49,16 +48,38 @@ const ScrollToTop: React.FC = () => {
   return null;
 };
 
+const decodeRoleFromToken = (token: string | null): string | null => {
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(base64));
+    return typeof decoded.role === 'string' ? decoded.role : null;
+  } catch {
+    return null;
+  }
+};
+
+const RootRedirect: React.FC = () => {
+  const token = localStorage.getItem('token');
+  const role = normalizeRole(decodeRoleFromToken(token));
+  return <Navigate to={role ? getHomePathForRole(role) : '/login'} replace />;
+};
+
 export const AppRoutes: React.FC = () => {
   return ( 
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
         {/* Public / Auth Routes */}
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+        <Route element={<GuestGuard />}>
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
         </Route>
+        {/* Root → role-aware redirect */}
+        <Route path="/" element={<RootRedirect />} />
 
         {/* Protected Admin/Dashboard Routes */}
         <Route element={<AuthGuard />}>
@@ -69,18 +90,8 @@ export const AppRoutes: React.FC = () => {
               </RoleGuard>
             }
           >
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
-          
-            {/* Implemented Feature Route */}
-            <Route
-              path="/students"
-              element={
-                <RoleGuard allowedRoles={['TECH_ADMIN', 'SCHEDULING_ADMIN']}>
-                  <StudentsPage />
-                </RoleGuard>
-              }
-            />
+            <Route path="/students" element={<StudentsPage />} />
 
             {/* Placeholders for future modules */}
             <Route path="/ai" element={<AIOptimizerPage />} />

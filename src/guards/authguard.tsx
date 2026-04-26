@@ -1,16 +1,29 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { getHomePathForRole } from '@/lib/authRoutes';
+import { getHomePathForRole, normalizeRole } from '@/lib/authRoutes';
+
+const isSessionValid = (): boolean => {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  const expiresAt = localStorage.getItem('token_expires_at');
+  if (expiresAt && Date.now() > Number(expiresAt)) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('token_expires_at');
+    localStorage.removeItem('auth_user');
+    return false;
+  }
+  return true;
+};
 
 interface AuthGuardProps {
   children?: React.ReactNode;
 }
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const token = localStorage.getItem('token');
+  const valid = isSessionValid();
   const location = useLocation();
 
-  if (!token) {
+  if (!valid) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -18,7 +31,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 };
 
 interface RoleGuardProps {
-  allowedRoles: string[];
+  allowedRoles: readonly string[];
   children?: React.ReactNode;
 }
 
@@ -38,11 +51,12 @@ const decodeTokenRole = (token: string | null): string | null => {
 };
 
 export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) => {
-  const token = localStorage.getItem('token');
+  const valid = isSessionValid();
   const location = useLocation();
-  const role = decodeTokenRole(token);
+  const token = valid ? localStorage.getItem('token') : null;
+  const role = normalizeRole(decodeTokenRole(token));
 
-  if (!token) {
+  if (!valid) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -52,3 +66,24 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) 
 
   return children ? <>{children}</> : <Outlet />;
 };
+
+/**
+ * Used on auth pages (login). Redirects authenticated users to their role home,
+ * preventing logged-in users from seeing /login again.
+ */
+interface GuestGuardProps {
+  children?: React.ReactNode;
+}
+
+export const GuestGuard: React.FC<GuestGuardProps> = ({ children }) => {
+  const valid = isSessionValid();
+  const token = valid ? localStorage.getItem('token') : null;
+  const role = normalizeRole(decodeTokenRole(token));
+
+  if (valid && role) {
+    return <Navigate to={getHomePathForRole(role)} replace />;
+  }
+
+  return children ? <>{children}</> : <Outlet />;
+};
+

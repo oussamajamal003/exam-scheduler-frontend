@@ -14,7 +14,12 @@ export const studentSchema = z.object({
     .string()
     .min(2, { message: "Last name must be at least 2 characters" })
     .regex(/^[a-zA-Z\s]+$/, { message: "Last name must contain only letters" }),
-  email: z.string().email({ message: "Invalid email address" }),
+  email: z
+    .string()
+    .email({ message: "Invalid email address" })
+    .refine((v) => v.toLowerCase().endsWith("@st.uni.edu"), {
+      message: "Student email must end with @st.uni.edu",
+    }),
   programId: z.string().uuid().optional(),
   user: z.object({ name: z.string().optional(), email: z.string().optional() }).nullable().optional(),
   programRef: z

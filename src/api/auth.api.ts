@@ -26,13 +26,6 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface SignupCredentials {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword?: string;
-}
-
 const unwrapResponseData = <T>(responseData: ApiEnvelope<T> | T): T => {
   if (
     responseData &&
@@ -48,11 +41,6 @@ const unwrapResponseData = <T>(responseData: ApiEnvelope<T> | T): T => {
 
 export const getCurrentUser = async (): Promise<User> => {
   const response = await axiosClient.get<ApiEnvelope<User>>('/auth/');
-  return unwrapResponseData(response.data);
-};
-
-export const signupUser = async (data: SignupCredentials): Promise<AuthResponse> => {
-  const response = await axiosClient.post<ApiEnvelope<AuthResponse>>('/auth/signup', data);
   return unwrapResponseData(response.data);
 };
 

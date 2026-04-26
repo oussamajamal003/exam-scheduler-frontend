@@ -40,10 +40,21 @@ axiosClient.interceptors.response.use(
       (typeof data?.message === 'string' ? data.message : '');
     const invalidToken = status === 403 && /token/i.test(errorText);
 
-    if (status === 401 || invalidToken) {
+    // If 401 on login, DO NOT hard redirect since the user is already on the login page trying to auth.
+    // Let the component handle rendering the invalid credentials error.
+    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+
+    if (!isLoginEndpoint && (status === 401 || invalidToken)) {
       localStorage.removeItem('token');
       localStorage.removeItem('token_expires_at');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
+    // Pass the actual API error message upwards if present instead of default Axios text.
+    if (errorText) {
+      error.message = errorText;
     }
 
     return Promise.reject(error);
