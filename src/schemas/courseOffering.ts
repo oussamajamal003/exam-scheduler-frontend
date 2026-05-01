@@ -18,6 +18,17 @@ export const offeringCourseSchema = z.object({
     })
     .nullable()
     .optional(),
+  semesterId: z.string().nullable().optional(),
+  semester: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  semesterIds: z.array(z.string()).optional(),
 });
 
 export type OfferingCourse = z.infer<typeof offeringCourseSchema>;

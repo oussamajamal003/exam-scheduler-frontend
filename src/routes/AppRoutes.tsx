@@ -18,6 +18,8 @@ import { CourseOfferingsPage } from '@/pages/admin/CourseOfferingsPage';
 import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage';
 import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
 import { SemestersPage } from '@/pages/admin/SemestersPage';
+import { SchedulesPage } from '@/pages/admin/SchedulesPage';
+import { ConflictsPage } from '@/pages/admin/ConflictsPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard, GuestGuard } from '@/guards/authguard';
@@ -106,9 +108,10 @@ export const AppRoutes: React.FC = () => {
             <Route path="/centers" element={<CentersPage />} />
             <Route path="/supervisors" element={<SupervisorsPage />} />
             <Route path="/timeslots" element={<TimeSlotsPage />} />
-            <Route path="/schedule" element={<PlaceholderPage title="Schedule Generation" />} />
-            <Route path="/scheduling" element={<PlaceholderPage title="Schedule Generation" />} />
-            <Route path="/conflicts" element={<PlaceholderPage title="Conflicts Detection" />} />
+            <Route path="/schedule" element={<SchedulesPage />} />
+            <Route path="/schedules" element={<SchedulesPage />} />
+            <Route path="/scheduling" element={<SchedulesPage />} />
+            <Route path="/conflicts" element={<ConflictsPage />} />
             <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
           </Route>
 

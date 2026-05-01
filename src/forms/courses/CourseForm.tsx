@@ -20,6 +20,7 @@ import type { Semester } from "../../schemas/semester";
 
 interface CourseFormProps {
   initialData?: Course;
+  existingCourses?: Course[];
   programs: Program[];
   semesters: Semester[];
   isProgramsLoading?: boolean;
@@ -37,6 +38,7 @@ type CourseFormOutput = z.output<typeof courseSchema>;
 
 export function CourseForm({
   initialData,
+  existingCourses = [],
   programs,
   semesters,
   isProgramsLoading,
@@ -94,15 +96,40 @@ export function CourseForm({
     [semesters, selectedSemesterId]
   );
 
+  // Detect duplicate (code + semester) against the courses already known to the
+  // page so the user gets immediate feedback before a network round-trip.
+  const trimmedCode = (enteredCode ?? "").trim().toLowerCase();
+  const editingId = initialData?.id;
+  const duplicateCourse = useMemo(() => {
+    if (!trimmedCode) return null;
+    return (
+      existingCourses.find(
+        (c) =>
+          c.id !== editingId &&
+          (c.code ?? "").trim().toLowerCase() === trimmedCode &&
+          (c.semesterId ?? "") === (selectedSemesterId ?? "")
+      ) ?? null
+    );
+  }, [existingCourses, trimmedCode, selectedSemesterId, editingId]);
+  const duplicateMessage = duplicateCourse
+    ? selectedSemesterId
+      ? `"${duplicateCourse.code}" already exists in ${
+          selectedSemester?.name ?? "this semester"
+        }. Pick a different semester to create another.`
+      : `"${duplicateCourse.code}" already exists with no semester assigned. Pick a semester to create another.`
+    : null;
+
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const isSubmitDisabled =
     Boolean(isLoading) ||
     hasErrors ||
+    Boolean(duplicateMessage) ||
     Boolean(isProgramsLoading) ||
     Boolean(programsErrorMessage) ||
     programs.length === 0;
 
   const handleSubmit = (values: CourseFormOutput) => {
+    if (duplicateMessage) return;
     onSubmit({
       id: initialData?.id,
       code: values.code,
@@ -155,17 +182,17 @@ export function CourseForm({
             {...form.register("code")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.code || submitValidationMessages?.code
+              form.formState.errors.code || submitValidationMessages?.code || duplicateMessage
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., CSCI301"
             disabled={isLoading}
           />
-          {(form.formState.errors.code || submitValidationMessages?.code) && (
+          {(form.formState.errors.code || submitValidationMessages?.code || duplicateMessage) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.code && !submitValidationMessages?.code && !!enteredCode && (
+          {!form.formState.errors.code && !submitValidationMessages?.code && !duplicateMessage && !!enteredCode && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
@@ -177,6 +204,16 @@ export function CourseForm({
             </p>
           </div>
         )}
+        {!form.formState.errors.code &&
+          !submitValidationMessages?.code &&
+          duplicateMessage && (
+            <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+              <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+              <p className="text-xs font-medium text-destructive leading-snug">
+                {duplicateMessage}
+              </p>
+            </div>
+          )}
       </div>
 
       <div className="space-y-2.5">

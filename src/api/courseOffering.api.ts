@@ -37,6 +37,13 @@ type BackendCourse = {
   description?: string | null;
   programId?: string | null;
   program?: BackendProgram | null;
+  semesterId?: string | null;
+  semester?: BackendSemester | null;
+  courseOfferings?: Array<{
+    id?: string;
+    semesterId?: string | null;
+    semester?: { id?: string; name?: string } | null;
+  }> | null;
 };
 
 type BackendSemester = {
@@ -123,6 +130,15 @@ type BackendOfferingDetail = BackendOfferingList & {
 const mapBackendCourse = (course?: BackendCourse | null): OfferingCourse | null => {
   if (!course) return null;
   const title = course.title ?? course.name ?? "Untitled course";
+  const semesterIds = Array.from(
+    new Set(
+      [
+        course.semester?.id ?? course.semesterId ?? null,
+        ...(course.courseOfferings ?? []).map((o) => o.semester?.id ?? o.semesterId ?? null),
+      ]
+        .filter((id): id is string => Boolean(id))
+    )
+  );
   return {
     id: course.id,
     name: course.name ?? title,
@@ -137,6 +153,16 @@ const mapBackendCourse = (course?: BackendCourse | null): OfferingCourse | null 
           code: course.program.code,
         }
       : null,
+    semesterId: course.semester?.id ?? course.semesterId ?? null,
+    semester: course.semester
+      ? {
+          id: course.semester.id,
+          name: course.semester.name,
+          startDate: course.semester.startDate,
+          endDate: course.semester.endDate,
+        }
+      : null,
+    semesterIds,
   };
 };
 
@@ -153,6 +179,10 @@ const mergeOfferingCourse = (
   return {
     ...mappedCourse,
     program: mappedCourse.program ?? fallbackCourse?.program ?? null,
+    semesterIds:
+      mappedCourse.semesterIds && mappedCourse.semesterIds.length > 0
+        ? mappedCourse.semesterIds
+        : fallbackCourse?.semesterIds ?? [],
   };
 };
 

@@ -54,7 +54,7 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={8} />
+                    <TableSkeletonRows columns={5} rows={supervisorRows.length > 0 ? supervisorRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : supervisorRows.length === 0 ? (

@@ -8,6 +8,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
   Search,
   Sparkles,
   UserRound,
@@ -116,26 +117,29 @@ const SectionGroup: React.FC<{
             const ItemIcon = item.icon;
             const isActive = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             return (
-              <Tooltip key={item.to} delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <NavLink
-                    to={item.to}
-                    onClick={onItemSelect}
-                    aria-label={item.label}
-                    className={cn(
-                      'mx-auto flex size-11 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
-                      isActive
-                        ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
-                        : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
-                    )}
-                  >
-                    <ItemIcon className="size-5" />
-                  </NavLink>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={20} className="z-50 font-semibold">
-                  {item.label}
-                </TooltipContent>
-              </Tooltip>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={onItemSelect}
+                aria-label={item.label}
+                className={cn(
+                  'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+                  isActive
+                    ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
+                    : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
+                )}
+              >
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center justify-center">
+                      <ItemIcon className="size-5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={20} className="z-50 font-semibold">
+                    {item.label}
+                  </TooltipContent>
+                </Tooltip>
+              </NavLink>
             );
           })}
         </>
@@ -172,27 +176,29 @@ const SectionGroup: React.FC<{
   if (isCollapsed) {
     return (
       <DropdownMenu>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`${section.title} navigation`}
-                className={cn(
-                  'mx-auto flex size-11 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
-                  hasActiveChild
-                    ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
-                    : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
-                )}
-              >
-                <SectionIcon className="size-5" />
-              </button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={20} className="font-semibold">
-            {section.title}
-          </TooltipContent>
-        </Tooltip>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${section.title} navigation`}
+            className={cn(
+              'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+              hasActiveChild
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
+                : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
+            )}
+          >
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span className="flex items-center justify-center">
+                  <SectionIcon className="size-5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={20} className="font-semibold">
+                {section.title}
+              </TooltipContent>
+            </Tooltip>
+          </button>
+        </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl p-2">
           <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -326,38 +332,42 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
 
   const sidebarAccountMenu = (
     <DropdownMenu>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Open account menu"
-              className={cn(
-                'group mt-4 flex shrink-0 items-center border border-zinc-200/80 bg-white/85 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
-                isCollapsed ? 'mx-auto size-12 justify-center rounded-2xl p-0' : 'w-full gap-3 rounded-2xl px-3 py-3'
-              )}
-            >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15 transition-all duration-300">
-                {userInitials}
-              </div>
-              <div
-                className={cn(
-                  'min-w-0 overflow-hidden whitespace-nowrap text-left transition-all duration-300',
-                  isCollapsed ? 'w-0 px-0 opacity-0' : 'w-full opacity-100'
-                )}
-              >
-                <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
-                <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
-              </div>
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        {isCollapsed && (
-          <TooltipContent side="right" sideOffset={14} className="font-medium">
-            {userName} &middot; {userRole}
-          </TooltipContent>
-        )}
-      </Tooltip>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Open account menu"
+          className={cn(
+            'group mt-4 flex shrink-0 items-center border border-zinc-200/80 bg-white/85 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+            isCollapsed ? 'mx-auto size-12 justify-center rounded-2xl p-0' : 'w-full gap-3 rounded-2xl px-3 py-3'
+          )}
+        >
+          {isCollapsed ? (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15 transition-all duration-300">
+                  {userInitials}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={14} className="font-medium">
+                {userName} &middot; {userRole}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15 transition-all duration-300">
+              {userInitials}
+            </div>
+          )}
+          <div
+            className={cn(
+              'min-w-0 overflow-hidden whitespace-nowrap text-left transition-all duration-300',
+              isCollapsed ? 'w-0 px-0 opacity-0' : 'w-full opacity-100'
+            )}
+          >
+            <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
+          </div>
+        </button>
+      </DropdownMenuTrigger>
       <DropdownMenuContent
         side={isCollapsed ? 'right' : 'top'}
         align={isCollapsed ? 'center' : 'start'}
@@ -394,8 +404,29 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
           isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'
         )}
       >
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm">
-          <Sparkles className="size-4 text-zinc-50" />
+        <div className={cn(
+          'relative',
+          isCollapsed ? 'mx-auto size-11 pointer-events-none' : 'shrink-0'
+        )}>
+          <div className={cn(
+            'flex size-11 shrink-0 items-center justify-center rounded-[15px] border border-zinc-200/70 bg-zinc-950 shadow-sm transition-opacity duration-200',
+            isCollapsed ? 'group-hover/sidebar:opacity-0' : ''
+          )}>
+            <Sparkles className="size-4.5 text-zinc-50" />
+          </div>
+          {isCollapsed && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Expand sidebar"
+              aria-expanded={false}
+              onClick={(e) => { e.stopPropagation(); toggleSidebarCollapse(); }}
+              className="pointer-events-auto absolute inset-0 size-11 shrink-0 rounded-[15px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10 opacity-0 group-hover/sidebar:opacity-100 duration-200"
+            >
+              <PanelLeftOpen className="size-4.5" />
+            </Button>
+          )}
         </div>
         <div
           className={cn(
@@ -406,25 +437,28 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
           <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950">{portalTitle}</h2>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!isCollapsed}
-          onClick={toggleSidebarCollapse}
-          className={cn(
-            'z-10 size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950',
-            isCollapsed ? 'absolute -right-4 top-4' : 'ml-auto'
-          )}
-        >
-          {isCollapsed ? <PanelLeftOpen className="size-4.5" /> : <PanelLeftClose className="size-4.5" />}
-        </Button>
+        {!isCollapsed && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Collapse sidebar"
+            aria-expanded={true}
+            onClick={toggleSidebarCollapse}
+            className="z-10 ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950"
+          >
+            <PanelLeftClose className="size-5" />
+          </Button>
+        )}
       </div>
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 pr-0.5 [scrollbar-gutter:stable]"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 transition-[padding]",
+          isCollapsed ? "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] pr-0" : "pr-0.5 [scrollbar-gutter:stable]"
+        )}
         aria-label={`${roleName} navigation`}
+        onClick={(e) => { e.stopPropagation(); if (isCollapsed && !(e.target as Element).closest('button, a, [role]')) toggleSidebarCollapse(); }}
       >
         <div className={cn('transition-all duration-300', isCollapsed ? 'space-y-2.5 pt-1' : 'space-y-1.5')}>
           {navSections.map((section) => (
@@ -440,7 +474,91 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
         </div>
       </div>
 
-      {sidebarAccountMenu}
+      <div onClick={(e) => { e.stopPropagation(); if (isCollapsed && !(e.target as Element).closest('button, a, [role]')) toggleSidebarCollapse(); }}>{sidebarAccountMenu}</div>
+    </>
+  );
+
+  const mobileSidebarAccountMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Open account menu"
+          className="group mt-4 flex w-full shrink-0 items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white/85 px-3 py-3 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+        >
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15 transition-all duration-300">
+            {userInitials}
+          </div>
+          <div className="w-full min-w-0 overflow-hidden whitespace-nowrap text-left">
+            <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
+          </div>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" sideOffset={14} className="w-64 rounded-2xl p-2">
+        <DropdownMenuLabel>
+          <div className="space-y-1 normal-case tracking-normal">
+            <p className="text-sm font-semibold tracking-tight text-zinc-950">{userName}</p>
+            <p className="text-xs font-medium text-zinc-500">{userRole}</p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to={profilePath} className="cursor-pointer" onClick={closeSidebar}>
+            <UserRound className="size-4" />
+            <span>Manage Profile</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
+          <LogOut className="size-4" />
+          <span>Logout</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const mobileSidebarContent = (
+    <>
+      <div className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 pb-4 px-2">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm">
+          <Sparkles className="size-4 text-zinc-50" />
+        </div>
+        <div className="w-full min-w-0 overflow-hidden whitespace-nowrap">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
+          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950">{portalTitle}</h2>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Close sidebar"
+          onClick={closeSidebar}
+          className="ml-auto size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950"
+        >
+          <X className="size-4.5" />
+        </Button>
+      </div>
+
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 pr-0.5 [scrollbar-gutter:stable]"
+        aria-label={`${roleName} navigation`}
+      >
+        <div className="space-y-1.5">
+          {navSections.map((section) => (
+            <SectionGroup
+              key={section.title}
+              section={section}
+              isOpen={openSections[section.title] ?? true}
+              isCollapsed={false}
+              onOpenChange={(open) => toggleSection(section.title, open)}
+              onItemSelect={closeSidebar}
+            />
+          ))}
+        </div>
+      </div>
+
+      {mobileSidebarAccountMenu}
     </>
   );
 
@@ -454,30 +572,32 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
 
         <aside
           className={cn(
-            'fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex',
-            isCollapsed ? 'w-24' : 'w-80'
+            'fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex group/sidebar',
+            isCollapsed ? 'w-24 cursor-default [&_button]:cursor-pointer [&_a]:cursor-pointer' : 'w-80'
           )}
+          onClick={isCollapsed ? toggleSidebarCollapse : undefined}
         >
           {sidebarContent}
         </aside>
 
-        {isSidebarOpen && (
-          <button
-            type="button"
-            aria-label="Close sidebar overlay"
-            className="fixed inset-0 z-40 bg-zinc-950/35 backdrop-blur-sm md:hidden"
-            onClick={closeSidebar}
-          />
-        )}
+        <button
+          type="button"
+          aria-label="Close sidebar overlay"
+          className={cn(
+            'fixed inset-0 z-40 bg-zinc-950/35 backdrop-blur-sm md:hidden transition-opacity duration-500 ease-in-out',
+            isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          )}
+          onClick={closeSidebar}
+          tabIndex={isSidebarOpen ? 0 : -1}
+        />
 
         <aside
           className={cn(
-            'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,width,max-width] duration-300 ease-out md:hidden',
-            isCollapsed ? 'w-24 max-w-24' : 'w-[86vw] max-w-[320px]',
-            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] md:hidden w-[86vw] max-w-[320px]',
+            isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
           )}
         >
-          {sidebarContent}
+          {mobileSidebarContent}
         </aside>
 
         <div

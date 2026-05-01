@@ -53,7 +53,7 @@ export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRo
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={8} />
+                    <TableSkeletonRows columns={5} rows={roomRows.length > 0 ? roomRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : roomRows.length === 0 ? (

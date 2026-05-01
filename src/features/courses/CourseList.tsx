@@ -55,7 +55,7 @@ export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEd
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={8} />
+                    <TableSkeletonRows columns={6} rows={courseRows.length > 0 ? courseRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : courseRows.length === 0 ? (

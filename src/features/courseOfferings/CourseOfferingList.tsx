@@ -128,7 +128,7 @@ export function CourseOfferingList({
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={12} className="p-0">
-                    <TableSkeletonRows columns={12} rows={8} />
+                    <TableSkeletonRows columns={12} rows={rows.length > 0 ? rows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (

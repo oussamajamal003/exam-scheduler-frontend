@@ -113,7 +113,7 @@ export function EnrollmentList({
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-0">
-                    <TableSkeletonRows columns={7} rows={8} />
+                    <TableSkeletonRows columns={7} rows={rows.length > 0 ? rows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (

@@ -32,6 +32,13 @@ type BackendCourse = {
     id: string;
     name: string;
   } | null;
+  semesterId?: string | null;
+  semester?: {
+    id: string;
+    name: string;
+    isActive?: boolean;
+    isCurrent?: boolean;
+  } | null;
   courseOfferings?: Array<{
     id?: string;
     semester?: {
@@ -48,6 +55,17 @@ type BackendCourse = {
 };
 
 const resolveSemester = (course: BackendCourse) => {
+  // Prefer the course's own semester (new schema column); fall back to the
+  // semester of an existing offering for backward compatibility.
+  if (course.semester) {
+    return {
+      semesterId: course.semester.id,
+      semesterName: course.semester.name,
+    };
+  }
+  if (course.semesterId) {
+    return { semesterId: course.semesterId, semesterName: "" };
+  }
   const offerings = course.courseOfferings ?? [];
   const currentOffering = offerings.find(
     (offering) => offering.semester?.isCurrent || offering.semester?.isActive

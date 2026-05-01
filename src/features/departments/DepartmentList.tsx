@@ -80,7 +80,7 @@ export function DepartmentList({
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={8} />
+                    <TableSkeletonRows columns={6} rows={programRows.length > 0 ? programRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : programRows.length === 0 ? (

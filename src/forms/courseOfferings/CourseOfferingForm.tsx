@@ -29,7 +29,6 @@ import type {
   OfferingCourse,
 } from "../../schemas/courseOffering";
 import type { Semester } from "../../schemas/semester";
-import { useSelectedCourseForOffering } from "../../hooks/courseOfferings/useCourseOfferings";
 
 const DAYS = [
   "Monday",
@@ -45,11 +44,38 @@ const offeringFormSchema = z.object({
   courseId: z.string().min(1, { message: "Please select a course" }),
   semesterId: z.string().min(1, { message: "Please select a semester" }),
   instructor: z.string().optional(),
-  day: z.string().optional(),
+  days: z.array(z.string()).optional(),
   time: z.string().optional(),
   capacity: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]).optional(),
 });
+
+const parseDays = (raw?: string | null): string[] =>
+  (raw ?? "")
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d) => DAYS.includes(d));
+
+type CourseGroup = {
+  key: string;
+  label: string;
+  courses: OfferingCourse[];
+  semesterIds: string[];
+};
+
+const normalizeCoursePart = (value?: string | number | null) =>
+  String(value ?? "").trim().toLowerCase();
+
+const getCourseSemesterId = (course: OfferingCourse) =>
+  course.semesterId ?? course.semesterIds?.[0] ?? null;
+
+const getCourseGroupKey = (course: OfferingCourse) =>
+  [
+    normalizeCoursePart(course.code),
+    normalizeCoursePart(course.title ?? course.name),
+    normalizeCoursePart(course.program?.id),
+    normalizeCoursePart(course.credits),
+  ].join("|");
 
 type OfferingFormValues = z.infer<typeof offeringFormSchema>;
 
@@ -86,7 +112,7 @@ export function CourseOfferingForm({
       courseId: initialData?.courseId ?? "",
       semesterId: initialData?.semesterId ?? "",
       instructor: initialData?.instructor ?? "",
-      day: initialData?.day ?? "",
+      days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
       capacity:
         initialData?.capacity !== undefined && initialData?.capacity !== null
@@ -102,7 +128,7 @@ export function CourseOfferingForm({
       courseId: initialData?.courseId ?? "",
       semesterId: initialData?.semesterId ?? "",
       instructor: initialData?.instructor ?? "",
-      day: initialData?.day ?? "",
+      days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
       capacity:
         initialData?.capacity !== undefined && initialData?.capacity !== null
@@ -124,27 +150,129 @@ export function CourseOfferingForm({
     control: form.control,
     name: "instructor",
   });
-  const selectedDay = useWatch({
+  const selectedDays = useWatch({
     control: form.control,
-    name: "day",
-  });
+    name: "days",
+  }) ?? [];
+
+  const toggleDay = (day: string) => {
+    const current = form.getValues("days") ?? [];
+    const next = current.includes(day)
+      ? current.filter((d) => d !== day)
+      : [...current, day];
+    // Preserve canonical week order
+    const ordered = DAYS.filter((d) => next.includes(d));
+    form.setValue("days", ordered, { shouldDirty: true, shouldTouch: true });
+  };
   const selectedStatus = useWatch({
     control: form.control,
     name: "status",
   });
+  const groupedCourses = useMemo(() => {
+    const groups = new Map<string, CourseGroup>();
+
+    courses.forEach((course) => {
+      const key = getCourseGroupKey(course);
+      const label = `${course.name ?? course.title} (${course.code})`;
+      const existing = groups.get(key);
+      const group = existing ?? { key, label, courses: [], semesterIds: [] };
+      const semesterIds = [getCourseSemesterId(course), ...(course.semesterIds ?? [])].filter(
+        (id): id is string => Boolean(id)
+      );
+
+      group.courses.push(course);
+      semesterIds.forEach((id) => {
+        if (!group.semesterIds.includes(id)) group.semesterIds.push(id);
+      });
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.values());
+  }, [courses]);
+
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? null,
     [courses, selectedCourseId]
   );
-  const selectedCourseQuery = useSelectedCourseForOffering(selectedCourseId);
-  const resolvedCourse = selectedCourseQuery.data ?? selectedCourse;
+  const selectedCourseGroup = useMemo(
+    () =>
+      groupedCourses.find((group) =>
+        group.courses.some((course) => course.id === selectedCourseId)
+      ) ?? null,
+    [groupedCourses, selectedCourseId]
+  );
+  const selectedCourseGroupKey = selectedCourseGroup?.key ?? "";
+  const resolvedCourse = selectedCourseGroup?.courses[0] ?? selectedCourse;
+
+  // Restrict semester selector to semesters this course already has offerings in.
+  // When editing, always keep the offering's current semester in the list so it
+  // can still be displayed and re-selected.
+  const initialSemesterId = initialData?.semesterId;
+  const resolvedSemesterIds = selectedCourseGroup?.semesterIds;
+  const allowedSemesterIds = useMemo(() => {
+    const ids = new Set<string>(resolvedSemesterIds ?? []);
+    if (initialSemesterId) ids.add(initialSemesterId);
+    return ids;
+  }, [resolvedSemesterIds, initialSemesterId]);
+
+  const isCourseSelected = Boolean(selectedCourseGroupKey);
+  const isCourseDetailLoading = false;
+  const availableSemesters = useMemo(() => {
+    if (!isCourseSelected) return semesters;
+    if (allowedSemesterIds.size === 0) return [];
+    return semesters.filter((s) => allowedSemesterIds.has(s.id));
+  }, [isCourseSelected, allowedSemesterIds, semesters]);
+  const isCourseMissingSemesters =
+    isCourseSelected && !isCourseDetailLoading && availableSemesters.length === 0;
+  const semesterErrorMessage = selectedSemesterId || isCourseMissingSemesters
+    ? null
+    : form.formState.errors.semesterId?.message ??
+      submitValidationMessages?.semesterId?.[0] ??
+      null;
+
+  const selectCourseForSemester = (semesterId: string) => {
+    const matchingCourse = selectedCourseGroup?.courses.find(
+      (course) => getCourseSemesterId(course) === semesterId
+    );
+    if (matchingCourse && matchingCourse.id !== selectedCourseId) {
+      form.setValue("courseId", matchingCourse.id, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  };
+
+  // Clear the semesterId if the currently selected course doesn't include it.
+  useEffect(() => {
+    if (!isCourseSelected) return;
+    if (isCourseDetailLoading) return;
+    if (!selectedSemesterId) return;
+    if (allowedSemesterIds.size === 0) return;
+    if (!allowedSemesterIds.has(selectedSemesterId)) {
+      form.setValue("semesterId", "", {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    isCourseSelected,
+    isCourseDetailLoading,
+    selectedSemesterId,
+    allowedSemesterIds,
+    form,
+  ]);
 
   const handleSubmit = (values: OfferingFormValues) => {
+    const courseForSemester = selectedCourseGroup?.courses.find(
+      (course) => getCourseSemesterId(course) === values.semesterId
+    );
     const payload: CreateCourseOfferingDto = {
-      courseId: values.courseId,
+      courseId: courseForSemester?.id ?? values.courseId,
       semesterId: values.semesterId,
       instructor: values.instructor?.trim() || undefined,
-      day: values.day?.trim() || undefined,
+      day: values.days && values.days.length > 0 ? values.days.join(", ") : undefined,
       time: values.time?.trim() || undefined,
       status: values.status,
     };
@@ -212,14 +340,29 @@ export function CourseOfferingForm({
           Course
         </Label>
         <Select
-          value={selectedCourseId || undefined}
-          onValueChange={(value) =>
-            form.setValue("courseId", value, {
+          value={selectedCourseGroupKey || undefined}
+          onValueChange={(value) => {
+            const group = groupedCourses.find((g) => g.key === value);
+            const currentSemesterId = form.getValues("semesterId");
+            const courseForSemester = group?.courses.find(
+              (course) => getCourseSemesterId(course) === currentSemesterId
+            );
+            const nextCourse = courseForSemester ?? group?.courses[0];
+
+            form.setValue("courseId", nextCourse?.id ?? "", {
               shouldDirty: true,
               shouldTouch: true,
               shouldValidate: true,
-            })
-          }
+            });
+
+            if (currentSemesterId && !group?.semesterIds.includes(currentSemesterId)) {
+              form.setValue("semesterId", "", {
+                shouldDirty: true,
+                shouldTouch: true,
+                shouldValidate: true,
+              });
+            }
+          }}
           disabled={isLoading || isCoursesLoading}
         >
           <SelectTrigger
@@ -234,9 +377,9 @@ export function CourseOfferingForm({
             <SelectValue placeholder={isCoursesLoading ? "Loading courses..." : "Select a course"} />
           </SelectTrigger>
           <SelectContent>
-            {courses.map((course) => (
-              <SelectItem key={course.id} value={course.id}>
-                {`${course.name ?? course.title} (${course.code})`}
+            {groupedCourses.map((group) => (
+              <SelectItem key={group.key} value={group.key}>
+                {group.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -273,37 +416,63 @@ export function CourseOfferingForm({
         </Label>
         <Select
           value={selectedSemesterId || undefined}
-          onValueChange={(value) =>
+          onValueChange={(value) => {
             form.setValue("semesterId", value, {
               shouldDirty: true,
               shouldTouch: true,
               shouldValidate: true,
-            })
+            });
+            form.clearErrors("semesterId");
+            selectCourseForSemester(value);
+          }}
+          disabled={
+            isLoading ||
+            isSemestersLoading ||
+            !isCourseSelected ||
+            isCourseDetailLoading ||
+            (isCourseSelected && availableSemesters.length === 0)
           }
-          disabled={isLoading || isSemestersLoading}
         >
           <SelectTrigger
             id="offering-semester"
             className={cn(
               "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.semesterId || submitValidationMessages?.semesterId
+              semesterErrorMessage
                 ? "border-destructive/60 bg-destructive/5"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400"
             )}
           >
-            <SelectValue placeholder={isSemestersLoading ? "Loading semesters..." : "Select a semester"} />
+            <SelectValue
+              placeholder={
+                isSemestersLoading
+                  ? "Loading semesters..."
+                  : isCourseDetailLoading
+                  ? "Loading course semesters..."
+                  : isCourseSelected && availableSemesters.length === 0
+                  ? "This course has no semesters yet"
+                  : !isCourseSelected
+                  ? "Select a course first"
+                  : "Select a semester"
+              }
+            />
           </SelectTrigger>
           <SelectContent>
-            {semesters.map((semester) => (
+            {availableSemesters.map((semester) => (
               <SelectItem key={semester.id} value={semester.id}>
                 {semester.isActive ? `${semester.name} (Active)` : semester.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {(form.formState.errors.semesterId || submitValidationMessages?.semesterId) && (
+        {isCourseMissingSemesters && (
+            <p className="text-[11px] text-zinc-500">
+              This course isn&apos;t linked to any semester yet. Pick another
+              course or add it to a semester first.
+            </p>
+          )}
+        {semesterErrorMessage && (
           <p className="text-xs font-medium text-destructive">
-            {form.formState.errors.semesterId?.message ?? submitValidationMessages?.semesterId?.[0]}
+            {semesterErrorMessage}
           </p>
         )}
       </div>
@@ -335,32 +504,48 @@ export function CourseOfferingForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2.5">
           <Label htmlFor="offering-day" className="text-sm font-semibold text-zinc-950">
-            Day
+            Days{" "}
+            <span className="text-xs font-normal text-zinc-400">
+              (select one or more)
+            </span>
           </Label>
-          <Select
-            value={selectedDay || undefined}
-            onValueChange={(value) =>
-              form.setValue("day", value, {
-                shouldDirty: true,
-                shouldTouch: true,
-              })
-            }
-            disabled={isLoading}
+          <div
+            id="offering-day"
+            role="group"
+            aria-label="Days"
+            className="flex flex-wrap gap-1.5"
           >
-            <SelectTrigger
-              id="offering-day"
-              className="h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm hover:border-zinc-300 focus-visible:border-zinc-400"
-            >
-              <SelectValue placeholder="Select day" />
-            </SelectTrigger>
-            <SelectContent>
-              {DAYS.map((day) => (
-                <SelectItem key={day} value={day}>
-                  {day}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {DAYS.map((day) => {
+              const active = selectedDays.includes(day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  disabled={isLoading}
+                  aria-label={`${active ? "Unselect" : "Select"} ${day}`}
+                  data-state={active ? "on" : "off"}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/50",
+                    active
+                      ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
+                    isLoading && "opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  {active && <CheckCircle2 className="size-3.5" />}
+                  {day.slice(0, 3)}
+                </button>
+              );
+            })}
+          </div>
+          {selectedDays.length > 0 && (
+            <p className="text-[11px] text-zinc-500">
+              {selectedDays.length}{" "}
+              {selectedDays.length === 1 ? "day" : "days"} selected
+            </p>
+          )}
         </div>
 
         <div className="space-y-2.5">

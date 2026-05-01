@@ -124,7 +124,7 @@ export function TimeSlotList({
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={8} />
+                    <TableSkeletonRows columns={6} rows={slotRows.length > 0 ? slotRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : slotRows.length === 0 ? (

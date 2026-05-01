@@ -147,7 +147,7 @@ export function CoursesPage() {
       <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button 
           onClick={openCreateModal}
-          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-200 bg-transparent font-semibold text-zinc-950 shadow-none transition-all hover:bg-zinc-50 active:scale-95 group-data-[stuck=true]:border-zinc-950 group-data-[stuck=true]:bg-zinc-950 group-data-[stuck=true]:text-white group-data-[stuck=true]:shadow-sm group-data-[stuck=true]:hover:bg-zinc-900"
+          className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-950 bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
         >
           <Plus className="size-4" />
           Add Course
@@ -259,6 +259,7 @@ export function CoursesPage() {
           <div className="mt-4">
             <CourseForm 
               initialData={editingCourse ?? undefined} 
+              existingCourses={courses}
               programs={programs}
               semesters={semesters}
               isProgramsLoading={programsQuery.isLoading}

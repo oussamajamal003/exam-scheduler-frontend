@@ -103,7 +103,7 @@ export function SemesterList({
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={8} />
+                    <TableSkeletonRows columns={6} rows={semesterRows.length > 0 ? semesterRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : semesterRows.length === 0 ? (

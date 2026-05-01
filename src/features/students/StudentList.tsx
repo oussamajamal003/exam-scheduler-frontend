@@ -56,7 +56,7 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-0">
-                    <TableSkeletonRows columns={7} rows={8} />
+                    <TableSkeletonRows columns={7} rows={studentRows.length > 0 ? studentRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : studentRows.length === 0 ? (
