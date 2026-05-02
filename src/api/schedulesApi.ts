@@ -88,3 +88,11 @@ export const updateSchedule = async ({
 export const deleteSchedule = async (id: string): Promise<void> => {
   await axiosClient.delete(`/schedules/${id}`);
 };
+
+// PATCH /api/schedules/:id/unpublish
+export const unpublishSchedule = async (id: string): Promise<Schedule> => {
+  const response = await axiosClient.patch<ApiEnvelope<Schedule>>(
+    `/schedules/${id}/unpublish`
+  );
+  return unwrap(response.data, "Unpublish schedule");
+};

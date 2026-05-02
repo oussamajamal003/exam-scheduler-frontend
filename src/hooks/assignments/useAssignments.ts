@@ -32,6 +32,12 @@ export const useUpdateAssignment = () => {
         title: "Assignment Updated",
         description: "The assignment has been updated.",
       });
+      addToast({
+        type: "warning",
+        title: "Schedule Changed",
+        description:
+          "Re-run conflict check before publishing this schedule.",
+      });
     },
     onError: (error: unknown) => {
       addToast({
@@ -67,6 +73,12 @@ export const useDeleteAssignment = () => {
         type: "success",
         title: "Assignment Deleted",
         description: "The assignment has been removed.",
+      });
+      addToast({
+        type: "warning",
+        title: "Schedule Changed",
+        description:
+          "Re-run conflict check before publishing this schedule.",
       });
     },
     onError: (error: unknown) => {

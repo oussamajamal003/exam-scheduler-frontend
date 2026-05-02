@@ -69,7 +69,7 @@ const mapBackendStudent = (student: BackendStudent): Student => {
 };
 
 export const getStudents = async (): Promise<Student[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedStudentsPayload>>("/students");
+  const response = await axiosClient.get<ApiEnvelope<PaginatedStudentsPayload>>("/students", { params: { limit: 5000 } });
   return (response.data?.data?.data ?? []).map(mapBackendStudent);
 };
 

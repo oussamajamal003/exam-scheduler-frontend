@@ -20,6 +20,7 @@ import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
 import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { SchedulesPage } from '@/pages/admin/SchedulesPage';
 import { ConflictsPage } from '@/pages/admin/ConflictsPage';
+import { SettingsPage } from '@/pages/admin/SettingsPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard, GuestGuard } from '@/guards/authguard';
@@ -112,7 +113,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/scheduling" element={<SchedulesPage />} />
             <Route path="/conflicts" element={<ConflictsPage />} />
-            <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
           <Route

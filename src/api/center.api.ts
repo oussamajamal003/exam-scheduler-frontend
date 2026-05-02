@@ -64,7 +64,7 @@ const mapBackendCenter = (center: BackendCenter): Center => ({
 
 export const fetchCenters = async (search = ""): Promise<Center[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendCenter>>>("/centers", {
-    params: { limit: 100, search: search || undefined },
+    params: { limit: 5000, search: search || undefined },
   });
   return (response.data?.data?.data ?? []).map(mapBackendCenter);
 };

@@ -16,16 +16,185 @@ const unwrap = <T,>(payload: ApiEnvelope<T> | undefined, label: string): T => {
   return payload.data;
 };
 
-// Generic payload shapes — the backend accepts a flexible body for prepare /
-// validate-input depending on inputs available (semesterId, centerIds, examIds, options).
+// -------------------- Shared DTO --------------------
+
+// Flexible body accepted by prepare / validate-input / generate
 export type PrepareSchedulingDto = {
   semesterId?: string;
+  /** ISO datetime – required by /prepare */
+  startDate?: string;
+  /** ISO datetime – required by /prepare */
+  endDate?: string;
   centerIds?: string[];
   examIds?: string[];
   options?: Record<string, unknown>;
 };
 
 export type ValidateSchedulingInputDto = PrepareSchedulingDto;
+
+// -------------------- POST /api/scheduling/prepare --------------------
+
+export type PrepareSchedulingMissingItem = {
+  entity: string;
+  reason: string;
+};
+
+export type PrepareSchedulingResult = {
+  // Core counts
+  activeCourseOfferingsCount: number;
+  roomsCount: number;
+  availableRoomsCount: number;
+  supervisorsCount: number;
+  timeSlotsCount: number;
+  // Overall readiness
+  readinessStatus: "ready" | "partial" | "not_ready" | string;
+  // Items that are missing or misconfigured
+  missingData: PrepareSchedulingMissingItem[];
+  // Optional extras the backend may include
+  semester?: { id: string; name: string } | null;
+  examsCount?: number;
+  studentsCount?: number;
+  [key: string]: unknown;
+};
+
+export const prepareScheduling = async (
+  payload: PrepareSchedulingDto = {}
+): Promise<PrepareSchedulingResult> => {
+  const response = await axiosClient.post<ApiEnvelope<PrepareSchedulingResult>>(
+    "/scheduling/prepare",
+    payload
+  );
+  const raw = unwrap(response.data, "Prepare scheduling") as Record<string, unknown>;
+
+  // Backend returns { semester, requestedWindow, resources: { courseOfferings, rooms, supervisors, timeSlotsInWindow, ... } }
+  // Normalize to the flat PrepareSchedulingResult shape the UI expects.
+  const res = (raw.resources ?? {}) as Record<string, unknown>;
+  const offerings = (res.courseOfferings as number) ?? 0;
+  const rooms     = (res.rooms        as number) ?? 0;
+  const supervisors = (res.supervisors as number) ?? 0;
+  const slots     = (res.timeSlotsInWindow as number) ?? 0;
+
+  return {
+    ...raw,
+    activeCourseOfferingsCount: offerings,
+    roomsCount:                 rooms,
+    availableRoomsCount:        rooms,   // backend query already filters status = 'AVAILABLE'
+    supervisorsCount:           supervisors,
+    timeSlotsCount:             slots,
+    examsCount:                 (res.exams as number) ?? offerings,
+    studentsCount:              (res.studentsWithExams as number) ?? 0,
+    readinessStatus:
+      offerings > 0 && rooms > 0 && supervisors > 0 && slots > 0
+        ? "ready"
+        : "partial",
+    missingData: (raw.missingData as PrepareSchedulingResult["missingData"]) ?? [],
+    semester: (raw.semester as PrepareSchedulingResult["semester"]) ?? null,
+  } as PrepareSchedulingResult;
+};
+
+// -------------------- POST /api/scheduling/validate-input --------------------
+
+export type ValidationGroup = {
+  ok: boolean;
+  issues: string[];
+};
+
+/** Per-offering breakdown used in validate details */
+export type OfferingRegistrationDetail = {
+  offeringId: string;
+  courseCode?: string | null;
+  courseTitle?: string | null;
+  semesterName?: string | null;
+  registrationsCount: number;
+  maxRoomCapacity: number;
+  /** true when maxRoomCapacity < registrationsCount */
+  capacityInsufficient: boolean;
+};
+
+/** Detailed statistics returned alongside validation result */
+export type ValidateSchedulingDetails = {
+  activeCourseOfferingsCount: number;
+  timeSlotsCount: number;
+  availableRoomsCount: number;
+  supervisorsCount: number;
+  /** Per-offering registration + capacity breakdown */
+  offeringRegistrations?: OfferingRegistrationDetail[];
+  [key: string]: unknown;
+};
+
+/** Errors grouped by category (key = category label, value = error messages) */
+export type ValidateSchedulingErrors = Record<string, string[]>;
+
+export type ValidateSchedulingResult = {
+  // New unified flag (mirrors `ready`)
+  isValid: boolean;
+  // Legacy flag kept for backward compat with existing page code
+  ready: boolean;
+  // Grouped error messages by category
+  errors: ValidateSchedulingErrors;
+  // Non-blocking advisory messages
+  warnings: string[];
+  // Detailed breakdown for the UI
+  details?: ValidateSchedulingDetails;
+  // Optional semester context
+  semester?: { name: string } | null;
+  // Legacy flat metrics (kept for the generate dialog)
+  metrics: {
+    roomsCount: number;
+    supervisorsCount: number;
+    examsCount: number;
+    timeSlotsCount: number;
+    studentsWithExamsCount: number;
+    existingAssignmentsCount: number;
+    [key: string]: unknown;
+  };
+  // Legacy grouped validation results
+  groups: {
+    rooms: ValidationGroup;
+    supervisors: ValidationGroup;
+    timeSlots: ValidationGroup;
+    courseOfferings: ValidationGroup;
+    studentOverlapRisks: ValidationGroup;
+    [key: string]: ValidationGroup;
+  };
+  // Flat issue list (legacy)
+  issues: string[];
+};
+
+export const validateSchedulingInput = async (
+  payload: ValidateSchedulingInputDto = {}
+): Promise<ValidateSchedulingResult> => {
+  const response = await axiosClient.post<ApiEnvelope<ValidateSchedulingResult>>(
+    "/scheduling/validate-input",
+    payload
+  );
+  const result = unwrap(response.data, "Validate scheduling input");
+  // Normalise: ensure isValid and ready are always in sync regardless of which
+  // field the backend populates.
+  result.isValid = result.isValid ?? result.ready ?? false;
+  result.ready = result.ready ?? result.isValid;
+  result.errors = result.errors ?? {};
+  result.warnings = result.warnings ?? [];
+  result.metrics = result.metrics ?? {
+    roomsCount: 0,
+    supervisorsCount: 0,
+    examsCount: 0,
+    timeSlotsCount: 0,
+    studentsWithExamsCount: 0,
+    existingAssignmentsCount: 0,
+  };
+  result.groups = result.groups ?? {
+    rooms: { ok: true, issues: [] },
+    supervisors: { ok: true, issues: [] },
+    timeSlots: { ok: true, issues: [] },
+    courseOfferings: { ok: true, issues: [] },
+    studentOverlapRisks: { ok: true, issues: [] },
+  };
+  result.issues = result.issues ?? [];
+  return result;
+};
+
+// -------------------- POST /api/scheduling/generate --------------------
 
 export type ScheduleAnalysis = {
   scheduleId: string;
@@ -35,29 +204,6 @@ export type ScheduleAnalysis = {
   [key: string]: unknown;
 };
 
-// POST /api/scheduling/prepare
-export const prepareScheduling = async (
-  payload: PrepareSchedulingDto = {}
-): Promise<unknown> => {
-  const response = await axiosClient.post<ApiEnvelope<unknown>>(
-    "/scheduling/prepare",
-    payload
-  );
-  return response.data?.data;
-};
-
-// POST /api/scheduling/validate-input
-export const validateSchedulingInput = async (
-  payload: ValidateSchedulingInputDto = {}
-): Promise<unknown> => {
-  const response = await axiosClient.post<ApiEnvelope<unknown>>(
-    "/scheduling/validate-input",
-    payload
-  );
-  return response.data?.data;
-};
-
-// POST /api/scheduling/generate
 export const generateSchedule = async (
   payload: GenerateScheduleDto
 ): Promise<GenerateScheduleResponse> => {

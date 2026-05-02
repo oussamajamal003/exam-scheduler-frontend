@@ -43,10 +43,15 @@ const DAYS = [
 const offeringFormSchema = z.object({
   courseId: z.string().min(1, { message: "Please select a course" }),
   semesterId: z.string().min(1, { message: "Please select a semester" }),
-  instructor: z.string().optional(),
-  days: z.array(z.string()).optional(),
-  time: z.string().optional(),
-  capacity: z.string().optional(),
+  instructor: z.string().min(1, { message: "Instructor name is required" }),
+  days: z.array(z.string()).min(1, { message: "Please select at least one day" }),
+  time: z.string().min(1, { message: "Class time is required" }),
+  capacity: z
+    .string()
+    .min(1, { message: "Capacity is required" })
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, {
+      message: "Capacity must be a positive number",
+    }),
   status: z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]).optional(),
 });
 
@@ -480,7 +485,7 @@ export function CourseOfferingForm({
       {/* Instructor */}
       <div className="space-y-2.5">
         <Label htmlFor="offering-instructor" className="text-sm font-semibold text-zinc-950">
-          Instructor
+          Instructor <span className="text-destructive">*</span>
         </Label>
         <div className="relative">
           <UserCircle2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
@@ -491,23 +496,27 @@ export function CourseOfferingForm({
             placeholder="e.g., Dr. Sarah Khan"
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 pl-9 pr-10 text-sm transition-all",
-              "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              form.formState.errors.instructor
+                ? "border-destructive/60 bg-destructive/5"
+                : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
           />
-          {selectedInstructor && (
+          {selectedInstructor && !form.formState.errors.instructor && (
             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-500" />
           )}
         </div>
+        {form.formState.errors.instructor && (
+          <p className="text-xs font-medium text-destructive">
+            {form.formState.errors.instructor.message}
+          </p>
+        )}
       </div>
 
       {/* Day & Time */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2.5">
           <Label htmlFor="offering-day" className="text-sm font-semibold text-zinc-950">
-            Days{" "}
-            <span className="text-xs font-normal text-zinc-400">
-              (select one or more)
-            </span>
+            Days <span className="text-destructive">*</span>
           </Label>
           <div
             id="offering-day"
@@ -540,17 +549,21 @@ export function CourseOfferingForm({
               );
             })}
           </div>
-          {selectedDays.length > 0 && (
+          {selectedDays.length > 0 ? (
             <p className="text-[11px] text-zinc-500">
               {selectedDays.length}{" "}
               {selectedDays.length === 1 ? "day" : "days"} selected
             </p>
-          )}
+          ) : form.formState.errors.days ? (
+            <p className="text-xs font-medium text-destructive">
+              {form.formState.errors.days.message}
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2.5">
           <Label htmlFor="offering-time" className="text-sm font-semibold text-zinc-950">
-            Time
+            Time <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
             <Clock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
@@ -559,9 +572,19 @@ export function CourseOfferingForm({
               type="time"
               {...form.register("time")}
               disabled={isLoading}
-              className="h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              className={cn(
+                "h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm",
+                form.formState.errors.time
+                  ? "border-destructive/60 bg-destructive/5"
+                  : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              )}
             />
           </div>
+          {form.formState.errors.time && (
+            <p className="text-xs font-medium text-destructive">
+              {form.formState.errors.time.message}
+            </p>
+          )}
         </div>
       </div>
 
@@ -569,21 +592,30 @@ export function CourseOfferingForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2.5">
           <Label htmlFor="offering-capacity" className="text-sm font-semibold text-zinc-950">
-            Capacity{" "}
-            <span className="text-xs font-normal text-zinc-400">(optional)</span>
+            Capacity <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
             <Hash className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
             <Input
               id="offering-capacity"
               type="number"
-              min={0}
+              min={1}
               {...form.register("capacity")}
               disabled={isLoading}
               placeholder="e.g., 40"
-              className="h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              className={cn(
+                "h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm",
+                form.formState.errors.capacity
+                  ? "border-destructive/60 bg-destructive/5"
+                  : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              )}
             />
           </div>
+          {form.formState.errors.capacity && (
+            <p className="text-xs font-medium text-destructive">
+              {form.formState.errors.capacity.message}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2.5">

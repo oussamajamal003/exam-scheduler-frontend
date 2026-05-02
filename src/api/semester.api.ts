@@ -54,7 +54,7 @@ const serializeSemester = <T extends Partial<CreateSemesterDto>>(payload: T) => 
 
 export const fetchSemesters = async (search = ""): Promise<Semester[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendSemester>>>("/semesters", {
-    params: { limit: 100, search: search || undefined },
+    params: { limit: 5000, search: search || undefined },
   });
   return (response.data?.data?.data ?? []).map(mapBackendSemester);
 };

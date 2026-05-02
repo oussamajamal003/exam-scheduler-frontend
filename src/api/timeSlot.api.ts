@@ -64,7 +64,7 @@ const serialize = <T extends Partial<CreateTimeSlotDto>>(payload: T) => {
 
 export const fetchTimeSlots = async (): Promise<TimeSlot[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendTimeSlot>>>("/timeslots", {
-    params: { limit: 100 },
+    params: { limit: 5000 },
   });
   return (response.data?.data?.data ?? []).map(mapBackendTimeSlot);
 };

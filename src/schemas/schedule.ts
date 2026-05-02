@@ -76,6 +76,7 @@ export type ScheduleSupervisorUser = {
 export type ScheduleSupervisor = {
   id: string;
   department?: string | null;
+  center?: ScheduleCenter | null;
   user?: ScheduleSupervisorUser | null;
 };
 

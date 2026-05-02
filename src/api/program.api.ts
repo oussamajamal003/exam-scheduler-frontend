@@ -53,7 +53,7 @@ const mapBackendProgram = (program: ProgramRecord): Program => ({
 
 export const fetchPrograms = async (search = ''): Promise<Program[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<ProgramRecord>>>('/programs', {
-    params: { limit: 100, search: search || undefined },
+    params: { limit: 5000, search: search || undefined },
   });
 
   return (response.data?.data?.data ?? []).map(mapBackendProgram);

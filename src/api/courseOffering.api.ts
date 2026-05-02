@@ -271,7 +271,7 @@ const fetchCoursesIndex = async (): Promise<Map<string, OfferingCourse>> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendCourse>>>(
     "/courses",
     {
-      params: { limit: 100 },
+      params: { limit: 5000 },
     }
   );
 
@@ -293,7 +293,7 @@ export const fetchCourseOfferings = async (search = ""): Promise<CourseOffering[
   const offeringsResponse = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendOfferingList>>>(
     "/course-offerings",
     {
-      params: { limit: 100, search: search || undefined },
+      params: { limit: 5000, search: search || undefined },
     }
   );
 

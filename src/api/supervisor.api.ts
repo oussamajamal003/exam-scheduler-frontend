@@ -64,7 +64,7 @@ const mapBackendSupervisor = (supervisor: BackendSupervisor): Supervisor => ({
 });
 
 export const fetchSupervisors = async (): Promise<Supervisor[]> => {
-  const response = await axiosClient.get<ApiEnvelope<{ data: BackendSupervisor[], meta?: unknown }>>("/supervisors");
+  const response = await axiosClient.get<ApiEnvelope<{ data: BackendSupervisor[], meta?: unknown }>>("/supervisors", { params: { limit: 5000 } });
   return (response.data?.data?.data || []).map(mapBackendSupervisor);
 };
 

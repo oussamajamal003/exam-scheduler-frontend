@@ -752,23 +752,115 @@ const ConflictDetailsSheet = ({
             )}
 
             <section className="border border-zinc-200/60 bg-white p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700 mb-2">
-                Metadata
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700 mb-3">
+                Conflict Details
               </div>
               <div className="divide-y divide-zinc-100">
-                <KV label="Conflict ID" value={c.id ?? "—"} mono />
+                {/* Type */}
                 <KV
                   label="Type"
-                  value={formatType(c.type ?? c.conflictType)}
+                  value={<ConflictTypeBadge type={c.type ?? c.conflictType} />}
                 />
-                <KV label="Related Course" value={courseCode ?? "—"} mono />
-                <KV label="Schedule" value={scheduleName} />
-                {c.entity && <KV label="Entity" value={c.entity} mono />}
+                {/* Status */}
                 <KV
                   label="Status"
-                  value={c.resolved ? "Resolved" : "Unresolved"}
+                  value={<StatusBadge resolved={c.resolved} />}
                 />
-                <KV label="Created At" value={formatDateTime(c.createdAt)} />
+                {/* Related Course */}
+                <KV
+                  label="Related Course"
+                  value={
+                    (() => {
+                      const course =
+                        (c as Conflict & { exam?: { courseOffering?: { course?: { code?: string; title?: string; name?: string } } } }).exam
+                          ?.courseOffering?.course;
+                      if (course?.code || course?.title || course?.name) {
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            {course.code && (
+                              <span className="font-mono text-xs font-semibold bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded-none text-zinc-700">
+                                {course.code}
+                              </span>
+                            )}
+                            {(course.title ?? course.name) && (
+                              <span className="text-zinc-800">{course.title ?? course.name}</span>
+                            )}
+                          </span>
+                        );
+                      }
+                      return courseCode ? (
+                        <span className="font-mono text-xs font-semibold bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded-none text-zinc-700">
+                          {courseCode}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">No related course</span>
+                      );
+                    })()
+                  }
+                />
+                {/* Schedule */}
+                <KV
+                  label="Schedule"
+                  value={
+                    scheduleName !== "—" ? (
+                      <span className="font-medium text-zinc-800">{scheduleName}</span>
+                    ) : (
+                      <span className="text-zinc-400">Not assigned</span>
+                    )
+                  }
+                />
+                {/* Room */}
+                {(() => {
+                  const room = (c as Conflict & { room?: { name?: string } }).room;
+                  return room?.name ? (
+                    <KV
+                      label="Room"
+                      value={<span className="font-medium text-zinc-800">{room.name}</span>}
+                    />
+                  ) : null;
+                })()}
+                {/* Supervisor */}
+                {(() => {
+                  const sup = (c as Conflict & { supervisor?: { user?: { name?: string; email?: string } } }).supervisor;
+                  const supName = sup?.user?.name ?? sup?.user?.email;
+                  return supName ? (
+                    <KV
+                      label="Supervisor"
+                      value={<span className="font-medium text-zinc-800">{supName}</span>}
+                    />
+                  ) : null;
+                })()}
+                {/* Time Slot */}
+                {(() => {
+                  const ts = (c as Conflict & { timeSlot?: { startTime?: string; endTime?: string; date?: string } }).timeSlot;
+                  if (ts?.startTime || ts?.date) {
+                    const start = ts.startTime ? formatDateTime(ts.startTime) : "";
+                    const end = ts.endTime ? ` → ${formatDateTime(ts.endTime)}` : "";
+                    return (
+                      <KV
+                        label="Time Slot"
+                        value={<span className="text-zinc-800">{start}{end}</span>}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+                {/* Entity (internal tag, shown only if meaningful) */}
+                {c.entity && (
+                  <KV
+                    label="Entity"
+                    value={
+                      <span className="font-mono text-[11px] bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 text-zinc-600 rounded-none">
+                        {c.entity}
+                      </span>
+                    }
+                  />
+                )}
+                {/* Detected At */}
+                <KV
+                  label="Detected At"
+                  value={<span className="text-zinc-600">{formatDateTime(c.createdAt)}</span>}
+                />
               </div>
             </section>
           </div>

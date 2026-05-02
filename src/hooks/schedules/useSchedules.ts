@@ -5,6 +5,7 @@ import {
   fetchSchedule,
   fetchSchedules,
   updateSchedule,
+  unpublishSchedule,
   type CreateScheduleDto,
   type FetchSchedulesParams,
   type UpdateScheduleDto,
@@ -15,6 +16,10 @@ import {
   prepareScheduling,
   publishSchedule,
   validateSchedulingInput,
+  type PrepareSchedulingDto,
+  type PrepareSchedulingResult,
+  type ValidateSchedulingInputDto,
+  type ValidateSchedulingResult,
 } from "../../api/schedulingApi";
 import { fetchScheduleConflicts } from "../../api/conflictsApi";
 import type { GenerateScheduleDto } from "../../schemas/schedule";
@@ -146,9 +151,8 @@ export const useDeleteSchedule = () => {
 
 export const usePrepareScheduling = () => {
   const { addToast } = useToast();
-  return useMutation({
-    mutationFn: (payload: Parameters<typeof prepareScheduling>[0] = {}) =>
-      prepareScheduling(payload),
+  return useMutation<PrepareSchedulingResult, unknown, PrepareSchedulingDto | undefined>({
+    mutationFn: (payload: PrepareSchedulingDto = {}) => prepareScheduling(payload),
     onError: (error: unknown) => {
       addToast({
         type: "error",
@@ -164,8 +168,8 @@ export const usePrepareScheduling = () => {
 
 export const useValidateSchedulingInput = () => {
   const { addToast } = useToast();
-  return useMutation({
-    mutationFn: (payload: Parameters<typeof validateSchedulingInput>[0] = {}) =>
+  return useMutation<ValidateSchedulingResult, unknown, ValidateSchedulingInputDto | undefined>({
+    mutationFn: (payload: ValidateSchedulingInputDto = {}) =>
       validateSchedulingInput(payload),
     onError: (error: unknown) => {
       addToast({
@@ -230,6 +234,33 @@ export const usePublishSchedule = () => {
         description: getSmartErrorDescription(
           error,
           "An error occurred while publishing the schedule."
+        ),
+      });
+    },
+  });
+};
+
+export const useUnpublishSchedule = () => {
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+
+  return useMutation({
+    mutationFn: (id: string) => unpublishSchedule(id),
+    onSuccess: (schedule) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+      addToast({
+        type: "success",
+        title: "Returned to Draft",
+        description: `${schedule.name} is now editable.`,
+      });
+    },
+    onError: (error: unknown) => {
+      addToast({
+        type: "error",
+        title: "Failed to Return to Draft",
+        description: getSmartErrorDescription(
+          error,
+          "An error occurred while returning the schedule to draft."
         ),
       });
     },

@@ -117,7 +117,7 @@ const mapEnrollment = (e: BackendEnrollment): Enrollment => ({
 export const fetchEnrollments = async (search = ""): Promise<Enrollment[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendEnrollment>>>(
     "/enrollments",
-    { params: { limit: 100, search: search || undefined } }
+    { params: { limit: 5000, search: search || undefined } }
   );
   return (response.data?.data?.data ?? []).map(mapEnrollment);
 };

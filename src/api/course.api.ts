@@ -98,7 +98,7 @@ const mapBackendCourse = (course: BackendCourse): Course => {
 
 export const fetchCourses = async (): Promise<Course[]> => {
   const response = await axiosClient.get<ApiEnvelope<{ data: BackendCourse[], meta?: unknown }>>("/courses", {
-    params: { limit: 100 },
+    params: { limit: 5000 },
   });
   return (response.data?.data?.data || []).map(mapBackendCourse);
 };

@@ -97,7 +97,7 @@ export function TimeSlotList({
             Time Slot Management
           </CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">
-            Define exam time windows. Overlapping slots on the same date are flagged for review before assignments are made.
+            Define exam time windows. Overlapping slots on the same date are flagged as local review warnings before assignments are made; persisted scheduling conflicts appear in the Conflicts page after schedule generation.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
@@ -164,7 +164,7 @@ export function TimeSlotList({
                           {formatDate(slot.date ?? slot.startTime)}
                           {inConflict && (
                             <span className="inline-flex items-center gap-1 rounded-none border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                              <AlertTriangle className="size-3" /> Conflict
+                              <AlertTriangle className="size-3" /> Overlap Warning
                             </span>
                           )}
                         </div>

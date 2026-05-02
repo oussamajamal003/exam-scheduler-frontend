@@ -39,7 +39,7 @@ const mapBackendDepartment = (department: DepartmentRecord): Department => ({
 
 export const fetchDepartments = async (search = ''): Promise<Department[]> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<DepartmentRecord>>>('/departments', {
-    params: { limit: 100, search: search || undefined },
+    params: { limit: 5000, search: search || undefined },
   });
 
   return (response.data?.data?.data ?? []).map(mapBackendDepartment);

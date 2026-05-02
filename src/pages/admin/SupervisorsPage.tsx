@@ -7,9 +7,10 @@ import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
-import { ClipboardList, Users, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
+import { ClipboardList, Users, Plus, RefreshCw, TrendingUp, Search, Calendar, Clock } from "lucide-react";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { ScrollArea } from "../../components/ui/scroll-area";
 
 import { SupervisorList } from "../../features/supervisors/SupervisorList";
 import { SupervisorForm } from "../../forms/supervisors/SupervisorForm";
@@ -19,6 +20,20 @@ import { useSupervisors, useCreateSupervisor, useUpdateSupervisor, useDeleteSupe
 function WorkloadContent({ supervisor, onClose }: { supervisor: Supervisor | null; onClose: () => void }) {
   const { data, isLoading, isError, error } = useSupervisorWorkload(supervisor?.id ?? null);
 
+  const fmtDate = (value?: string | null) => {
+    if (!value) return null;
+    try {
+      return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    } catch { return null; }
+  };
+
+  const fmtTime = (value?: string | null) => {
+    if (!value) return null;
+    try {
+      return new Date(value).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "UTC" });
+    } catch { return null; }
+  };
+
   if (isLoading) return <PageSpinner label="Loading workload" className="min-h-32" />;
   if (isError) return (
     <div className="rounded-none border border-destructive/30 bg-destructive/5 px-3 py-3 text-sm text-destructive">
@@ -26,52 +41,87 @@ function WorkloadContent({ supervisor, onClose }: { supervisor: Supervisor | nul
     </div>
   );
 
+  // Deduplicate: same course + same start time = same exam slot
+  const seen = new Set<string>();
+  const uniqueAssignments = (data?.assignments ?? []).filter((a) => {
+    const key = `${a.exam?.courseOffering?.course?.code ?? "?"}:${a.timeSlot?.startTime ?? "?"}:${a.timeSlot?.date ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   return (
-    <div className="mt-2 space-y-5">
-      <div className="flex items-center gap-4 rounded-none border border-zinc-200/60 bg-zinc-50 px-4 py-4">
+    <div className="flex flex-col gap-2 h-full">
+      <div className="flex items-center gap-3 rounded-none border border-zinc-200/60 bg-zinc-50 px-3 py-3 shrink-0">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Supervisor</p>
-          <p className="mt-0.5 truncate text-base font-bold text-zinc-950">{supervisor?.name}</p>
-          <p className="text-xs text-zinc-500">{supervisor?.center}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">Supervisor</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-zinc-950">{supervisor?.name}</p>
+          <p className="text-[11px] text-zinc-500">{supervisor?.center}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-none bg-indigo-50 px-4 py-3">
-          <ClipboardList className="size-5 text-indigo-600" />
+        <div className="flex items-center gap-1.5 rounded-none bg-indigo-50 px-3 py-2 shrink-0">
+          <ClipboardList className="size-4 text-indigo-600" />
           <div className="text-right">
-            <p className="text-2xl font-black text-indigo-700">{data?.workloadCount ?? 0}</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">exams</p>
+            <p className="text-xl font-black text-indigo-700 leading-none">{uniqueAssignments.length}</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-indigo-400">exams</p>
           </div>
         </div>
       </div>
 
-      {!data || data.assignments.length === 0 ? (
+      {uniqueAssignments.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No assignments" description="This supervisor has no exam assignments." />
       ) : (
-        <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">Assignments</p>
-          {data.assignments.map((a, i) => {
-            const course = a.exam?.courseOffering?.course;
-            const semester = a.exam?.courseOffering?.semester;
-            const slot = a.timeSlot;
-            return (
-              <div key={a.id ?? i} className="rounded-none border border-zinc-200/60 bg-white px-4 py-3">
-                <p className="text-sm font-semibold text-zinc-950">
-                  {course?.code ? `[${course.code}] ` : ""}{course?.title ?? "Unknown Course"}
-                </p>
-                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500">
-                  {semester?.name && <span>{semester.name}</span>}
-                  {slot?.date && <span>{slot.date}</span>}
-                  {(slot?.startTime || slot?.endTime) && (
-                    <span>{slot.startTime ?? ""}{slot.startTime && slot.endTime ? " – " : ""}{slot.endTime ?? ""}</span>
-                  )}
-                  {slot?.label && !slot?.date && <span>{slot.label}</span>}
+        <div className="flex-1 flex flex-col min-h-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400 shrink-0 mb-2">
+            Assignments ({uniqueAssignments.length})
+          </p>
+          <ScrollArea className="flex-1 rounded-none border border-zinc-200/40">
+            <div className="space-y-2 px-4 py-3">
+            {uniqueAssignments.map((a, i) => {
+              const course = a.exam?.courseOffering?.course;
+              const semester = a.exam?.courseOffering?.semester;
+              const slot = a.timeSlot;
+              const dateStr = fmtDate(slot?.date ?? slot?.startTime);
+              const startStr = fmtTime(slot?.startTime);
+              const endStr = fmtTime(slot?.endTime);
+              return (
+                <div
+                  key={(a as { id?: string }).id ?? i}
+                  className="rounded-none border border-zinc-200/60 bg-white px-4 py-3 space-y-1.5"
+                >
+                  <p className="text-sm font-semibold text-zinc-950 leading-snug">
+                    {course?.code && (
+                      <span className="inline-flex items-center rounded-none border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[11px] font-mono font-semibold text-zinc-700 mr-1.5">
+                        {course.code}
+                      </span>
+                    )}
+                    {course?.title ?? "Unknown Course"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+                    {semester?.name && (
+                      <span className="text-zinc-400">{semester.name}</span>
+                    )}
+                    {dateStr && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-3 shrink-0" />
+                        {dateStr}
+                      </span>
+                    )}
+                    {(startStr || endStr) && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-3 shrink-0" />
+                        {startStr}{startStr && endStr ? " – " : ""}{endStr}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+            </div>
+          </ScrollArea>
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end shrink-0">
         <Button variant="outline" onClick={onClose} className="rounded-none font-semibold">Close</Button>
       </div>
     </div>
@@ -309,11 +359,13 @@ export function SupervisorsPage() {
       />
 
       <Dialog open={!!workloadSupervisor} onOpenChange={(open) => !open && setWorkloadSupervisor(null)}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-xl max-h-96 overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Supervisor Workload</DialogTitle>
           </DialogHeader>
-          <WorkloadContent supervisor={workloadSupervisor} onClose={() => setWorkloadSupervisor(null)} />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+            <WorkloadContent supervisor={workloadSupervisor} onClose={() => setWorkloadSupervisor(null)} />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

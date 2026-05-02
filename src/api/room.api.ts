@@ -37,7 +37,7 @@ const mapBackendRoom = (room: BackendRoom): Room => ({
 });
 
 export const fetchRooms = async (): Promise<Room[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms");
+  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms", { params: { limit: 5000 } });
   return (response.data?.data?.data || []).map(mapBackendRoom);
 };
 
@@ -68,7 +68,7 @@ export const deleteRoom = async (id: string): Promise<void> => {
 };
 
 export const fetchAvailableRooms = async (): Promise<Room[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms/available");
+  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms/available", { params: { limit: 5000 } });
   return (response.data?.data?.data || []).map(mapBackendRoom);
 };
 
