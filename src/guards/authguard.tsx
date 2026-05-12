@@ -1,17 +1,44 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { getHomePathForRole, normalizeRole } from '@/lib/authRoutes';
+import { authStorageKeys, clearStoredAuthSession } from '@/api/axiosclient';
 
-const isSessionValid = (): boolean => {
-  const token = localStorage.getItem('token');
+const AUTH_GUARD_CHECKED_BOOT_SESSION_KEY = 'auth_guard_checked_boot';
+const AUTH_GUARD_LAST_PATH_SESSION_KEY = 'auth_guard_last_path';
+
+const isSessionValid = (pathname: string): boolean => {
+  const token = localStorage.getItem(authStorageKeys.token);
   if (!token) return false;
-  const expiresAt = localStorage.getItem('token_expires_at');
-  if (expiresAt && Date.now() > Number(expiresAt)) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('auth_user');
+
+  const currentBootId = sessionStorage.getItem(authStorageKeys.pageBootId);
+  const checkedBootId = sessionStorage.getItem(AUTH_GUARD_CHECKED_BOOT_SESSION_KEY);
+  const lastPath = sessionStorage.getItem(AUTH_GUARD_LAST_PATH_SESSION_KEY);
+  const expiresAt = localStorage.getItem(authStorageKeys.tokenExpiresAt);
+  const expired = expiresAt ? Date.now() > Number(expiresAt) : false;
+
+  if (currentBootId && checkedBootId !== currentBootId) {
+    sessionStorage.setItem(AUTH_GUARD_CHECKED_BOOT_SESSION_KEY, currentBootId);
+
+    const forceLogoutOnReload =
+      localStorage.getItem(authStorageKeys.forceLogoutOnReload) === 'true';
+    const forceLogoutBootId = localStorage.getItem(authStorageKeys.forceLogoutOnReloadBoot);
+    const shouldLogoutAfterReload =
+      forceLogoutOnReload && forceLogoutBootId !== currentBootId;
+
+    if (shouldLogoutAfterReload || expired) {
+      clearStoredAuthSession();
+      return false;
+    }
+  }
+
+  if (expired && lastPath && lastPath !== pathname) {
+    clearStoredAuthSession();
+    sessionStorage.removeItem(AUTH_GUARD_LAST_PATH_SESSION_KEY);
     return false;
   }
+
+  sessionStorage.setItem(AUTH_GUARD_LAST_PATH_SESSION_KEY, pathname);
+
   return true;
 };
 
@@ -20,8 +47,8 @@ interface AuthGuardProps {
 }
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const valid = isSessionValid();
   const location = useLocation();
+  const valid = isSessionValid(location.pathname);
 
   if (!valid) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -51,9 +78,9 @@ const decodeTokenRole = (token: string | null): string | null => {
 };
 
 export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) => {
-  const valid = isSessionValid();
   const location = useLocation();
-  const token = valid ? localStorage.getItem('token') : null;
+  const valid = isSessionValid(location.pathname);
+  const token = valid ? localStorage.getItem(authStorageKeys.token) : null;
   const role = normalizeRole(decodeTokenRole(token));
 
   if (!valid) {
@@ -76,8 +103,9 @@ interface GuestGuardProps {
 }
 
 export const GuestGuard: React.FC<GuestGuardProps> = ({ children }) => {
-  const valid = isSessionValid();
-  const token = valid ? localStorage.getItem('token') : null;
+  const location = useLocation();
+  const valid = isSessionValid(location.pathname);
+  const token = valid ? localStorage.getItem(authStorageKeys.token) : null;
   const role = normalizeRole(decodeTokenRole(token));
 
   if (valid && role) {

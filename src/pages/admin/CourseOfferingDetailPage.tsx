@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+﻿import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,6 +20,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { getApiErrorMessage } from "../../lib/apiError";
+import { formatUtcDate } from "../../lib/dateTime";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import { useCourseOffering } from "../../hooks/courseOfferings/useCourseOfferings";
 import { cn } from "../../lib/utils";
@@ -72,7 +73,7 @@ export function CourseOfferingDetailPage() {
   const totalEnrollments = registrations.length;
   const totalExams = exams.length;
   const hasAssignments = exams.some((exam) => exam.assignments.length > 0);
-  const hasConflicts = (offering.conflictsCount ?? 0) > 0;
+  const isReadyForScheduling = totalEnrollments > 0;
 
   return (
     <div className="p-5 sm:p-6 lg:p-8">
@@ -197,25 +198,25 @@ export function CourseOfferingDetailPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Conflicts
+                  Scheduling Readiness
                 </p>
                 <p className="mt-2 text-3xl font-bold text-zinc-950">
-                  {hasConflicts ? "!" : "OK"}
+                  {isReadyForScheduling ? "Ready" : "Needs Data"}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {hasConflicts ? "Review schedule conflicts" : "No conflicts detected"}
+                  {isReadyForScheduling ? "Eligible for hybrid scheduling" : "Add enrollments before scheduling"}
                 </p>
               </div>
               <div
                 className={cn(
                   "rounded-none p-2",
-                  hasConflicts ? "bg-red-50" : "bg-emerald-50"
+                  isReadyForScheduling ? "bg-emerald-50" : "bg-amber-50"
                 )}
               >
-                {hasConflicts ? (
-                  <AlertTriangle className="size-5 text-red-600" />
-                ) : (
+                {isReadyForScheduling ? (
                   <ShieldCheck className="size-5 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="size-5 text-amber-600" />
                 )}
               </div>
             </div>
@@ -381,7 +382,7 @@ export function CourseOfferingDetailPage() {
               <EmptyState
                 icon={ClipboardList}
                 title="No exams scheduled"
-                description="Once exams are created for this offering they will appear here with rooms, supervisors, and time slots."
+                description="Once exams are created for this offering they will appear here with rooms, proctors, and time slots."
               />
             ) : (
               <div className="space-y-4">
@@ -393,9 +394,7 @@ export function CourseOfferingDetailPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold text-zinc-950">
-                          {exam.examDate
-                            ? new Date(exam.examDate).toLocaleDateString()
-                            : "Date TBD"}
+                          {formatUtcDate(exam.examDate, "Date TBD")}
                         </p>
                         <p className="text-xs text-zinc-500">
                           Duration: {exam.duration ? `${exam.duration} min` : "—"}
@@ -413,7 +412,7 @@ export function CourseOfferingDetailPage() {
 
                     {exam.assignments.length === 0 ? (
                       <p className="mt-3 text-xs text-zinc-500">
-                        No room/supervisor assignment yet.
+                        No room/proctor assignment yet.
                       </p>
                     ) : (
                       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -428,7 +427,7 @@ export function CourseOfferingDetailPage() {
                             </p>
                             <p className="mt-1 flex items-center gap-1.5">
                               <UserCircle2 className="size-3.5 text-zinc-500" />
-                              {assignment.supervisorName ?? "Supervisor TBD"}
+                              {assignment.proctorName ?? "Proctor TBD"}
                             </p>
                             <p className="mt-1 flex items-center gap-1.5">
                               <Clock className="size-3.5 text-zinc-500" />
@@ -445,37 +444,37 @@ export function CourseOfferingDetailPage() {
           </CardContent>
         </Card>
 
-        {/* 4. Conflict status */}
+        {/* 4. Scheduling readiness */}
         <Card className="rounded-none border border-zinc-200/80 bg-white shadow-sm lg:col-span-1">
           <CardContent className="space-y-4 p-6">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">
-                Conflict Status
+                Scheduling Readiness
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-zinc-950">Schedule health</h2>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-950">Offering readiness</h2>
             </div>
 
             <div
               className={cn(
                 "flex items-center gap-3 rounded-none border p-4",
-                hasConflicts
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                isReadyForScheduling
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
               )}
             >
-              {hasConflicts ? (
-                <AlertTriangle className="size-5 shrink-0" />
-              ) : (
+              {isReadyForScheduling ? (
                 <CheckCircle2 className="size-5 shrink-0" />
+              ) : (
+                <AlertTriangle className="size-5 shrink-0" />
               )}
               <div>
                 <p className="text-sm font-bold uppercase tracking-wide">
-                  {hasConflicts ? "Has Conflicts" : "OK"}
+                  {isReadyForScheduling ? "Ready" : "Blocked"}
                 </p>
                 <p className="text-xs opacity-80">
-                  {hasConflicts
-                    ? "Review the conflicts module to resolve overlaps."
-                    : "No overlapping schedules detected for this offering."}
+                  {isReadyForScheduling
+                    ? "This offering has the enrollment data needed to participate in schedule generation."
+                    : "This offering needs enrolled students before the scheduling engine can place its exam."}
                 </p>
               </div>
             </div>

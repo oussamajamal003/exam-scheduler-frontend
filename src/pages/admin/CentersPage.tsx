@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useDeferredValue, useMemo, useState } from "react";
 import { CenterList } from "../../features/centers/CenterList";
 import { CenterForm } from "../../forms/centers/CenterForm";
 import { CenterDetailDialog } from "../../features/centers/CenterDetailDialog";
@@ -18,7 +18,7 @@ import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
-import { Building, CheckCircle2, DoorOpen, Plus, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { Building, CheckCircle2, DoorOpen, Plus, RefreshCw, Search, Users } from "lucide-react";
 
 export function CentersPage() {
   const [search, setSearch] = useState("");
@@ -56,20 +56,33 @@ export function CentersPage() {
     updateMutation.reset();
   };
 
-  const handleSubmit = (data: CenterFormValues) => {
+  const handleSubmit = async (data: CenterFormValues) => {
+    const supervisors = (data.supervisorsText ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
     const payload = {
       name: data.name.trim(),
       ...(data.location && data.location.trim() ? { location: data.location.trim() } : {}),
+      supervisors,
     };
 
-    if (editingCenter?.id) {
-      updateMutation.mutate(
-        { id: editingCenter.id, data: payload },
-        { onSuccess: closeFormModal }
-      );
-      return;
+    try {
+      if (editingCenter?.id) {
+        await updateMutation.mutateAsync({
+          id: editingCenter.id,
+          data: payload,
+        });
+        closeFormModal();
+        return;
+      }
+
+      await createMutation.mutateAsync(payload);
+      closeFormModal();
+    } catch {
+      // Mutation hooks already expose the save error state and toasts.
     }
-    createMutation.mutate(payload, { onSuccess: closeFormModal });
   };
 
   const handleDelete = (center: Center) => {
@@ -148,7 +161,7 @@ export function CentersPage() {
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Centers</h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              Manage exam centers, their rooms, and supervisor assignments across the institution
+              Manage exam centers, their rooms, and administrative supervisors
             </p>
           </div>
         </div>
@@ -184,7 +197,7 @@ export function CentersPage() {
       </StickyActionBar>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
@@ -204,12 +217,12 @@ export function CentersPage() {
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Rooms</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.totalRooms}</p>
-                <p className="text-xs text-zinc-500 mt-2">Across all centers</p>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Supervisors</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.totalSupervisors}</p>
+                <p className="text-xs text-zinc-500 mt-2">Administrative center managers</p>
               </div>
               <div className="p-2 rounded-none bg-emerald-50">
-                <DoorOpen className="size-5 text-emerald-600" />
+                <Users className="size-5 text-emerald-600" />
               </div>
             </div>
           </CardContent>
@@ -219,12 +232,12 @@ export function CentersPage() {
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Supervisors</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.totalSupervisors}</p>
-                <p className="text-xs text-zinc-500 mt-2">Assigned to centers</p>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Rooms</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.totalRooms}</p>
+                <p className="text-xs text-zinc-500 mt-2">Across all centers</p>
               </div>
-              <div className="p-2 rounded-none bg-violet-50">
-                <ShieldCheck className="size-5 text-violet-600" />
+              <div className="p-2 rounded-none bg-emerald-50">
+                <DoorOpen className="size-5 text-emerald-600" />
               </div>
             </div>
           </CardContent>
@@ -287,6 +300,7 @@ export function CentersPage() {
           <div className="mt-4">
             <CenterForm
               initialData={editingCenter ?? undefined}
+              center={editingCenter}
               onSubmit={handleSubmit}
               isLoading={isSaving}
               submitErrorMessage={

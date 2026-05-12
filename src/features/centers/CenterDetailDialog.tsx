@@ -1,8 +1,8 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+﻿import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Card, CardContent } from "../../components/ui/card";
 import { useCenter } from "../../hooks/centers/useCenters";
 import { Center } from "../../schemas/center";
-import { Building2, DoorOpen, MapPin, ShieldCheck, UserCircle2 } from "lucide-react";
+import { Building2, DoorOpen, MapPin, Users } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { getApiErrorMessage } from "../../lib/apiError";
@@ -44,7 +44,7 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
           <div className="space-y-6 mt-2">
             {/* Header summary */}
             <Card className="rounded-none border border-zinc-200/60 bg-linear-to-br from-zinc-50 to-white">
-              <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <CardContent className="p-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-500">Location</p>
                   <p className="mt-1 text-sm font-semibold text-zinc-950 inline-flex items-center gap-1.5">
@@ -112,24 +112,21 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[0.12em] text-zinc-700">
-                  <ShieldCheck className="size-4" /> Supervisors
+                  <Users className="size-4" /> Center Supervisors
                 </h3>
                 <span className="text-xs text-zinc-500">{view.supervisors?.length ?? view.supervisorsCount ?? 0} total</span>
               </div>
               {view.supervisors && view.supervisors.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {view.supervisors.map((sup) => (
-                    <Card key={sup.id} className="rounded-none border border-zinc-200/70 bg-white hover:shadow-md transition-shadow">
+                  {view.supervisors.map((supervisor) => (
+                    <Card key={supervisor} className="rounded-none border border-zinc-200/70 bg-white hover:shadow-md transition-shadow">
                       <CardContent className="p-4 flex items-center gap-3">
-                        <div className="rounded-none bg-zinc-100 p-2">
-                          <UserCircle2 className="size-5 text-zinc-600" />
+                        <div className="rounded-none bg-emerald-50 p-2">
+                          <Users className="size-5 text-emerald-600" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-zinc-950 truncate">{sup.name ?? "Unnamed"}</p>
-                          {sup.email && <p className="text-xs text-zinc-500 truncate">{sup.email}</p>}
-                          {sup.department && (
-                            <p className="text-[11px] text-zinc-400 mt-0.5">{sup.department}</p>
-                          )}
+                          <p className="text-sm font-semibold text-zinc-950 truncate">{supervisor}</p>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">Administrative center supervisor</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -137,7 +134,7 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                 </div>
               ) : (
                 <div className="rounded-none border border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-6 text-center text-xs text-zinc-500">
-                  No supervisors assigned to this center yet.
+                  No supervisors linked to this center yet.
                 </div>
               )}
             </section>

@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+﻿import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { centerFormSchema, CenterFormValues } from "../../schemas/center";
+import type { Center } from "../../schemas/center";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
@@ -9,7 +10,8 @@ import { AlertCircle, Building2, CheckCircle2, MapPin } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface CenterFormProps {
-  initialData?: Partial<CenterFormValues> & { id?: string };
+  initialData?: Partial<Center> & { id?: string };
+  center?: Center | null;
   onSubmit: (data: CenterFormValues) => void;
   isLoading?: boolean;
   submitErrorMessage?: string;
@@ -18,16 +20,22 @@ interface CenterFormProps {
 
 export function CenterForm({
   initialData,
+  center,
   onSubmit,
   isLoading,
   submitErrorMessage,
   submitValidationMessages,
 }: CenterFormProps) {
+  const initialSupervisors = useMemo(
+    () => initialData?.supervisors ?? center?.supervisors ?? [],
+    [center?.supervisors, initialData?.supervisors]
+  );
   const form = useForm<CenterFormValues>({
     resolver: zodResolver(centerFormSchema),
     defaultValues: {
       name: initialData?.name ?? "",
       location: initialData?.location ?? "",
+      supervisorsText: initialSupervisors.join(", "),
     },
     mode: "onChange",
   });
@@ -36,13 +44,15 @@ export function CenterForm({
     form.reset({
       name: initialData?.name ?? "",
       location: initialData?.location ?? "",
+      supervisorsText: initialSupervisors.join(", "),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.name, initialData?.location]);
+  }, [initialData?.name, initialData?.location, initialSupervisors]);
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const nameValue = form.watch("name");
   const locationValue = form.watch("location");
+  const supervisorsTextValue = form.watch("supervisorsText");
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
@@ -108,6 +118,35 @@ export function CenterForm({
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
               {form.formState.errors.location?.message || submitValidationMessages?.location?.join(", ")}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <Label htmlFor="supervisorsText" className="text-sm font-semibold text-zinc-950">Center Supervisors</Label>
+        <div className="relative">
+          <Input
+            id="supervisorsText"
+            {...form.register("supervisorsText")}
+            className={cn(
+              "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
+              form.formState.errors.supervisorsText || submitValidationMessages?.supervisors
+                ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
+                : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+            )}
+            disabled={isLoading}
+            placeholder="e.g., Sara Ali, John Doe"
+          />
+          {!form.formState.errors.supervisorsText && !submitValidationMessages?.supervisors && !!supervisorsTextValue && (
+            <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
+          )}
+        </div>
+        {(form.formState.errors.supervisorsText || submitValidationMessages?.supervisors) && (
+          <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
+            <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-xs font-medium text-destructive leading-snug">
+              {(form.formState.errors.supervisorsText?.message ?? submitValidationMessages?.supervisors?.[0]) as string}
             </p>
           </div>
         )}

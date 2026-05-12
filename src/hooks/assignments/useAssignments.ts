@@ -1,12 +1,20 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAssignment,
+  fetchScheduleAssignments,
   updateAssignment,
   type UpdateAssignmentDto,
 } from "../../api/assignmentsApi";
 import { scheduleKeys } from "../schedules/useSchedules";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+
+export const useScheduleAssignments = (scheduleId?: string) =>
+  useQuery({
+    queryKey: scheduleKeys.assignments(scheduleId),
+    queryFn: () => fetchScheduleAssignments(scheduleId as string),
+    enabled: Boolean(scheduleId),
+  });
 
 export const useUpdateAssignment = () => {
   const queryClient = useQueryClient();
@@ -27,6 +35,9 @@ export const useUpdateAssignment = () => {
       queryClient.invalidateQueries({
         queryKey: scheduleKeys.detail(variables.scheduleId),
       });
+      queryClient.invalidateQueries({
+        queryKey: scheduleKeys.assignments(variables.scheduleId),
+      });
       addToast({
         type: "success",
         title: "Assignment Updated",
@@ -35,8 +46,7 @@ export const useUpdateAssignment = () => {
       addToast({
         type: "warning",
         title: "Schedule Changed",
-        description:
-          "Re-run conflict check before publishing this schedule.",
+        description: "Review the updated schedule before publishing.",
       });
     },
     onError: (error: unknown) => {
@@ -60,14 +70,19 @@ export const useDeleteAssignment = () => {
     mutationFn: ({
       scheduleId,
       assignmentId,
+      deleteGroup,
     }: {
       scheduleId: string;
       assignmentId: string;
-    }) => deleteAssignment({ scheduleId, assignmentId }),
+      deleteGroup?: boolean;
+    }) => deleteAssignment({ scheduleId, assignmentId, deleteGroup }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
       queryClient.invalidateQueries({
         queryKey: scheduleKeys.detail(variables.scheduleId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: scheduleKeys.assignments(variables.scheduleId),
       });
       addToast({
         type: "success",
@@ -77,8 +92,7 @@ export const useDeleteAssignment = () => {
       addToast({
         type: "warning",
         title: "Schedule Changed",
-        description:
-          "Re-run conflict check before publishing this schedule.",
+        description: "Review the updated schedule before publishing.",
       });
     },
     onError: (error: unknown) => {

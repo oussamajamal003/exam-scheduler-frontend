@@ -1,7 +1,6 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  AlertTriangle,
   Bell,
   BookOpen,
   Building,
@@ -59,14 +58,10 @@ type NavSection = {
   items: NavItem[];
 };
 
-const overviewItems: NavItem[] = [
-  { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-  { label: 'Schedules', to: '/scheduling', icon: CalendarClock },
-  { label: 'Conflicts', to: '/conflicts', icon: AlertTriangle },
-  { label: 'AI Optimizer', to: '/ai', icon: Sparkles },
-];
+const overviewItems: NavItem[] = [{ label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard }];
 
 const academicItems: NavItem[] = [
+  { label: 'Schedules', to: '/scheduling', icon: CalendarClock },
   { label: 'Programs / Departments', to: '/departments', icon: GraduationCap },
   { label: 'Semesters', to: '/semesters', icon: Calendar },
   { label: 'Course Offerings', to: '/course-offerings', icon: Layers },
@@ -75,7 +70,7 @@ const academicItems: NavItem[] = [
 
 const managementItems: NavItem[] = [
   { label: 'Students', to: '/students', icon: Users },
-  { label: 'Supervisors', to: '/supervisors', icon: UserCog },
+  { label: 'Proctors', to: '/proctors', icon: UserCog },
   { label: 'Courses', to: '/courses', icon: BookOpen },
   { label: 'Rooms', to: '/rooms', icon: Building2 },
   { label: 'Centers', to: '/centers', icon: Building },
@@ -97,14 +92,12 @@ const routeMap: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Monitor scheduling operations and platform health in one command center.' },
   '/schedule': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
   '/scheduling': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
-  '/conflicts': { title: 'Conflicts', subtitle: 'Detect clashes, prioritize issues, and resolve conflicts faster.' },
-  '/ai': { title: 'AI Optimizer', subtitle: 'Model better scheduling outcomes with AI-assisted optimization.' },
   '/departments': { title: 'Programs / Departments', subtitle: 'Manage relational program data, department ownership, and course coverage in one workspace.' },
   '/semesters': { title: 'Semesters', subtitle: 'Control active terms, timelines, and planning windows precisely.' },
   '/course-offerings': { title: 'Course Offerings', subtitle: 'Track semester offerings, sections, and readiness across the catalog.' },
   '/enrollments': { title: 'Enrollments', subtitle: 'Manage student registrations and import workflows with confidence.' },
   '/students': { title: 'Students', subtitle: 'Oversee student records, activity, and academic readiness.' },
-  '/supervisors': { title: 'Supervisors', subtitle: 'Coordinate invigilation staff and monitor assignment coverage.' },
+  '/proctors': { title: 'Proctors', subtitle: 'Coordinate invigilation staff and monitor assignment coverage.' },
   '/courses': { title: 'Courses', subtitle: 'Maintain the course catalog that powers exam generation and enrollment.' },
   '/rooms': { title: 'Rooms', subtitle: 'Review room capacity, readiness, and spatial availability.' },
   '/centers': { title: 'Centers', subtitle: 'Configure exam centers and manage distribution across locations.' },
@@ -564,7 +557,7 @@ export const AdminLayout: React.FC = () => {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] md:hidden w-[86vw] max-w-[320px]',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,opacity] duration-500 ease-in-out md:hidden w-[86vw] max-w-[320px]',
           isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
         )}
       >
@@ -588,7 +581,7 @@ export const AdminLayout: React.FC = () => {
             <div className="relative hidden max-w-xl flex-1 md:block">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
               <Input
-                placeholder="Search students, schedules, rooms, supervisors..."
+                placeholder="Search students, schedules, rooms, proctors..."
                 className="h-11 rounded-full border-zinc-200/80 bg-zinc-50/70 pl-10 pr-4 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300"
               />
             </div>

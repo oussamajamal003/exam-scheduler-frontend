@@ -1,15 +1,14 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import StudentLayout from '@/layouts/StudentLayout';
-import SupervisorLayout from '@/layouts/SupervisorLayout';
+import ProctorLayout from '@/layouts/ProctorLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { StudentsPage } from '@/pages/admin/StudentsPage';
-import { AIOptimizerPage } from '@/pages/admin/AIOptimizerPage';
 import { CoursesPage } from '../pages/admin/CoursesPage';
-import { SupervisorsPage } from '@/pages/admin/SupervisorsPage';
+import { ProctorsPage } from '@/pages/admin/ProctorsPage';
 import { RoomsCentersPage } from '../pages/admin/RoomsCentersPage';
 import { CentersPage } from '../pages/admin/CentersPage';
 import { TimeSlotsPage } from '../pages/admin/TimeSlotsPage';
@@ -19,7 +18,6 @@ import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage
 import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
 import { SemestersPage } from '@/pages/admin/SemestersPage';
 import { SchedulesPage } from '@/pages/admin/SchedulesPage';
-import { ConflictsPage } from '@/pages/admin/ConflictsPage';
 import { SettingsPage } from '@/pages/admin/SettingsPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
@@ -97,7 +95,6 @@ export const AppRoutes: React.FC = () => {
             <Route path="/students" element={<StudentsPage />} />
 
             {/* Placeholders for future modules */}
-            <Route path="/ai" element={<AIOptimizerPage />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/semesters" element={<SemestersPage />} />
@@ -107,12 +104,11 @@ export const AppRoutes: React.FC = () => {
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
             <Route path="/rooms" element={<RoomsCentersPage />} />
             <Route path="/centers" element={<CentersPage />} />
-            <Route path="/supervisors" element={<SupervisorsPage />} />
+            <Route path="/proctors" element={<ProctorsPage />} />
             <Route path="/timeslots" element={<TimeSlotsPage />} />
             <Route path="/schedule" element={<SchedulesPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/scheduling" element={<SchedulesPage />} />
-            <Route path="/conflicts" element={<ConflictsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
@@ -132,16 +128,16 @@ export const AppRoutes: React.FC = () => {
 
           <Route
             element={
-              <RoleGuard allowedRoles={['SUPERVISOR']}>
-                <SupervisorLayout />
+              <RoleGuard allowedRoles={['PROCTOR']}>
+                <ProctorLayout />
               </RoleGuard>
             }
           >
-            <Route path="/supervisor" element={<Navigate to="/supervisor/dashboard" replace />} />
-            <Route path="/supervisor/dashboard" element={<PlaceholderPage title="Supervisor Dashboard" />} />
-            <Route path="/supervisor/schedule" element={<PlaceholderPage title="Supervisor Exam Schedule" />} />
-            <Route path="/supervisor/students" element={<PlaceholderPage title="Assigned Students" />} />
-            <Route path="/supervisor/settings" element={<PlaceholderPage title="Supervisor Settings" />} />
+            <Route path="/proctor" element={<Navigate to="/proctor/dashboard" replace />} />
+            <Route path="/proctor/dashboard" element={<PlaceholderPage title="Proctor Dashboard" />} />
+            <Route path="/proctor/schedule" element={<PlaceholderPage title="Proctor Exam Schedule" />} />
+            <Route path="/proctor/students" element={<PlaceholderPage title="Assigned Students" />} />
+            <Route path="/proctor/settings" element={<PlaceholderPage title="Proctor Settings" />} />
           </Route>
         </Route>
 

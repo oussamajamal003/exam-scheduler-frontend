@@ -1,11 +1,30 @@
 type ApiErrorLike = {
   response?: {
+    status?: number;
     data?: {
+      error?: string;
       message?: string;
       data?: unknown;
     };
   };
   message?: string;
+};
+
+export const isAuthExpiredError = (error: unknown) => {
+  const apiError = error as ApiErrorLike | undefined;
+  const status = apiError?.response?.status;
+  const message = [
+    apiError?.response?.data?.error,
+    apiError?.response?.data?.message,
+    apiError?.message,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (status === 401) return true;
+  if (status === 403 && message.includes("token")) return true;
+  return message.includes("invalid or expired token");
 };
 
 export const getApiErrorMessage = (error: unknown, fallback = "Something went wrong") => {

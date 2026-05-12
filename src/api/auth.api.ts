@@ -44,6 +44,11 @@ export const getCurrentUser = async (): Promise<User> => {
   return unwrapResponseData(response.data);
 };
 
+export const getAllUsers = async (): Promise<User[]> => {
+  const response = await axiosClient.get<ApiEnvelope<User[]>>('/auth/');
+  return unwrapResponseData(response.data);
+};
+
 export const loginUser = async (data: LoginCredentials): Promise<AuthResponse> => {
   const response = await axiosClient.post<ApiEnvelope<AuthResponse>>('/auth/login', data);
   return unwrapResponseData(response.data);

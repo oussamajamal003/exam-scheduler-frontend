@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useDeferredValue, useMemo, useState } from "react";
 import { TimeSlotList } from "../../features/timeslots/TimeSlotList";
 import { TimeSlotForm } from "../../forms/timeSlots/TimeSlotForm";
 import {
@@ -175,7 +175,7 @@ export function TimeSlotsPage() {
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Time Slots</h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              Define exam time windows and detect overlaps before assigning rooms and supervisors
+              Define exam time windows and detect overlaps before assigning rooms and proctors
             </p>
           </div>
         </div>

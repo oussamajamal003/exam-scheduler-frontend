@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   BarChart3, 
@@ -6,9 +6,7 @@ import {
   MapPin, 
   UserSquare, 
   CalendarDays, 
-  AlertTriangle, 
   Settings,
-  Sparkles,
   LogOut,
   GraduationCap
 } from 'lucide-react';
@@ -16,17 +14,18 @@ import { cn } from '@/lib/utils';
 import { env } from '@/config/env';
 import { useLogout } from '@/hooks/auth/useLogout';
 
-const mainNavItems = [
+const overviewItems = [
   { name: 'Dashboard', path: '/dashboard', icon: BarChart3 },
+];
+
+const academicItems = [
   { name: 'Schedules', path: '/schedule', icon: CalendarDays },
-  { name: 'Conflicts', path: '/conflicts', icon: AlertTriangle },
-  { name: 'AI Optimizer', path: '/ai', icon: Sparkles },
+  { name: 'Courses', path: '/courses', icon: BookOpen },
 ];
 
 const managementItems = [
   { name: 'Students', path: '/students', icon: GraduationCap },
-  { name: 'Courses', path: '/courses', icon: BookOpen },
-  { name: 'Supervisors', path: '/supervisors', icon: UserSquare },
+  { name: 'Proctors', path: '/proctors', icon: UserSquare },
   { name: 'Rooms & Centers', path: '/rooms', icon: MapPin },
 ];
 
@@ -45,12 +44,43 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col gap-6 py-6 px-4 overflow-y-auto custom-scrollbar">
-        {/* Core Scheduling */}
+        {/* Overview */}
         <div className="flex flex-col gap-1">
           <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Overview
           </p>
-          {mainNavItems.map((item) => (
+          {overviewItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group relative",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
+                  )}
+                  <item.icon className={cn("w-4 h-4 transition-colors", isActive ? "text-primary" : "opacity-80 group-hover:opacity-100 group-hover:text-foreground")} />
+                  <span>{item.name}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+
+        {/* Academic */}
+        <div className="flex flex-col gap-1">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Academic
+          </p>
+          {academicItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

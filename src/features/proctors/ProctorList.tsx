@@ -1,25 +1,45 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+﻿import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Supervisor } from "../../schemas/supervisor";
+import { Badge } from "../../components/ui/badge";
+import { Proctor } from "../../schemas/proctor";
 import { Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
 
-interface SupervisorListProps {
-  supervisors: Supervisor[];
+const formatTimeSlotLabel = (slot: NonNullable<Proctor["availableTimeSlots"]>[number]) => {
+  const date = slot.date || slot.startTime;
+  const day = date
+    ? new Date(date).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      })
+    : "Unknown day";
+  const start = new Date(slot.startTime).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  });
+
+  return `${day} ${start}`;
+};
+
+interface ProctorListProps {
+  proctors: Proctor[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
   onAdd?: () => void;
-  onEditSupervisor: (supervisor: Supervisor) => void;
-  onViewWorkload: (supervisor: Supervisor) => void;
-  onDeleteSupervisor: (supervisor: Supervisor) => void;
+  onEditProctor: (proctor: Proctor) => void;
+  onViewWorkload: (proctor: Proctor) => void;
+  onDeleteProctor: (proctor: Proctor) => void;
 }
 
-export function SupervisorList({ supervisors, isLoading, isDeleting, search, onAdd, onEditSupervisor, onViewWorkload, onDeleteSupervisor }: SupervisorListProps) {
-  const supervisorRows = Array.isArray(supervisors) ? supervisors : [];
+export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, onEditProctor, onViewWorkload, onDeleteProctor }: ProctorListProps) {
+  const proctorRows = Array.isArray(proctors) ? proctors : [];
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -28,13 +48,13 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
           <div className="inline-flex items-center rounded-none bg-zinc-950 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-white shadow-sm shadow-zinc-950/10">
             Directory
           </div>
-          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Supervisors</CardTitle>
-          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Manage examinee supervisors, track workloads, and map specific centers efficiently.</p>
+          <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Proctors</CardTitle>
+          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Manage examinee proctors, track workloads, and map specific centers efficiently.</p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Staff</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{supervisorRows.length}</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{proctorRows.length}</p>
           </div>
         </div>
       </CardHeader>
@@ -46,6 +66,7 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Email</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 inline-flex sm:table-cell">Department / Center</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Availability</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Workload</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
               </TableRow>
@@ -53,36 +74,36 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={supervisorRows.length > 0 ? supervisorRows.length : 10} />
+                  <TableCell colSpan={6} className="p-0">
+                    <TableSkeletonRows columns={6} rows={proctorRows.length > 0 ? proctorRows.length : 10} />
                   </TableCell>
                 </TableRow>
-              ) : supervisorRows.length === 0 ? (
+              ) : proctorRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
+                  <TableCell colSpan={6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={ShieldAlert}
                         title="No results found"
-                        description={`No supervisors match "${search.trim()}". Try a different search term.`}
+                        description={`No proctors match "${search.trim()}". Try a different search term.`}
                       />
                     ) : (
                       <EmptyState
                         icon={ShieldAlert}
-                        title="No supervisors yet"
-                        description="Add a supervisor record to start assigning workloads."
-                        action={onAdd ? { label: "Add Supervisor", onClick: onAdd } : undefined}
+                        title="No proctors yet"
+                        description="Add a proctor record to start assigning workloads."
+                        action={onAdd ? { label: "Add Proctor", onClick: onAdd } : undefined}
                       />
                     )}
                   </TableCell>
                 </TableRow>
               ) : (
-                supervisorRows.map((sup, idx) => (
+                proctorRows.map((sup, idx) => (
                   <TableRow
                     key={sup.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                      idx === supervisorRows.length - 1 && "border-b-0"
+                      idx === proctorRows.length - 1 && "border-b-0"
                     )}
                   >
                     <TableCell className="px-4 py-4 sm:px-6">
@@ -93,6 +114,25 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-medium text-zinc-900 text-sm">{sup.department}</div>
                       <p className="text-xs text-zinc-500 mt-0.5">{sup.centerRef?.name ?? sup.center}</p>
+                    </TableCell>
+                    <TableCell className="px-4 py-4 sm:px-6">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {sup.availableTimeSlots?.length ?? 0} slot{(sup.availableTimeSlots?.length ?? 0) === 1 ? "" : "s"}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(sup.availableTimeSlots ?? []).slice(0, 2).map((slot) => (
+                            <Badge key={slot.id} variant="secondary" className="rounded-none normal-case tracking-normal">
+                              {formatTimeSlotLabel(slot)}
+                            </Badge>
+                          ))}
+                          {(sup.availableTimeSlots?.length ?? 0) > 2 && (
+                            <Badge variant="default" className="rounded-none normal-case tracking-normal">
+                              +{(sup.availableTimeSlots?.length ?? 0) - 2} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
                       <Button
@@ -110,9 +150,9 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onEditSupervisor(sup)}
+                          onClick={() => onEditProctor(sup)}
                           className="h-8 w-8 rounded-none text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors p-0 flex items-center justify-center"
-                          title="Edit supervisor"
+                          title="Edit proctor"
                         >
                           <Edit2 className="size-4" />
                         </Button>
@@ -120,9 +160,9 @@ export function SupervisorList({ supervisors, isLoading, isDeleting, search, onA
                           variant="ghost"
                           size="sm"
                           disabled={isDeleting}
-                          onClick={() => onDeleteSupervisor(sup)}
+                          onClick={() => onDeleteProctor(sup)}
                           className="h-8 w-8 rounded-none text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors p-0 flex items-center justify-center disabled:opacity-50"
-                          title="Delete supervisor"
+                          title="Delete proctor"
                         >
                           <Trash2 className="size-4" />
                         </Button>

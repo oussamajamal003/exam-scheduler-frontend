@@ -11,17 +11,18 @@ import {
   type UpdateScheduleDto,
 } from "../../api/schedulesApi";
 import {
+  optimizeScheduling,
   fetchScheduleAnalysis,
   generateSchedule,
   prepareScheduling,
   publishSchedule,
   validateSchedulingInput,
+  type OptimizeSchedulingDto,
   type PrepareSchedulingDto,
   type PrepareSchedulingResult,
   type ValidateSchedulingInputDto,
   type ValidateSchedulingResult,
 } from "../../api/schedulingApi";
-import { fetchScheduleConflicts } from "../../api/conflictsApi";
 import type { GenerateScheduleDto } from "../../schemas/schedule";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
@@ -30,8 +31,8 @@ export const scheduleKeys = {
   all: ["schedules"] as const,
   list: (params: FetchSchedulesParams = {}) => ["schedules", "list", params] as const,
   detail: (id?: string) => ["schedules", "detail", id] as const,
-  conflicts: (id?: string) => ["schedules", "conflicts", id] as const,
   analysis: (id?: string) => ["schedules", "analysis", id] as const,
+  assignments: (id?: string) => ["schedules", "assignments", id] as const,
 };
 
 // -------------------- Queries --------------------
@@ -46,13 +47,6 @@ export const useSchedule = (id?: string) =>
   useQuery({
     queryKey: scheduleKeys.detail(id),
     queryFn: () => fetchSchedule(id as string),
-    enabled: Boolean(id),
-  });
-
-export const useScheduleConflicts = (id?: string) =>
-  useQuery({
-    queryKey: scheduleKeys.conflicts(id),
-    queryFn: () => fetchScheduleConflicts(id as string),
     enabled: Boolean(id),
   });
 
@@ -184,6 +178,35 @@ export const useValidateSchedulingInput = () => {
   });
 };
 
+export const useOptimizeScheduling = () => {
+  const { addToast } = useToast();
+  return useMutation<ValidateSchedulingResult, unknown, OptimizeSchedulingDto | undefined>({
+    mutationFn: (payload: OptimizeSchedulingDto = {}) => optimizeScheduling(payload),
+    onSuccess: (result) => {
+      addToast({
+        type: result.isValid ? "success" : "warning",
+        title: result.isValid ? "Optimization Confirmed" : "Optimization Blocked",
+        description:
+          result.optimization?.message ??
+          (result.isValid
+            ? "The hybrid engine found a complete valid draft."
+            : "Hard-constraint requirements remain unsatisfied after optimization."),
+      });
+    },
+    onError: (error: unknown) => {
+      addToast({
+        type: "error",
+        title: "Optimization Failed",
+        description: getSmartErrorDescription(
+          error,
+          "An error occurred while optimizing the scheduling draft."
+        ),
+      });
+    },
+  });
+};
+
+
 export const useGenerateSchedule = () => {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
@@ -195,9 +218,7 @@ export const useGenerateSchedule = () => {
       addToast({
         type: "success",
         title: "Schedule Generated",
-        description: result?.schedule?.name
-          ? `${result.schedule.name} generated successfully.`
-          : "Scheduling completed.",
+        description: result?.message ?? "Schedule generated successfully with all hard constraints satisfied.",
       });
     },
     onError: (error: unknown) => {

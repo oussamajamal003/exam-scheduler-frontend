@@ -1,4 +1,4 @@
-import { axiosClient } from "./axiosclient";
+﻿import { axiosClient } from "./axiosclient";
 import { Center, CreateCenterDto, UpdateCenterDto } from "../schemas/center";
 
 type ApiEnvelope<T> = {
@@ -19,12 +19,6 @@ type BackendRoom = {
   status?: string;
 };
 
-type BackendSupervisor = {
-  id: string;
-  department?: string | null;
-  user?: { id?: string; name?: string; email?: string };
-};
-
 type BackendCenter = {
   id: string;
   name: string;
@@ -33,10 +27,10 @@ type BackendCenter = {
   description?: string | null;
   isActive?: boolean;
   rooms?: BackendRoom[];
-  supervisors?: BackendSupervisor[];
+  supervisors?: string[];
   roomsCount?: number;
   supervisorsCount?: number;
-  _count?: { rooms?: number; supervisors?: number };
+  _count?: { rooms?: number };
 };
 
 const mapBackendCenter = (center: BackendCenter): Center => ({
@@ -47,19 +41,14 @@ const mapBackendCenter = (center: BackendCenter): Center => ({
   description: center.description ?? undefined,
   isActive: center.isActive ?? true,
   roomsCount: center.rooms?.length ?? center.roomsCount ?? center._count?.rooms ?? 0,
-  supervisorsCount: center.supervisors?.length ?? center.supervisorsCount ?? center._count?.supervisors ?? 0,
+  supervisorsCount: center.supervisors?.length ?? center.supervisorsCount ?? 0,
   rooms: center.rooms?.map((r) => ({
     id: r.id,
     name: r.name,
     capacity: r.capacity,
     status: r.status,
   })),
-  supervisors: center.supervisors?.map((s) => ({
-    id: s.id,
-    name: s.user?.name,
-    email: s.user?.email,
-    department: s.department ?? undefined,
-  })),
+  supervisors: center.supervisors ?? [],
 });
 
 export const fetchCenters = async (search = ""): Promise<Center[]> => {

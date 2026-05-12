@@ -1,4 +1,4 @@
-import { axiosClient } from "./axiosclient";
+﻿import { axiosClient } from "./axiosclient";
 import {
   CourseOffering,
   CourseOfferingDetail,
@@ -8,6 +8,7 @@ import {
   OfferingRegistrationStudent,
   UpdateCourseOfferingDto,
 } from "../schemas/courseOffering";
+import { formatTimeSlotLabel } from "../lib/dateTime";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -75,7 +76,7 @@ type BackendAssignment = {
   id?: string;
   schedule?: { id?: string; name?: string } | null;
   room?: { id?: string; name?: string; label?: string } | null;
-  supervisor?: { id?: string; user?: BackendUser | null } | null;
+  proctor?: { id?: string; user?: BackendUser | null } | null;
   timeSlot?: {
     id?: string;
     label?: string;
@@ -247,12 +248,8 @@ const mapBackendExam = (exam: BackendExam): OfferingExam => ({
   assignments: (exam.assignments ?? []).map((assignment) => ({
     id: assignment.id,
     roomName: assignment.room?.name ?? assignment.room?.label ?? undefined,
-    supervisorName: assignment.supervisor?.user?.name ?? undefined,
-    timeSlotLabel:
-      assignment.timeSlot?.label ??
-      [assignment.timeSlot?.date, assignment.timeSlot?.startTime, assignment.timeSlot?.endTime]
-        .filter(Boolean)
-        .join(" "),
+    proctorName: assignment.proctor?.user?.name ?? undefined,
+    timeSlotLabel: formatTimeSlotLabel(assignment.timeSlot),
     scheduleName: assignment.schedule?.name ?? undefined,
   })),
 });

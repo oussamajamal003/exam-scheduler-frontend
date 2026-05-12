@@ -1,4 +1,4 @@
-import { axiosClient } from "./axiosclient";
+﻿import { axiosClient } from "./axiosclient";
 import type { ScheduleAssignment } from "../schemas/schedule";
 
 type ApiEnvelope<T> = {
@@ -14,7 +14,7 @@ const unwrap = <T,>(payload: ApiEnvelope<T> | undefined, label: string): T => {
 
 export type UpdateAssignmentDto = {
   roomId?: string;
-  supervisorId?: string;
+  proctorId?: string;
   timeSlotId?: string;
   exam?: {
     duration?: number;
@@ -67,9 +67,13 @@ export const updateAssignment = async ({
 export const deleteAssignment = async ({
   scheduleId,
   assignmentId,
+  deleteGroup,
 }: {
   scheduleId: string;
   assignmentId: string;
+  deleteGroup?: boolean;
 }): Promise<void> => {
-  await axiosClient.delete(`${base(scheduleId)}/${assignmentId}`);
+  await axiosClient.delete(`${base(scheduleId)}/${assignmentId}`, {
+    params: deleteGroup ? { deleteGroup: true } : undefined,
+  });
 };

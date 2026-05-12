@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clearDemoData, generateDemoData } from '@/api/demoDataApi';
 import { useToast } from '@/components/ui/toast';
 import { getSmartErrorDescription } from '@/lib/apiError';
@@ -15,10 +15,9 @@ const affectedQueryKeys = [
   ['centers'],
   ['rooms'],
   ['rooms', 'available'],
-  ['supervisors'],
+  ['proctors'],
   ['timeSlots'],
   ['schedules'],
-  ['conflicts'],
 ];
 
 const invalidateDemoDataQueries = (queryClient: ReturnType<typeof useQueryClient>) => {
@@ -37,8 +36,8 @@ export const useGenerateDemoData = () => {
       invalidateDemoDataQueries(queryClient);
       addToast({
         type: 'success',
-        title: 'Big Demo Dataset Generated',
-        description: `Created ${result.summary.students} students, ${result.summary.courseOfferings} offerings, ${result.summary.registrations} enrollments, ${result.summary.rooms} rooms, and ${result.summary.timeSlots} time slots.`,
+        title: `${result.datasetLabel ?? 'Demo Dataset'} Generated`,
+        description: `Created ${result.summary.students} students, ${result.summary.courseOfferings} offerings, ${result.summary.registrations} enrollments, ${result.summary.rooms} rooms, and ${result.summary.timeSlots} time slots without clearing other demo datasets.`,
       });
     },
     onError: (error: unknown) => {
@@ -57,12 +56,12 @@ export const useClearDemoData = () => {
 
   return useMutation({
     mutationFn: clearDemoData,
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateDemoDataQueries(queryClient);
       addToast({
         type: 'success',
-        title: 'Demo Data Cleared',
-        description: 'Generated demo academic, management, and scheduling test data has been removed.',
+        title: `${result.datasetLabel ?? 'Demo Dataset'} Cleared`,
+        description: `Only demo-generated data for ${result.datasetLabel ?? 'the selected dataset'} has been removed.`,
       });
     },
     onError: (error: unknown) => {

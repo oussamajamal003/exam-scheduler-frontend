@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 export const offeringStatusSchema = z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]);
 export type OfferingStatus = z.infer<typeof offeringStatusSchema>;
@@ -104,7 +104,7 @@ export type OfferingRegistrationStudent = {
 export type OfferingExamAssignment = {
   id?: string;
   roomName?: string;
-  supervisorName?: string;
+  proctorName?: string;
   timeSlotLabel?: string;
   scheduleName?: string;
 };

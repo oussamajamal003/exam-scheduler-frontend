@@ -1,5 +1,5 @@
-import React from 'react';
-import { Users, BookOpen, AlertTriangle, CheckCircle, CalendarClock, Sparkles, ArrowRight, TrendingUp, CalendarDays, Cpu, MapPin } from 'lucide-react';
+﻿import React from 'react';
+import { Users, BookOpen, CheckCircle, CalendarClock, Sparkles, ArrowRight, TrendingUp, CalendarDays, Cpu, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageSpinner } from '@/components/shared/PageSpinner';
@@ -8,14 +8,14 @@ import { DashboardCharts } from '@/components/shared/DashboardCharts';
 const stats = [
   { title: 'Total Students', value: '12,450', icon: Users, trend: '+5.2%' },
   { title: 'Exams Scheduled', value: '342', icon: BookOpen, trend: '+12 this week' },
-  { title: 'Scheduling Conflicts', value: '3', icon: AlertTriangle, trend: '-2 resolved today' },
+  { title: 'Quality Score', value: '91%', icon: Sparkles, trend: '+13% improved' },
   { title: 'System Health', value: 'Optimal', icon: CheckCircle, trend: '99.8% uptime' },
 ];
 
 const upcomingExams = [
-  { course: 'Advanced Algorithms', date: 'May 12, 2026', room: 'A102', supervisor: 'Dr. Hassan Ali', status: 'Finalized' },
-  { course: 'Database Systems', date: 'May 13, 2026', room: 'B201', supervisor: 'Ms. Laila Farouk', status: 'Published' },
-  { course: 'Software Architecture', date: 'May 14, 2026', room: 'C303', supervisor: 'Dr. Kareem Nasser', status: 'Draft' },
+  { course: 'Advanced Algorithms', date: 'May 12, 2026', room: 'A102', proctor: 'Dr. Hassan Ali', status: 'Finalized' },
+  { course: 'Database Systems', date: 'May 13, 2026', room: 'B201', proctor: 'Ms. Laila Farouk', status: 'Published' },
+  { course: 'Software Architecture', date: 'May 14, 2026', room: 'C303', proctor: 'Dr. Kareem Nasser', status: 'Draft' },
 ];
 
 const quickSignals = [
@@ -44,17 +44,17 @@ export const Dashboard: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
               <TrendingUp className="size-3.5" />
-              System Overview
+              Scheduling Command Center
             </div>
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">Smart Exam Scheduler</h1>
               <p className="max-w-2xl text-sm leading-6 text-zinc-500">
-                Live operational snapshot of exam scheduling, conflict monitoring, and AI-guided planning built for fast decisions.
+                Live operational snapshot of exam scheduling quality, resource readiness, and AI-guided planning built for fast decisions.
               </p>
             </div>
             <div className="flex flex-wrap gap-2.5">
               <Button className="rounded-none bg-zinc-950 text-white hover:bg-zinc-800">Open Schedule Pipeline</Button>
-              <Button variant="outline" className="rounded-none">View Conflicts</Button>
+              <Button variant="outline" className="rounded-none">Generate Schedule</Button>
             </div>
           </div>
 
@@ -115,7 +115,7 @@ export const Dashboard: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-zinc-500">
-                    {exam.date} · {exam.room} · {exam.supervisor}
+                    {exam.date} · {exam.room} · {exam.proctor}
                   </p>
                 </div>
                 <Button variant="outline" size="sm" className="w-fit rounded-none">
@@ -141,7 +141,7 @@ export const Dashboard: React.FC = () => {
             <div className="rounded-none border border-zinc-200/60 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
               Room utilization can improve by 11% by rebalancing two large exams to North Center.
             </div>
-            <Button variant="outline" className="w-full rounded-none sm:w-auto">Open AI Optimizer</Button>
+            <Button variant="outline" className="w-full rounded-none sm:w-auto">Open Schedule Pipeline</Button>
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 export const centerRoomSchema = z.object({
   id: z.string(),
@@ -7,12 +7,7 @@ export const centerRoomSchema = z.object({
   status: z.string().optional(),
 });
 
-export const centerSupervisorSchema = z.object({
-  id: z.string(),
-  name: z.string().optional(),
-  email: z.string().optional(),
-  department: z.string().optional(),
-});
+export const centerSupervisorSchema = z.string();
 
 export const centerSchema = z.object({
   id: z.string(),
@@ -34,13 +29,15 @@ export type CenterSupervisor = z.infer<typeof centerSupervisorSchema>;
 export const centerFormSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   location: z.string().trim().optional().or(z.literal("")),
+  supervisorsText: z.string().trim().optional().or(z.literal("")),
 });
 
-export type CenterFormValues = z.infer<typeof centerFormSchema>;
+export type CenterFormValues = z.input<typeof centerFormSchema>;
 
 export type CreateCenterDto = {
   name: string;
   location?: string;
+  supervisors?: string[];
 };
 
 export type UpdateCenterDto = Partial<CreateCenterDto>;

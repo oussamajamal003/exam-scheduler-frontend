@@ -97,7 +97,7 @@ export function TimeSlotList({
             Time Slot Management
           </CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">
-            Define exam time windows. Overlapping slots on the same date are flagged as local review warnings before assignments are made; persisted scheduling conflicts appear in the Conflicts page after schedule generation.
+            Define exam time windows. Overlapping slots on the same date are flagged as local review warnings before assignments are made; blocking scheduling issues are surfaced directly in the Generate Schedule flow.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">

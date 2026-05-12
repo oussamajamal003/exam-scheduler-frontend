@@ -1,8 +1,8 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+﻿import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Center } from "../../schemas/center";
-import { Building2, Edit2, Eye, MapPin, Trash2 } from "lucide-react";
+import { Building2, Edit2, Eye, MapPin, Trash2, Users } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
@@ -41,7 +41,7 @@ export function CenterList({
             Center Management
           </CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">
-            Manage exam centers, their rooms, and supervisor assignments across the institution.
+            Manage exam centers, their rooms, and administrative supervisors across the institution.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
@@ -83,7 +83,7 @@ export function CenterList({
                       <EmptyState
                         icon={Building2}
                         title="No centers yet"
-                        description="Add your first exam center to start allocating rooms and supervisors."
+                        description="Add your first exam center to start linking rooms and supervisors."
                         action={onAddCenter ? { label: "Add Center", onClick: onAddCenter } : undefined}
                       />
                     )}
@@ -117,7 +117,8 @@ export function CenterList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6 text-right">
-                      <span className="inline-flex items-center justify-center rounded-none bg-violet-50 text-violet-700 px-2.5 py-1 text-xs font-bold min-w-10">
+                      <span className="inline-flex items-center gap-1.5 rounded-none bg-emerald-50 text-emerald-700 px-2.5 py-1 text-xs font-bold min-w-10 justify-center">
+                        <Users className="size-3.5" />
                         {center?.supervisors?.length ?? center?.supervisorsCount ?? 0}
                       </span>
                     </TableCell>

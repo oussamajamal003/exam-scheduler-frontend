@@ -1,7 +1,8 @@
-import React from 'react';
-import { Database, Loader2, RefreshCcw, Trash2 } from 'lucide-react';
+﻿import React from 'react';
+import { Database, Loader2, RefreshCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useClearDemoData, useGenerateDemoData } from '@/hooks/demoData/useDemoData';
 import type { DemoDataSummary } from '@/api/demoDataApi';
 
@@ -15,17 +16,46 @@ const summaryLabels: Array<{ key: keyof DemoDataSummary; label: string }> = [
   { key: 'students', label: 'Students' },
   { key: 'centers', label: 'Centers' },
   { key: 'rooms', label: 'Rooms' },
-  { key: 'supervisors', label: 'Supervisors' },
+  { key: 'proctors', label: 'Proctors' },
   { key: 'timeSlots', label: 'Time Slots' },
   { key: 'exams', label: 'Exams' },
+  { key: 'schedules', label: 'Schedules' },
+];
+
+const datasetCards = [
+  {
+    key: 'A' as const,
+    title: 'Dataset A',
+    caption: 'Balanced baseline',
+    detail: '18 offerings, 4 centers, 10 rooms, and a fully feasible balanced scheduling workload.',
+  },
+  {
+    key: 'B' as const,
+    title: 'Dataset B',
+    caption: 'Scaled 40+ offerings',
+    detail: '44 offerings with more students, more campuses, more proctors, and a wider feasible time-slot grid.',
+  },
+  {
+    key: 'C' as const,
+    title: 'Dataset C',
+    caption: 'Largest 55+ offerings',
+    detail: '60 offerings with the highest realistic scale, expanded rooms, centers, enrollments, and proctor coverage.',
+  },
 ];
 
 export const SettingsPage: React.FC = () => {
+  const [confirmClearOpen, setConfirmClearOpen] = React.useState(false);
+  const [selectedDataset, setSelectedDataset] = React.useState<'A' | 'B' | 'C'>('A');
+  const [selectedClearDataset, setSelectedClearDataset] = React.useState<'A' | 'B' | 'C'>('A');
   const generateMutation = useGenerateDemoData();
   const clearMutation = useClearDemoData();
   const isBusy = generateMutation.isPending || clearMutation.isPending;
-  const summary = generateMutation.data?.summary ?? clearMutation.data?.summary;
-  const expectedTestCases = generateMutation.data?.expectedTestCases ?? clearMutation.data?.expectedTestCases;
+  const summary = generateMutation.data?.summary;
+  const overallSummary = generateMutation.data?.overallSummary ?? clearMutation.data?.overallSummary ?? clearMutation.data?.summary;
+  const expectedTestCases = generateMutation.data?.expectedTestCases;
+  const generatedDataset = generateMutation.data?.datasetLabel;
+  const selectedDatasetConfig = datasetCards.find((dataset) => dataset.key === selectedDataset) ?? datasetCards[0];
+  const selectedClearDatasetConfig = datasetCards.find((dataset) => dataset.key === selectedClearDataset) ?? datasetCards[0];
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -36,7 +66,7 @@ export const SettingsPage: React.FC = () => {
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">System Settings</h1>
         <p className="max-w-2xl text-sm text-zinc-600">
-          Generate a large connected university dataset for Academic, Management, and Scheduling screens using the real backend APIs and Prisma schema.
+          Generate multiple persistent feasible demo datasets for Academic, Management, Scheduling, Calendar, and Assignments screens using the real backend APIs and Prisma schema.
         </p>
       </section>
 
@@ -47,74 +77,196 @@ export const SettingsPage: React.FC = () => {
             Constraint Scheduling Demo Dataset
           </CardTitle>
           <CardDescription>
-            Creates 500+ students, 40+ offerings, 800+ enrollments, 20+ rooms, supervisors, time slots, and guaranteed scheduling stress cases.
+            Generate persistent feasible datasets A, B, and C. Creating one dataset no longer clears the others, and demo data is removed only when an admin explicitly confirms Clear Demo Data.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-4">
-          <div className="grid gap-3 text-xs text-zinc-600 sm:grid-cols-3">
+          <div className="grid gap-3 text-xs text-zinc-600 sm:grid-cols-2">
             <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <p className="font-semibold text-zinc-900">Normal schedule path</p>
-              <p className="mt-1">Enough rooms, supervisors, and time slots for most exams.</p>
+              <p className="font-semibold text-zinc-900">Clean schedule path</p>
+              <p className="mt-1">Each dataset is sized to remain feasible for the Hybrid Constraint-Based Scheduling Algorithm.</p>
             </div>
             <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="font-semibold text-zinc-900">Relational coverage</p>
-              <p className="mt-1">Students connect to registrations, offerings, exams, and schedules.</p>
+              <p className="mt-1">Students connect to registrations, offerings, exams, schedules, assignments, and the calendar view.</p>
             </div>
-            <div className="rounded-none border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="font-semibold text-amber-900">Conflict case included</p>
-              <p className="mt-1 text-amber-800">Overcapacity, student overlap, supervisor limits, and long-duration exam cases.</p>
+            <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <p className="font-semibold text-zinc-900">Persistent demo data</p>
+              <p className="mt-1">Datasets stay in the database across refreshes and restarts until an admin explicitly clears demo data.</p>
+            </div>
+            <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <p className="font-semibold text-zinc-900">Safe cleanup</p>
+              <p className="mt-1">Clear Demo Data removes only demo-generated entities and does not touch manually created records.</p>
+            </div>
+          </div>
+
+          <div className="rounded-none border border-zinc-200 bg-zinc-50/60 p-4 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Dataset Choice</p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-950">Choose between dataset A, B, or C before generation.</p>
+                </div>
+                <div className="inline-flex w-full flex-wrap items-center rounded-none border border-zinc-200 bg-white p-1 shadow-sm lg:w-auto">
+                  {datasetCards.map((dataset) => {
+                    const isActive = dataset.key === selectedDataset;
+                    return (
+                      <button
+                        key={dataset.key}
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => setSelectedDataset(dataset.key)}
+                        className={[
+                          "inline-flex min-w-20 items-center justify-center rounded-none px-4 py-2 text-xs font-semibold transition-colors",
+                          isActive ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950",
+                        ].join(" ")}
+                      >
+                        {dataset.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="h-10 rounded-none bg-zinc-950 px-4 text-white hover:bg-zinc-900"
+                disabled={isBusy}
+                onClick={() => generateMutation.mutate({ dataset: selectedDataset })}
+              >
+                {generateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+                Generate {selectedDatasetConfig.title}
+              </Button>
+            </div>
+            <div className="mt-4 flex items-start justify-between gap-3 rounded-none border border-zinc-200 bg-white px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{selectedDatasetConfig.title}</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">{selectedDatasetConfig.caption}</p>
+                <p className="mt-2 text-xs leading-5 text-zinc-600">{selectedDatasetConfig.detail}</p>
+              </div>
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-zinc-50 text-zinc-700 shadow-sm">
+                <ShieldCheck className="size-4" />
+              </span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              className="h-9 rounded-none bg-zinc-950 text-white hover:bg-zinc-900"
-              disabled={isBusy}
-              onClick={() => generateMutation.mutate()}
-            >
-              {generateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
-              Generate Big Demo Dataset
-            </Button>
-            <Button
-              type="button"
               variant="outline"
               className="h-9 rounded-none border-zinc-200"
               disabled={isBusy}
-              onClick={() => clearMutation.mutate()}
+              onClick={() => {
+                setSelectedClearDataset(selectedDataset);
+                setConfirmClearOpen(true);
+              }}
             >
               {clearMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
               Clear Demo Data
             </Button>
           </div>
 
+          {generateMutation.data && expectedTestCases && (
+            <div className="space-y-2 rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+              <p className="font-semibold text-zinc-950">
+                {generatedDataset} ready
+              </p>
+              {expectedTestCases.expectedResult && <p>{expectedTestCases.expectedResult}</p>}
+              {expectedTestCases.offerings && <p>{expectedTestCases.offerings}</p>}
+              {expectedTestCases.rooms && <p>{expectedTestCases.rooms}</p>}
+              {expectedTestCases.proctors && <p>{expectedTestCases.proctors}</p>}
+              {expectedTestCases.timeSlots && <p>{expectedTestCases.timeSlots}</p>}
+              {generateMutation.data.instruction && <p>{generateMutation.data.instruction}</p>}
+            </div>
+          )}
+
           {summary && (
             <div className="space-y-4 border-t border-zinc-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Last Generated Dataset</p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {summaryLabels.map(({ key, label }) => (
                   <div key={key} className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
-                    <p className="text-lg font-semibold tabular-nums text-zinc-950">{summary[key]}</p>
+                    <p className="text-lg font-semibold tabular-nums text-zinc-950">{summary[key] ?? 0}</p>
                     <p className="text-[11px] text-zinc-500">{label}</p>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
 
-              {expectedTestCases && (
-                <div className="rounded-none border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-                  <p className="font-semibold text-amber-950">Expected scheduling test cases</p>
-                  <div className="mt-2 grid gap-1.5">
-                    <p>Normal schedulable offerings: {expectedTestCases.normalSchedulableCount}</p>
-                    <p>{expectedTestCases.overcapacityCourse}</p>
-                    <p>{expectedTestCases.overlapStudentGroup}</p>
-                    <p>{expectedTestCases.supervisorLimitedCase}</p>
-                    <p>{expectedTestCases.invalidTimeSlotCase}</p>
+          {overallSummary && (
+            <div className="space-y-4 border-t border-zinc-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">All Persisted Demo Data</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                {summaryLabels.map(({ key, label }) => (
+                  <div key={`overall-${key}`} className="rounded-none border border-zinc-200 bg-white px-3 py-2">
+                    <p className="text-lg font-semibold tabular-nums text-zinc-950">{overallSummary[key] ?? 0}</p>
+                    <p className="text-[11px] text-zinc-500">{label}</p>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={confirmClearOpen} onOpenChange={(next) => { if (!clearMutation.isPending) setConfirmClearOpen(next); }}>
+        <DialogContent className="rounded-none">
+          <DialogHeader>
+            <DialogTitle>Clear Demo Data</DialogTitle>
+            <DialogDescription>
+              Choose which demo dataset to clear. Only the selected demo dataset will be removed, and manually created data is preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Dataset To Clear</p>
+            <div className="inline-flex w-full flex-wrap items-center rounded-none border border-zinc-200 bg-white p-1 shadow-sm">
+              {datasetCards.map((dataset) => {
+                const isActive = dataset.key === selectedClearDataset;
+                return (
+                  <button
+                    key={`clear-${dataset.key}`}
+                    type="button"
+                    disabled={clearMutation.isPending}
+                    onClick={() => setSelectedClearDataset(dataset.key)}
+                    className={[
+                      'inline-flex min-w-20 items-center justify-center rounded-none px-4 py-2 text-xs font-semibold transition-colors',
+                      isActive ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950',
+                    ].join(' ')}
+                  >
+                    {dataset.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="rounded-none border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
+            {selectedClearDatasetConfig.title} will be removed, including its schedules, assignments, enrollments, rooms, proctors, time slots, and related demo-generated records.
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none"
+              disabled={clearMutation.isPending}
+              onClick={() => setConfirmClearOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="rounded-none"
+              disabled={clearMutation.isPending}
+              onClick={() => clearMutation.mutate({ dataset: selectedClearDataset }, {
+                onSuccess: () => setConfirmClearOpen(false),
+              })}
+            >
+              {clearMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Clear {selectedClearDatasetConfig.title}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

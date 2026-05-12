@@ -1,9 +1,7 @@
-// Type definitions mirroring the backend Prisma response shape for
-// Schedule, ExamAssignment, Exam, Room, Supervisor, TimeSlot, Conflict.
+﻿// Type definitions mirroring the backend Prisma response shape for
+// Schedule, ExamAssignment, Exam, Room, Proctor, and TimeSlot.
 // These are intentionally permissive (most fields optional) so the same
 // shape can be reused for list / detail / generate responses.
-
-import type { Conflict } from "./conflict";
 
 export type ScheduleCourse = {
   id: string;
@@ -67,17 +65,17 @@ export type ScheduleRoom = {
   center?: ScheduleCenter | null;
 };
 
-export type ScheduleSupervisorUser = {
+export type ScheduleProctorUser = {
   id: string;
   name?: string | null;
   email?: string | null;
 };
 
-export type ScheduleSupervisor = {
+export type ScheduleProctor = {
   id: string;
   department?: string | null;
   center?: ScheduleCenter | null;
-  user?: ScheduleSupervisorUser | null;
+  user?: ScheduleProctorUser | null;
 };
 
 export type ScheduleTimeSlot = {
@@ -93,11 +91,11 @@ export type ScheduleAssignment = {
   scheduleId: string;
   examId: string;
   roomId: string;
-  supervisorId: string;
+  proctorId: string;
   timeSlotId: string;
   exam?: ScheduleExam | null;
   room?: ScheduleRoom | null;
-  supervisor?: ScheduleSupervisor | null;
+  proctor?: ScheduleProctor | null;
   timeSlot?: ScheduleTimeSlot | null;
 };
 
@@ -105,13 +103,19 @@ export type Schedule = {
   id: string;
   name: string;
   isFinal: boolean;
+  algorithmType?: "HYBRID_CONSTRAINT_BASED" | string;
+  generationStage?: string;
+  qualityScore?: number | null;
+  hardConstraintScore?: number | null;
+  softConstraintScore?: number | null;
+  algorithmMetadata?: Record<string, unknown> | null;
   createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
   assignments?: ScheduleAssignment[];
-  conflicts?: Conflict[];
-  _count?: { assignments?: number; conflicts?: number };
+  _count?: { assignments?: number };
 };
+
 
 // Payload sent to POST /api/scheduling/generate
 export type GenerateScheduleDto = {
@@ -127,14 +131,6 @@ export type GenerateScheduleResponse = {
   scheduleId?: string;
   scheduleName?: string;
   schedule: Schedule;
-  summary?: {
-    totalExams?: number;
-    scheduledExams?: number;
-    unscheduledExams?: number;
-    totalAssignments?: number;
-    conflictsCount?: number;
-    [key: string]: unknown;
-  };
-  conflicts?: Conflict[];
+  assignmentsCount?: number;
   message?: string;
 };

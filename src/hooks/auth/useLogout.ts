@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { logoutUser } from '@/api/auth.api';
-
-const AUTH_USER_STORAGE_KEY = 'auth_user';
+import { clearStoredAuthSession } from '@/api/axiosclient';
 
 export const useLogout = () => {
   const navigate = useNavigate();
@@ -11,16 +10,12 @@ export const useLogout = () => {
   return useMutation({
     mutationFn: logoutUser,
     onSuccess: () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('token_expires_at');
-      localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      clearStoredAuthSession();
       queryClient.clear();
       navigate('/login');
     },
     onError: () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('token_expires_at');
-      localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      clearStoredAuthSession();
       queryClient.clear();
       navigate('/login');
     },

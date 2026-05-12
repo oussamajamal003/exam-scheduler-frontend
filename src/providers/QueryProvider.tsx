@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { isAuthExpiredError } from '../lib/apiError';
 
 interface QueryProviderProps {
   children: React.ReactNode;
@@ -15,7 +16,10 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
           queries: {
             staleTime: 0,
             refetchOnWindowFocus: false,
-            retry: 1,
+            retry: (failureCount, error) => {
+              if (isAuthExpiredError(error)) return false;
+              return failureCount < 1;
+            },
           },
         },
       })

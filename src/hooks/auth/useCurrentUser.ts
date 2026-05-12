@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCurrentUser, type User } from '@/api/auth.api';
+import { getAllUsers, getCurrentUser, type User } from '@/api/auth.api';
 
 const AUTH_USER_STORAGE_KEY = 'auth_user';
 
@@ -34,6 +34,15 @@ export const useCurrentUser = () => {
     queryFn: resolveCurrentUser,
     enabled: Boolean(localStorage.getItem('token')),
     retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useUsers = () => {
+  return useQuery<User[], Error>({
+    queryKey: ['users'],
+    queryFn: getAllUsers,
+    enabled: Boolean(localStorage.getItem('token')),
     staleTime: 5 * 60 * 1000,
   });
 };

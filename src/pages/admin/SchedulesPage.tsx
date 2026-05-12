@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   BookOpen,
@@ -36,6 +37,7 @@ import {
   useDeleteSchedule,
   useGenerateSchedule,
   usePrepareScheduling,
+  useOptimizeScheduling,
   usePublishSchedule,
   useUnpublishSchedule,
   useSchedule,
@@ -45,9 +47,10 @@ import {
 } from "../../hooks/schedules/useSchedules";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
 import { useRooms } from "../../hooks/rooms/useRooms";
-import { useSupervisors } from "../../hooks/supervisors/useSupervisors";
+import { useProctors } from "../../hooks/proctors/useProctors";
 import { useTimeSlots } from "../../hooks/timeSlots/useTimeSlots";
 import {
+  useScheduleAssignments,
   useDeleteAssignment,
   useUpdateAssignment,
 } from "../../hooks/assignments/useAssignments";
@@ -55,7 +58,7 @@ import type {
   Schedule,
   ScheduleAssignment,
 } from "../../schemas/schedule";
-import type { Conflict } from "../../schemas/conflict";
+import type { ValidateSchedulingResult } from "../../api/schedulingApi";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -108,10 +111,9 @@ import {
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { FilterPopover, FilterField } from "../../components/shared/FilterPopover";
-import { ConflictBadges } from "../../components/shared/ConflictBadges";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
-import { getApiErrorMessage } from "../../lib/apiError";
+import { getApiErrorMessage, isAuthExpiredError } from "../../lib/apiError";
 import { cn } from "../../lib/utils";
 
 // -------------------- helpers --------------------
@@ -180,6 +182,7 @@ const LockedActionTooltip = ({
 const ScheduleVersionsTable = ({
   schedules,
   activeId,
+  countOverrides,
   onSelect,
   onDeleted,
   isLoading,
@@ -187,6 +190,7 @@ const ScheduleVersionsTable = ({
 }: {
   schedules: Schedule[];
   activeId?: string | null;
+  countOverrides?: Record<string, { assignments?: number }>;
   onSelect: (id: string) => void;
   onDeleted: (deletedId: string) => void;
   isLoading: boolean;
@@ -257,9 +261,6 @@ const ScheduleVersionsTable = ({
                 <TableHead className="h-9 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                   Assignments
                 </TableHead>
-                <TableHead className="h-9 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Conflicts
-                </TableHead>
                 <TableHead className="h-9 pr-4 text-right text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                   Actions
                 </TableHead>
@@ -269,7 +270,7 @@ const ScheduleVersionsTable = ({
               {isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-b border-zinc-100">
-                    {Array.from({ length: 6 }).map((__, j) => (
+                    {Array.from({ length: 5 }).map((__, j) => (
                       <TableCell key={j} className="py-3 pl-5">
                         <Skeleton className="h-4 w-full max-w-28" />
                       </TableCell>
@@ -279,7 +280,7 @@ const ScheduleVersionsTable = ({
               ) : schedules.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={5}
                     className="py-10 text-center text-sm text-zinc-500"
                   >
                     <List className="mx-auto mb-2 size-6 text-zinc-300" />
@@ -289,8 +290,12 @@ const ScheduleVersionsTable = ({
               ) : (
                 schedules.map((s) => {
                   const isActive = s.id === activeId;
-                  const assignmentsCount = s._count?.assignments ?? s.assignments?.length ?? 0;
-                  const conflictsCount = s._count?.conflicts ?? s.conflicts?.length ?? 0;
+                  const override = countOverrides?.[s.id];
+                  const assignmentsCount =
+                    override?.assignments ??
+                    (s.assignments ? getLogicalAssignmentCount(s.assignments) : undefined) ??
+                    s._count?.assignments ??
+                    0;
                   return (
                     <TableRow
                       key={s.id}
@@ -325,21 +330,9 @@ const ScheduleVersionsTable = ({
                           {assignmentsCount}
                         </span>
                       </TableCell>
-                      <TableCell className="py-3 text-center">
-                        <span
-                          className={cn(
-                            "inline-flex items-center justify-center min-w-8 rounded-none border px-2 py-0.5 text-xs font-semibold tabular-nums",
-                            conflictsCount > 0
-                              ? "border-rose-200 bg-rose-50 text-rose-700"
-                              : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          )}
-                        >
-                          {conflictsCount}
-                        </span>
-                      </TableCell>
                       <TableCell className="py-3 pr-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {!isActive && (
+                          {!isActive ? (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -349,8 +342,7 @@ const ScheduleVersionsTable = ({
                               <Eye className="size-3.5 mr-1" />
                               View
                             </Button>
-                          )}
-                          {isActive && (
+                          ) : (
                             <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] uppercase tracking-wide font-bold text-zinc-500">
                               <span className="size-1.5 rounded-full bg-emerald-500" />
                               Active
@@ -362,47 +354,45 @@ const ScheduleVersionsTable = ({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-8 rounded-none text-zinc-500 hover:text-zinc-950 hover:bg-zinc-100 ml-1"
+                                className="ml-1 size-8 rounded-none text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
                               >
                                 <MoreHorizontal className="size-4" />
                                 <span className="sr-only">Actions</span>
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 rounded-none border-zinc-200 shadow-lg">
+                            <DropdownMenuContent align="end" className="rounded-none w-48">
                               <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold px-3 py-1.5">
                                 Actions
                               </DropdownMenuLabel>
-                              <DropdownMenuSeparator className="bg-zinc-100" />
-                              
-                              {/* Show Publish and Return to Draft dynamically */}
+                              <DropdownMenuSeparator />
                               {!s.isFinal ? (
                                 <DropdownMenuItem
+                                  disabled={publishMutation.isPending}
                                   onClick={() => publishMutation.mutate(s.id, {
                                     onSuccess: () => onRefetch?.()
                                   })}
-                                  className="cursor-pointer text-sm font-medium text-emerald-700 focus:text-emerald-700 focus:bg-emerald-50 px-3 py-2"
+                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700"
                                 >
                                   <CheckCircle2 className="size-4 mr-2" />
                                   Publish
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                  onClick={() => unpublishMutation.mutate(s.id, {
-                    onSuccess: () => onRefetch?.()
-                  })}
-                  disabled={unpublishMutation.isPending}
-                  className="cursor-pointer text-sm font-medium text-zinc-700 focus:text-zinc-900 focus:bg-zinc-50 px-3 py-2"
-                >
-                  {unpublishMutation.isPending ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <Wrench className="size-4 mr-2 text-zinc-400" />
-                  )}
-                  Return to Draft
-                </DropdownMenuItem>
-              )}
+                                  onClick={() => unpublishMutation.mutate(s.id, {
+                                    onSuccess: () => onRefetch?.()
+                                  })}
+                                  disabled={unpublishMutation.isPending}
+                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-700 focus:bg-zinc-50 focus:text-zinc-900"
+                                >
+                                  {unpublishMutation.isPending ? (
+                                    <Loader2 className="size-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Wrench className="size-4 mr-2 text-zinc-400" />
+                                  )}
+                                  Return to Draft
+                                </DropdownMenuItem>
+                              )}
 
-                              {/* Edit & Delete always shown, but disabled with tooltip if isFinal */}
                               <LockedActionTooltip isLocked={!!s.isFinal}>
                                 <DropdownMenuItem
                                   disabled={!!s.isFinal}
@@ -411,7 +401,7 @@ const ScheduleVersionsTable = ({
                                     setRenameTarget(s);
                                     setNewName(s.name);
                                   }}
-                                  className="cursor-pointer text-sm font-medium text-zinc-700 focus:text-zinc-900 focus:bg-zinc-50 px-3 py-2"
+                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-700 focus:bg-zinc-50 focus:text-zinc-900"
                                 >
                                   <Pencil className="size-4 mr-2 text-zinc-400" />
                                   Rename
@@ -419,7 +409,7 @@ const ScheduleVersionsTable = ({
                               </LockedActionTooltip>
 
                               <DropdownMenuSeparator className="bg-zinc-100" />
-                              
+
                               <LockedActionTooltip isLocked={!!s.isFinal}>
                                 <DropdownMenuItem
                                   disabled={!!s.isFinal}
@@ -427,7 +417,7 @@ const ScheduleVersionsTable = ({
                                     if (s.isFinal) return e.preventDefault();
                                     setConfirmDeleteId(s.id);
                                   }}
-                                  className="cursor-pointer text-sm font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 px-3 py-2"
+                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-rose-600 focus:bg-rose-50 focus:text-rose-600"
                                 >
                                   <Trash2 className="size-4 mr-2" />
                                   Delete Version
@@ -540,51 +530,22 @@ const ScheduleVersionsTable = ({
   );
 };
 
-type ComingSoonButtonProps = {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  tooltip: string;
-  disabled?: boolean;
-};
-
-const ComingSoonButton = ({
-  icon: Icon,
-  label,
-  tooltip,
-  disabled,
-}: ComingSoonButtonProps) => (
-  <TooltipProvider delayDuration={150}>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* Wrapper span keeps the tooltip working when the button is disabled. */}
-        <span className="inline-flex">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            aria-disabled
-            className="h-10 rounded-none border-dashed border-zinc-300 text-zinc-700 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
-          >
-            <Icon className="size-4" />
-            {label}
-            <span className="ml-1 inline-flex items-center rounded-none bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              Soon
-            </span>
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="max-w-xs text-xs">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
-
 const examStatusToneMap: Record<string, string> = {
+  DRAFT: "border-amber-200 bg-amber-50 text-amber-700",
+  REVIEW: "border-amber-200 bg-amber-50 text-amber-700",
   SCHEDULED: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  IN_PROGRESS: "border-sky-200 bg-sky-50 text-sky-700",
   PENDING: "border-amber-200 bg-amber-50 text-amber-700",
   COMPLETED: "border-blue-200 bg-blue-50 text-blue-700",
   CANCELLED: "border-zinc-200 bg-zinc-50 text-zinc-600",
+};
+
+const getAssignmentDisplayStatus = ({
+  isFinal,
+}: {
+  isFinal?: boolean;
+}) => {
+  return isFinal ? "SCHEDULED" : "DRAFT";
 };
 
 const ExamStatusBadge = ({
@@ -597,7 +558,8 @@ const ExamStatusBadge = ({
   if (!status) {
     return <span className="text-xs text-zinc-400">—</span>;
   }
-  const tone = examStatusToneMap[status] ?? "border-zinc-200 bg-zinc-50 text-zinc-700";
+  const displayStatus = status === "CONFLICT" ? "REVIEW" : status;
+  const tone = examStatusToneMap[displayStatus] ?? "border-zinc-200 bg-zinc-50 text-zinc-700";
   return (
     <span
       className={cn(
@@ -606,7 +568,7 @@ const ExamStatusBadge = ({
         tone
       )}
     >
-      {status}
+      {displayStatus}
     </span>
   );
 };
@@ -648,7 +610,7 @@ const StatCard = ({
   );
 };
  
-// -------------------- Generate dialog — pipeline: prepare → validate → generate --------------------
+// -------------------- Generate dialog — pipeline: prepare → validate → build draft → evaluate → optimize → re-evaluate → confirm → generate --------------------
 
 type SemesterOption = {
   id: string;
@@ -659,103 +621,461 @@ type SemesterOption = {
   endDate?: string | null;
 };
 
-type PipelinePhase = "idle" | "preparing" | "validating" | "ready" | "failed" | "generating";
+type PipelinePhase = "idle" | "preparing" | "validating" | "building-draft" | "evaluating" | "optimizing" | "re-evaluating" | "confirming" | "ready" | "failed" | "generating";
+type PipelineStepStatus = "idle" | "active" | "complete" | "blocked";
 
-// Strip raw UUIDs from user-facing messages so they are always human-readable
-const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-const stripUuids = (msg: string) => msg.replace(UUID_RE, "").replace(/\s{2,}/g, " ").trim();
-
-type CategoryMeta = {
+type PipelineStep = {
+  key: "prepare" | "validate" | "build-draft" | "evaluate" | "optimize" | "re-evaluate" | "confirm" | "generate";
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  cardClass: string;
-  badgeClass: string;
-  labelClass: string;
-  dotClass: string;
+  description: string;
+  status: PipelineStepStatus;
 };
 
-const CATEGORY_META: Record<string, CategoryMeta> = {
-  courseofferings: {
-    label: "Course Offerings",
-    icon: BookOpen,
-    cardClass: "border-violet-100 bg-violet-50/40",
-    badgeClass: "bg-violet-100 text-violet-700",
-    labelClass: "text-violet-700",
-    dotClass: "bg-violet-400",
+const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "description">> = [
+  {
+    key: "prepare",
+    label: "Prepare",
+    description: "Loading scheduling resources...",
   },
-  rooms: {
-    label: "Rooms",
-    icon: DoorOpen,
-    cardClass: "border-blue-100 bg-blue-50/40",
-    badgeClass: "bg-blue-100 text-blue-700",
-    labelClass: "text-blue-700",
-    dotClass: "bg-blue-400",
+  {
+    key: "validate",
+    label: "Validate",
+    description: "Validating hard constraints...",
   },
-  supervisors: {
-    label: "Supervisors",
-    icon: UserCheck,
-    cardClass: "border-amber-100 bg-amber-50/40",
-    badgeClass: "bg-amber-100 text-amber-700",
-    labelClass: "text-amber-700",
-    dotClass: "bg-amber-400",
+  {
+    key: "build-draft",
+    label: "Build Draft",
+    description: "Building feasible assignments...",
   },
-  timeslots: {
-    label: "Time Slots",
-    icon: Clock,
-    cardClass: "border-sky-100 bg-sky-50/40",
-    badgeClass: "bg-sky-100 text-sky-700",
-    labelClass: "text-sky-700",
-    dotClass: "bg-sky-400",
+  {
+    key: "evaluate",
+    label: "Evaluate",
+    description: "Evaluating schedule quality...",
   },
-  capacity: {
-    label: "Capacity",
-    icon: Users,
-    cardClass: "border-orange-100 bg-orange-50/40",
-    badgeClass: "bg-orange-100 text-orange-700",
-    labelClass: "text-orange-700",
-    dotClass: "bg-orange-400",
+  {
+    key: "optimize",
+    label: "Optimize",
+    description: "Optimizing soft constraints...",
   },
-  studentoverlaprisks: {
-    label: "Student Overlap Risks",
-    icon: AlertTriangle,
-    cardClass: "border-rose-100 bg-rose-50/40",
-    badgeClass: "bg-rose-100 text-rose-700",
-    labelClass: "text-rose-700",
-    dotClass: "bg-rose-400",
+  {
+    key: "re-evaluate",
+    label: "Re-evaluate",
+    description: "Re-evaluating optimized schedule...",
   },
-};
-
-const CATEGORY_PRIORITY = [
-  "courseofferings",
-  "capacity",
-  "rooms",
-  "timeslots",
-  "supervisors",
-  "studentoverlaprisks",
+  {
+    key: "confirm",
+    label: "Confirm",
+    description: "Confirming valid draft...",
+  },
+  {
+    key: "generate",
+    label: "Generate",
+    description: "Saving final conflict-free schedule...",
+  },
 ];
 
-const normalizeCatKey = (raw: string) =>
-  raw.toLowerCase().replace(/[_\s-]/g, "").replace(/risk$/, "risks");
+const MIN_BUILD_DRAFT_STAGE_DELAY_MS = 2200;
+const EVALUATE_STAGE_DELAY_MS = 320;
+const OPTIMIZE_STAGE_DELAY_MS = 420;
+const RE_EVALUATE_STAGE_DELAY_MS = 350;
+const CONFIRM_STAGE_DELAY_MS = 300;
 
-const resolveMeta = (raw: string): CategoryMeta =>
-  CATEGORY_META[normalizeCatKey(raw)] ?? {
-    label: raw
-      .replace(/([A-Z])/g, " $1")
-      .replace(/[_-]/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim(),
-    icon: AlertTriangle,
-    cardClass: "border-rose-100 bg-rose-50/40",
-    badgeClass: "bg-rose-100 text-rose-700",
-    labelClass: "text-rose-700",
-    dotClass: "bg-rose-400",
+const GENERATION_BLOCKED_MESSAGE = "Schedule generation is currently blocked.";
+const GENERATION_BLOCKED_DETAIL_FALLBACK = "No valid schedule can be generated with the current data and available resources. Review rooms, proctors, time slots, and semester dates, then try again.";
+
+const getMetricNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+const formatScore = (value: unknown) => `${Math.round(getMetricNumber(value))}%`;
+const getOptimizationBeforeScore = (
+  evaluationResult: ValidateSchedulingResult | undefined,
+  optimizationResult: ValidateSchedulingResult | undefined,
+) => getMetricNumber(
+  optimizationResult?.optimization?.beforeScore
+    ?? evaluationResult?.quality?.originalScore
+    ?? evaluationResult?.quality?.optimizedScore
+    ?? evaluationResult?.metrics?.qualityScore,
+);
+const getOptimizationAfterScore = (optimizationResult: ValidateSchedulingResult | undefined) =>
+  getMetricNumber(
+    optimizationResult?.optimization?.afterScore
+      ?? optimizationResult?.quality?.optimizedScore
+      ?? optimizationResult?.metrics?.qualityScore,
+  );
+const getQualityMetric = (
+  evaluationResult: ValidateSchedulingResult | undefined,
+  optimizationResult: ValidateSchedulingResult | undefined,
+  key: string,
+) => getMetricNumber(
+  optimizationResult?.optimization?.qualityMetrics?.[key]
+    ?? optimizationResult?.quality?.qualityMetrics?.[key]
+    ?? evaluationResult?.quality?.qualityMetrics?.[key],
+);
+const PRIMARY_QUALITY_AREAS = [
+  "roomUtilization",
+  "proctorWorkloadBalance",
+  "studentSpacing",
+  "examDistribution",
+] as const;
+type QualityStatus = "excellent" | "strong" | "needs-tuning" | "weak" | "critical";
+const formatQualityArea = (area: string) => area
+  .replace(/([A-Z])/g, " $1")
+  .replace(/^./, (char) => char.toUpperCase());
+const getQualityStatus = (value: number): QualityStatus => {
+  if (value >= 85) return "excellent";
+  if (value >= 70) return "strong";
+  if (value >= 55) return "needs-tuning";
+  if (value >= 35) return "weak";
+  return "critical";
+};
+const deriveWeakAreas = (
+  evaluationResult: ValidateSchedulingResult | undefined,
+  optimizationResult: ValidateSchedulingResult | undefined,
+) => {
+  const fallbackWeakAreas =
+    optimizationResult?.optimization?.weakAreas
+    ?? optimizationResult?.quality?.weakAreas
+    ?? evaluationResult?.quality?.weakAreas
+    ?? [];
+
+  const beforeQualityMetrics = optimizationResult?.optimization?.beforeQualityMetrics;
+
+  const derived = PRIMARY_QUALITY_AREAS
+    .map((area) => ({
+      area,
+      score: getMetricNumber(
+        beforeQualityMetrics?.[area]
+          ?? evaluationResult?.quality?.qualityMetrics?.[area]
+      ),
+    }))
+    .filter((item) => {
+      const status = getQualityStatus(item.score);
+      return status === "critical" || status === "weak" || status === "needs-tuning";
+    })
+    .sort((left, right) => left.score - right.score);
+
+  return derived.length > 0 ? derived : fallbackWeakAreas;
+};
+const getQualityDescriptor = (value: number) => {
+  const status = getQualityStatus(value);
+  if (status === "excellent") return "Excellent";
+  if (status === "strong") return "Strong";
+  if (status === "needs-tuning") return "Needs tuning";
+  if (status === "weak") return "Weak";
+  return "Critical";
+};
+const getQualityTone = (value: number) => {
+  const status = getQualityStatus(value);
+  if (status === "excellent") {
+    return {
+      shell: "border-emerald-200/80 bg-linear-to-br from-emerald-50 via-white to-emerald-100/70",
+      badge: "border-emerald-200 bg-white text-emerald-700",
+      score: "text-emerald-950",
+      track: "bg-emerald-100",
+      fill: "bg-linear-to-r from-emerald-500 to-emerald-400",
+      glow: "shadow-[0_18px_40px_-24px_rgba(16,185,129,0.7)]",
+    };
+  }
+  if (status === "strong") {
+    return {
+      shell: "border-sky-200/80 bg-linear-to-br from-sky-50 via-white to-indigo-50",
+      badge: "border-sky-200 bg-white text-sky-700",
+      score: "text-sky-950",
+      track: "bg-sky-100",
+      fill: "bg-linear-to-r from-sky-500 to-indigo-500",
+      glow: "shadow-[0_18px_40px_-24px_rgba(59,130,246,0.55)]",
+    };
+  }
+  if (status === "needs-tuning") {
+    return {
+      shell: "border-amber-200/80 bg-linear-to-br from-amber-50 via-white to-orange-50",
+      badge: "border-amber-200 bg-white text-amber-700",
+      score: "text-amber-950",
+      track: "bg-amber-100",
+      fill: "bg-linear-to-r from-amber-400 to-orange-400",
+      glow: "shadow-[0_18px_40px_-24px_rgba(245,158,11,0.55)]",
+    };
+  }
+  if (status === "weak") {
+    return {
+      shell: "border-orange-200/80 bg-linear-to-br from-orange-50 via-white to-rose-50",
+      badge: "border-orange-200 bg-white text-orange-700",
+      score: "text-orange-950",
+      track: "bg-orange-100",
+      fill: "bg-linear-to-r from-orange-500 to-rose-500",
+      glow: "shadow-[0_18px_40px_-24px_rgba(249,115,22,0.55)]",
+    };
+  }
+  return {
+    shell: "border-rose-200/80 bg-linear-to-br from-rose-50 via-white to-pink-50",
+    badge: "border-rose-200 bg-white text-rose-700",
+    score: "text-rose-950",
+    track: "bg-rose-100",
+    fill: "bg-linear-to-r from-rose-500 to-pink-500",
+    glow: "shadow-[0_18px_40px_-24px_rgba(244,63,94,0.55)]",
   };
+};
+const normalizeBlockingMessage = (message: string | null | undefined) => {
+  if (!message) return GENERATION_BLOCKED_DETAIL_FALLBACK;
 
-type FailItem = {
-  key: string;
+  if (/conflict-free schedule exists/i.test(message)) {
+    return GENERATION_BLOCKED_DETAIL_FALLBACK;
+  }
+
+  return message
+    .replace(/conflict-free/gi, "valid")
+    .replace(/conflicts still exist/gi, "hard-constraint issues are still present")
+    .replace(/conflicts remain/gi, "hard-constraint issues remain");
+};
+const getBlockingIssues = (result: ValidateSchedulingResult | undefined) => {
+  if (!result) return [] as string[];
+  return Object.values(result.errors ?? {}).flat().filter((issue): issue is string => Boolean(issue));
+};
+const getBlockingSuggestions = (result: ValidateSchedulingResult | undefined) => {
+  const keys = Object.keys(result?.errors ?? {});
+  const suggestions = new Set<string>();
+
+  if (keys.includes("rooms")) suggestions.add("Increase usable room capacity or add additional available rooms.");
+  if (keys.includes("proctors")) suggestions.add("Increase proctor coverage for the affected exam window.");
+  if (keys.includes("timeSlots")) suggestions.add("Add more valid time slots inside the semester exam window.");
+  if (keys.includes("courseOfferings") || keys.includes("enrollments")) suggestions.add("Complete missing course offering or enrollment data before generating.");
+  if (keys.includes("studentOverlapRisks")) suggestions.add("Reduce overlapping demand by expanding available slots or balancing exam distribution.");
+
+  return [...suggestions].slice(0, 3);
+};
+
+const ResourceStatCard = ({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
-  issues: string[];
-  meta: CategoryMeta;
+  value: number;
+}) => (
+  <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70 px-4 py-4 shadow-sm">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+        <p className="mt-2 text-3xl font-bold tabular-nums text-zinc-950">{value}</p>
+      </div>
+      <span className="inline-flex size-10 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-700 shadow-sm">
+        <Icon className="size-4" />
+      </span>
+    </div>
+  </div>
+);
+
+const QualityMetricCard = ({ label, value }: { label: string; value: number }) => (
+  (() => {
+    const tone = getQualityTone(value);
+    const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
+    const descriptor = getQualityDescriptor(value);
+
+    return (
+      <div className={cn("rounded-none border px-4 py-4", tone.shell, tone.glow)}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+            <p className={cn("mt-2 text-3xl font-bold tabular-nums", tone.score)}>{formatScore(value)}</p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2">
+          <div className={cn("h-2.5 overflow-hidden rounded-full", tone.track)}>
+            <div className={cn("h-full rounded-full", tone.fill)} style={{ width: `${normalizedValue}%` }} />
+          </div>
+          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
+            <span className={cn("uppercase tracking-wide", tone.score)}>{descriptor}</span>
+            <span className="tabular-nums text-zinc-400">{normalizedValue}/100</span>
+          </div>
+        </div>
+      </div>
+    );
+  })()
+);
+
+const ScoreSummaryCard = ({
+  label,
+  value,
+  variant,
+}: {
+  label: string;
+  value: string;
+  variant: "draft" | "optimized" | "improvement";
+}) => {
+  const styles = {
+    draft: {
+      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70",
+      eyebrow: "text-zinc-500",
+      value: "text-zinc-950",
+      caption: "text-zinc-500",
+      iconWrap: "bg-white text-zinc-700 border border-zinc-200",
+    },
+    optimized: {
+      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.65)]",
+      eyebrow: "text-emerald-700",
+      value: "text-emerald-950",
+      caption: "text-emerald-800",
+      iconWrap: "bg-white text-emerald-700 border border-emerald-200",
+    },
+    improvement: {
+      shell: "border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_18px_40px_-24px_rgba(24,24,27,0.8)]",
+      eyebrow: "text-zinc-300",
+      value: "text-white",
+      caption: "text-zinc-300",
+      iconWrap: "bg-white/10 text-white border border-white/10",
+    },
+  }[variant];
+
+  const Icon = variant === "optimized" ? Sparkles : variant === "improvement" ? Wand2 : ShieldCheck;
+
+  return (
+    <div className={cn("rounded-none border px-4 py-4", styles.shell)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={cn("text-[10px] font-semibold uppercase tracking-[0.18em]", styles.eyebrow)}>{label}</p>
+          <p className={cn("mt-2 text-3xl font-bold tabular-nums", styles.value)}>{value}</p>
+        </div>
+        <span className={cn("inline-flex size-10 items-center justify-center rounded-none", styles.iconWrap)}>
+          <Icon className="size-4" />
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const WeakAreaItem = ({ area, score, index }: { area: string; score: number; index: number }) => {
+  const width = Math.max(8, Math.min(100, Math.round(score)));
+  const descriptor = getQualityDescriptor(score);
+  const stripeTone = [
+    "from-amber-400 to-orange-400",
+    "from-rose-400 to-pink-400",
+    "from-sky-400 to-cyan-400",
+    "from-violet-400 to-fuchsia-400",
+  ][index % 4];
+
+  return (
+    <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-3 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">{formatQualityArea(area)}</p>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500">{descriptor}</p>
+          <p className="mt-1 text-[11px] text-zinc-400">Before optimization</p>
+        </div>
+        <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+          {formatScore(score)}
+        </span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200/80">
+        <div className={cn("h-full rounded-full bg-linear-to-r", stripeTone)} style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+};
+
+const FinalStatCard = ({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: "neutral" | "success" | "quality";
+}) => {
+  const styles = {
+    neutral: {
+      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70",
+      label: "text-zinc-500",
+      value: "text-zinc-950",
+      icon: "border-zinc-200 bg-white text-zinc-700",
+    },
+    success: {
+      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.55)]",
+      label: "text-emerald-700",
+      value: "text-emerald-950",
+      icon: "border-emerald-200 bg-white text-emerald-700",
+    },
+    quality: {
+      shell: "border-sky-200 bg-linear-to-br from-sky-50 via-white to-indigo-50 shadow-[0_18px_40px_-24px_rgba(59,130,246,0.5)]",
+      label: "text-sky-700",
+      value: "text-sky-950",
+      icon: "border-sky-200 bg-white text-sky-700",
+    },
+  }[tone];
+
+  return (
+    <div className={cn("rounded-none border px-4 py-4", styles.shell)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={cn("text-[10px] font-semibold uppercase tracking-[0.18em]", styles.label)}>{label}</p>
+          <p className={cn("mt-2 text-3xl font-bold tabular-nums", styles.value)}>{value}</p>
+        </div>
+        <span className={cn("inline-flex size-10 items-center justify-center rounded-none border shadow-sm", styles.icon)}>
+          <Icon className="size-4" />
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const PipelineLoadingExperience = ({
+  steps,
+  activeStepKey,
+}: {
+  steps: PipelineStep[];
+  activeStepKey: PipelineStep["key"] | null;
+}) => {
+  const activeStep = steps.find((step) => step.key === activeStepKey) ?? null;
+  const completedCount = steps.filter((step) => step.status === "complete").length;
+  const visibleProgressCount = Math.min(
+    steps.length,
+    completedCount + (activeStep ? 1 : 0)
+  );
+
+  if (!activeStep) return null;
+
+  return (
+    <div className="rounded-none border border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-4 text-white shadow-[0_24px_50px_-28px_rgba(24,24,27,0.85)] transition-all duration-500">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex size-10 items-center justify-center rounded-none border border-white/10 bg-white/10">
+              <Loader2 className="size-4 animate-spin" />
+            </span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-300">Generation In Progress</p>
+              <p className="mt-1 text-base font-semibold text-white">{activeStep.label}</p>
+            </div>
+          </div>
+          <p className="max-w-2xl text-sm text-zinc-300">{activeStep.description}</p>
+        </div>
+
+        <div className="rounded-none border border-white/10 bg-white/5 px-3 py-3 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Progress</p>
+          <p className="mt-1 text-2xl font-bold text-white">{visibleProgressCount}/{steps.length}</p>
+          <p className="text-[11px] text-zinc-400">steps in motion</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-4 gap-2 lg:grid-cols-8">
+        {steps.map((step) => (
+          <div
+            key={step.key}
+            className={cn(
+              "h-2 rounded-full transition-all duration-500",
+              step.status === "complete"
+                ? "bg-emerald-400"
+                : step.status === "active"
+                  ? "animate-pulse bg-white"
+                  : step.status === "blocked"
+                    ? "bg-amber-400"
+                    : "bg-white/10"
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const GenerateScheduleDialog = ({
@@ -778,13 +1098,19 @@ const GenerateScheduleDialog = ({
   const [phase, setPhase] = useState<PipelinePhase>("idle");
   const [zeroAssignments, setZeroAssignments] = useState(false);
   const [missingDates, setMissingDates] = useState(false);
+  const [generateErrorMessage, setGenerateErrorMessage] = useState<string | null>(null);
+  const pipelineTimerIdsRef = useRef<number[]>([]);
+  const buildDraftStartedAtRef = useRef<number | null>(null);
 
   const prepareMutation = usePrepareScheduling();
   const validateMutation = useValidateSchedulingInput();
+  const optimizeMutation = useOptimizeScheduling();
   const generateMutation = useGenerateSchedule();
 
   const prepare = prepareMutation.data;
-  const validation = validateMutation.data;
+  const validationResult = validateMutation.data;
+  const optimizationResult = optimizeMutation.data;
+  const finalPipelineResult = optimizationResult ?? validationResult;
 
   const defaultSemesterId = useMemo(() => {
     if (semesters.length === 0) return "";
@@ -792,17 +1118,40 @@ const GenerateScheduleDialog = ({
   }, [semesters]);
   const effectiveSemesterId = semesterId || defaultSemesterId;
 
+  const clearPipelineTimers = () => {
+    for (const timerId of pipelineTimerIdsRef.current) {
+      window.clearTimeout(timerId);
+    }
+    pipelineTimerIdsRef.current = [];
+  };
+
+  const queuePipelinePhase = (nextPhase: PipelinePhase, delayMs: number) => {
+    const timerId = window.setTimeout(() => {
+      setPhase(nextPhase);
+      pipelineTimerIdsRef.current = pipelineTimerIdsRef.current.filter((id) => id !== timerId);
+    }, delayMs);
+    pipelineTimerIdsRef.current.push(timerId);
+  };
+
+  const resetPipelineClock = () => {
+    buildDraftStartedAtRef.current = null;
+  };
+
   // Reset pipeline state whenever the dialog closes
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => {
+        clearPipelineTimers();
+        resetPipelineClock();
         setName("");
         setSemesterId("");
         setPhase("idle");
         setZeroAssignments(false);
         setMissingDates(false);
+        setGenerateErrorMessage(null);
         prepareMutation.reset();
         validateMutation.reset();
+        optimizeMutation.reset();
         generateMutation.reset();
       }, 300);
       return () => clearTimeout(t);
@@ -811,17 +1160,20 @@ const GenerateScheduleDialog = ({
   }, [open]);
 
   const handleSemesterChange = (next: string) => {
+    clearPipelineTimers();
+    resetPipelineClock();
     setSemesterId(next);
     setPhase("idle");
     setZeroAssignments(false);
     setMissingDates(false);
+    setGenerateErrorMessage(null);
     prepareMutation.reset();
     validateMutation.reset();
+    optimizeMutation.reset();
     generateMutation.reset();
   };
 
-  /** Step 1+2: prepare → auto-chain validate */
-  const runPreflightChecks = () => {
+  const runSmartSchedulingFlow = () => {
     if (!effectiveSemesterId) return;
     const sem = semesters.find((s) => s.id === effectiveSemesterId);
     const startDate = sem?.startDate ?? undefined;
@@ -834,7 +1186,12 @@ const GenerateScheduleDialog = ({
     setMissingDates(false);
     setPhase("preparing");
     setZeroAssignments(false);
+    setGenerateErrorMessage(null);
+    clearPipelineTimers();
+    resetPipelineClock();
+    prepareMutation.reset();
     validateMutation.reset();
+    optimizeMutation.reset();
     generateMutation.reset();
     prepareMutation.mutate(
       { semesterId: effectiveSemesterId, startDate, endDate },
@@ -845,13 +1202,57 @@ const GenerateScheduleDialog = ({
             { semesterId: effectiveSemesterId },
             {
               onSuccess: (result) => {
-                setPhase(result.isValid ? "ready" : "failed");
+                if (!result.isValid) {
+                  setPhase("failed");
+                  return;
+                }
+
+                setPhase("building-draft");
+                buildDraftStartedAtRef.current = Date.now();
+                optimizeMutation.mutate(
+                  { semesterId: effectiveSemesterId },
+                  {
+                    onSuccess: (optimizedResult) => {
+                      clearPipelineTimers();
+                      if (!optimizedResult.isValid) {
+                        resetPipelineClock();
+                        setPhase("failed");
+                        return;
+                      }
+
+                      const elapsedBuildDraftMs = buildDraftStartedAtRef.current
+                        ? Date.now() - buildDraftStartedAtRef.current
+                        : 0;
+                      const remainingBuildDraftMs = Math.max(0, MIN_BUILD_DRAFT_STAGE_DELAY_MS - elapsedBuildDraftMs);
+
+                      queuePipelinePhase("evaluating", remainingBuildDraftMs);
+                      queuePipelinePhase("optimizing", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS);
+                      queuePipelinePhase("re-evaluating", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS);
+                      queuePipelinePhase("confirming", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS);
+                      queuePipelinePhase("ready", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS + CONFIRM_STAGE_DELAY_MS);
+                      resetPipelineClock();
+                    },
+                    onError: () => {
+                      clearPipelineTimers();
+                      resetPipelineClock();
+                      setPhase("failed");
+                    },
+                  }
+                );
               },
-              onError: () => setPhase("failed"),
+              onError: () => {
+                clearPipelineTimers();
+                resetPipelineClock();
+                setPhase("failed");
+              },
             }
           );
         },
-        onError: () => setPhase("failed"),
+        onError: () => {
+          clearPipelineTimers();
+          resetPipelineClock();
+          setPhase("failed");
+        },
       }
     );
   };
@@ -859,16 +1260,17 @@ const GenerateScheduleDialog = ({
   /** Step 3: generate */
   const handleGenerate = () => {
     if (phase !== "ready" || !effectiveSemesterId || name.trim().length < 3 || isDuplicateName) return;
+    clearPipelineTimers();
+    resetPipelineClock();
     setPhase("generating");
     setZeroAssignments(false);
+    setGenerateErrorMessage(null);
     generateMutation.mutate(
       { scheduleName: name.trim(), semesterId: effectiveSemesterId },
       {
         onSuccess: (result) => {
           const assignmentCount =
-            (result as { assignmentsCount?: number }).assignmentsCount ??
-            result?.summary?.assignedExams ??
-            0;
+            (result as { assignmentsCount?: number }).assignmentsCount ?? 0;
           if (assignmentCount === 0) {
             setZeroAssignments(true);
             setPhase("ready");
@@ -876,131 +1278,255 @@ const GenerateScheduleDialog = ({
             onGenerated(result);
           }
         },
-        onError: () => setPhase("ready"),
+        onError: (error) => {
+          setGenerateErrorMessage(
+            getApiErrorMessage(error, GENERATION_BLOCKED_MESSAGE)
+          );
+          setPhase("failed");
+        },
       }
     );
   };
 
   const isPreparing = phase === "preparing";
   const isValidating = phase === "validating";
+  const isOptimizing = phase === "optimizing";
   const isGenerating = phase === "generating";
-  const isBusy = isPreparing || isValidating || isGenerating;
+  const isBuildingDraft = phase === "building-draft";
+  const isEvaluating = phase === "evaluating";
+  const isReEvaluating = phase === "re-evaluating";
+  const isConfirming = phase === "confirming";
+  const isRunningChecks = isPreparing || isValidating || isBuildingDraft || isEvaluating || isOptimizing || isReEvaluating || isConfirming;
+  const isBusy = isRunningChecks || isGenerating;
+
   const hasRun = phase !== "idle";
   const canRunChecks = Boolean(effectiveSemesterId) && !isBusy;
   const isDuplicateName = existingNames.some(
     (n) => n.trim().toLowerCase() === name.trim().toLowerCase()
   );
-  const canGenerate = phase === "ready" && name.trim().length >= 3 && !isDuplicateName && !isGenerating && !zeroAssignments;
+  const canGenerate = Boolean(validationResult?.isValid) && Boolean(optimizationResult?.isValid) && phase === "ready" && name.trim().length >= 3 && !isDuplicateName && !isGenerating && !zeroAssignments;
+  const beforeScore = getOptimizationBeforeScore(validationResult, optimizationResult);
+  const afterScore = getOptimizationAfterScore(optimizationResult);
+  const improvement = optimizationResult?.optimization?.improvementPercentage ?? Math.max(0, afterScore - beforeScore);
+  const finalQualityScore = optimizationResult ? afterScore : beforeScore;
+  const assignmentCount = finalPipelineResult?.riskAnalysis?.totalExamsCount ?? finalPipelineResult?.metrics?.examsCount ?? 0;
+  const hardViolationCount = finalPipelineResult?.riskAnalysis?.blockingCount ?? finalPipelineResult?.metrics?.blockingIssuesCount ?? 0;
+  const shouldShowQuality = Boolean(optimizationResult?.isValid && finalQualityScore > 0);
+  const weakAreas = useMemo(
+    () => deriveWeakAreas(validationResult, optimizationResult),
+    [validationResult, optimizationResult]
+  );
+  const optimizationChangesApplied = Math.max(
+    optimizationResult?.optimization?.localSearchRepairs?.length ?? 0,
+    improvement > 0 ? 1 : 0,
+  );
+  const optimizationStrategyCount = optimizationResult?.optimization?.attemptedStrategies?.length ?? 0;
+  const blockingResult = !optimizationResult?.isValid && optimizationResult
+    ? optimizationResult
+    : !validationResult?.isValid && validationResult
+      ? validationResult
+      : undefined;
+  const blockingIssues = getBlockingIssues(blockingResult);
+  const blockingSuggestions = getBlockingSuggestions(blockingResult);
+  const blockingMessage = generateErrorMessage
+    ? normalizeBlockingMessage(generateErrorMessage)
+    : blockingResult?.optimization?.message
+      ? normalizeBlockingMessage(blockingResult.optimization.message)
+      : blockingIssues.length > 0
+        ? normalizeBlockingMessage(blockingIssues[0])
+        : normalizeBlockingMessage(
+          prepareMutation.error || validateMutation.error || optimizeMutation.error || generateMutation.error
+            ? getApiErrorMessage(
+              prepareMutation.error ?? validateMutation.error ?? optimizeMutation.error ?? generateMutation.error,
+              GENERATION_BLOCKED_DETAIL_FALLBACK,
+            )
+            : GENERATION_BLOCKED_DETAIL_FALLBACK,
+        );
 
-  // Build fail items: strip UUIDs, group by semantic category, sort by priority
-  const failItems = useMemo<FailItem[]>(() => {
-    if (!validation || validation.isValid) return [];
-    const map = new Map<string, string[]>();
+  const activeStepKey = useMemo<PipelineStep["key"] | null>(() => {
+    if (phase === "preparing") return "prepare";
+    if (phase === "validating") return "validate";
+    if (phase === "building-draft") return "build-draft";
+    if (phase === "evaluating") return "evaluate";
+    if (phase === "optimizing") return "optimize";
+    if (phase === "re-evaluating") return "re-evaluate";
+    if (phase === "confirming") return "confirm";
+    if (phase === "generating") return "generate";
+    return null;
+  }, [phase]);
 
-    const add = (rawKey: string, msgs: string[]) => {
-      const key = normalizeCatKey(rawKey);
-      const clean = msgs.map(stripUuids).filter(Boolean);
-      if (clean.length === 0) return;
-      map.set(key, [...(map.get(key) ?? []), ...clean]);
+  const steps = useMemo<PipelineStep[]>(() => {
+    const hasPrepared = Boolean(prepare) || phase === "validating" || phase === "building-draft" || phase === "evaluating" || phase === "optimizing" || phase === "re-evaluating" || phase === "confirming" || phase === "ready" || phase === "generating";
+    const hasSuccessfulValidation = Boolean(validationResult?.isValid);
+    const hasSuccessfulOptimization = Boolean(optimizationResult?.isValid);
+    const hasValidation = hasSuccessfulValidation && phase !== "validating";
+    const isBlocked = phase === "failed" || Boolean(missingDates) || Boolean(generateErrorMessage);
+    const hasDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft";
+    const hasEvaluatedDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft" && phase !== "evaluating";
+    const hasOptimized = hasSuccessfulOptimization && phase !== "optimizing";
+    const hasReEvaluated = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "re-evaluating";
+    const hasConfirmed = phase === "ready" || phase === "generating" || Boolean(generateErrorMessage);
+    const completionMap: Record<PipelineStep["key"], boolean> = {
+      prepare: hasPrepared,
+      validate: hasValidation,
+      "build-draft": hasDraft,
+      evaluate: hasEvaluatedDraft,
+      optimize: hasOptimized,
+      "re-evaluate": hasReEvaluated,
+      confirm: hasConfirmed,
+      generate: false,
     };
+    const lastCompletedIndex = PIPELINE_STEP_META.reduce((lastIndex, step, index) => {
+      return completionMap[step.key] ? index : lastIndex;
+    }, -1);
 
-    // New format: errors record keyed by category
-    if (validation.errors && Object.keys(validation.errors).length > 0) {
-      for (const [cat, msgs] of Object.entries(validation.errors)) {
-        add(cat, msgs);
-      }
+    return PIPELINE_STEP_META.map((step, index) => ({
+      ...step,
+      status:
+        isBusy && activeStepKey === step.key
+          ? "active"
+          : completionMap[step.key]
+            ? "complete"
+            : isBlocked && index > lastCompletedIndex
+              ? "blocked"
+              : "idle",
+    }));
+  }, [
+    prepare,
+    validationResult,
+    missingDates,
+    generateErrorMessage,
+    optimizationResult,
+    phase,
+    isBusy,
+    activeStepKey,
+  ]);
+
+  const displayedPipelineSteps = useMemo(
+    () => isBusy ? steps.filter((step) => step.status === "complete" || step.status === "active") : steps,
+    [isBusy, steps]
+  );
+
+  const visibleStepCount = useMemo(() => {
+    if (activeStepKey) {
+      const stepIndex = PIPELINE_STEP_META.findIndex((step) => step.key === activeStepKey);
+      return stepIndex >= 0 ? stepIndex + 1 : 0;
     }
+    return steps.filter((step) => step.status === "complete").length;
+  }, [activeStepKey, steps]);
 
-    // Legacy format: groups object
-    if (map.size === 0 && validation.groups) {
-      const legacyKeys = [
-        "courseOfferings",
-        "capacity",
-        "rooms",
-        "timeSlots",
-        "supervisors",
-        "studentOverlapRisks",
-      ] as const;
-      for (const rawKey of legacyKeys) {
-        const g = (validation.groups as Record<string, { issues?: string[] }>)[rawKey];
-        if (g?.issues?.length) add(rawKey, g.issues);
-      }
-    }
+  const stepStatusClass = (status: PipelineStepStatus) => {
+    if (status === "complete") return "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 text-emerald-700 shadow-[0_18px_36px_-26px_rgba(16,185,129,0.5)]";
+    if (status === "active") return "border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_18px_36px_-24px_rgba(24,24,27,0.8)]";
+    if (status === "blocked") return "border-amber-200 bg-linear-to-br from-amber-50 via-white to-orange-50 text-amber-700";
+    return "border-zinc-200 bg-linear-to-br from-white to-zinc-50 text-zinc-400";
+  };
 
-    // Enrich capacity section from offeringRegistrations details
-    if (validation.details?.offeringRegistrations) {
-      const capIssues: string[] = [];
-      for (const r of validation.details.offeringRegistrations) {
-        if (r.capacityInsufficient) {
-          const course = [r.courseCode, r.courseTitle].filter(Boolean).join(" – ");
-          capIssues.push(
-            `${course || "Unknown course"}: ${r.registrationsCount} students exceed max room capacity of ${r.maxRoomCapacity}`
-          );
-        }
-      }
-      if (capIssues.length > 0) {
-        const key = "capacity";
-        map.set(key, Array.from(new Set([...(map.get(key) ?? []), ...capIssues])));
-      }
-    }
-
-    // Flat fallback
-    if (map.size === 0 && (validation.issues?.length ?? 0) > 0) {
-      add("general", validation.issues!);
-    }
-
-    // Sort: priority categories first, then alphabetical
-    const allKeys = Array.from(map.keys());
-    const ordered = [
-      ...CATEGORY_PRIORITY.filter((k) => allKeys.includes(k)),
-      ...allKeys.filter((k) => !CATEGORY_PRIORITY.includes(k)).sort(),
-    ];
-
-    return ordered
-      .map((key) => ({
-        key,
-        label: resolveMeta(key).label,
-        issues: map.get(key) ?? [],
-        meta: resolveMeta(key),
-      }))
-      .filter((item) => item.issues.length > 0);
-  }, [validation]);
+  const stepStatusLabel = (status: PipelineStepStatus) => {
+    if (status === "complete") return "Done";
+    if (status === "active") return "In Progress";
+    if (status === "blocked") return "Blocked";
+    return "Waiting";
+  };
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!isBusy) onOpenChange(next); }}>
-      <DialogContent className="sm:max-w-xl rounded-none p-0 gap-0 overflow-hidden">
+      <DialogContent className="!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-none p-0 gap-0 sm:max-w-3xl">
         {/* Dialog header */}
-        <DialogHeader className="px-6 py-5 border-b border-zinc-200/70 bg-zinc-50/60">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-zinc-950 text-white shadow-sm">
-              <Sparkles className="size-4" />
-            </span>
-            <div>
-              <DialogTitle className="text-base font-semibold text-zinc-950">
-                Generate Schedule
-              </DialogTitle>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Run pre-flight checks, validate inputs, then generate.
-              </p>
+        <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.92)_42%,rgba(228,228,231,0.82))] px-5 py-4 sm:px-6 sm:py-5">
+          <div className="relative rounded-none border border-zinc-200/80 bg-white/80 p-4 shadow-[0_20px_48px_-34px_rgba(24,24,27,0.35)] backdrop-blur-sm sm:p-5">
+            <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-32 bg-[linear-gradient(135deg,rgba(24,24,27,0.05),rgba(24,24,27,0))] lg:block" />
+            <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-none border border-zinc-900 bg-zinc-950 text-white shadow-[0_18px_36px_-22px_rgba(24,24,27,0.8)]">
+                  <Sparkles className="size-4.5" />
+                </span>
+                <div className="space-y-1.5">
+                  <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                    <ShieldCheck className="size-3.5" />
+                    Confirmed Schedule Only
+                  </span>
+                  <div className="space-y-1">
+                    <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl">
+                      Generate Schedule
+                    </DialogTitle>
+                    <p className="max-w-2xl text-xs leading-5 text-zinc-600 sm:text-sm sm:leading-6">
+                      Smart generation prepares resources, validates feasibility, optimizes quality, and saves only a confirmed schedule.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="px-6 py-5 space-y-6 max-h-[68vh] overflow-y-auto">
-          {/* ── Step 1: Configure ── */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="space-y-6">
+          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70 p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Schedule Flow</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">End-to-end generation pipeline</p>
+              </div>
+              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm">
+                {visibleStepCount}/8 steps
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {displayedPipelineSteps.map((step) => {
+                const stepIndex = PIPELINE_STEP_META.findIndex((item) => item.key === step.key);
+
+                return (
+                  <div
+                    key={step.key}
+                    className={cn(
+                      "min-w-0 rounded-none border px-3 py-3 text-xs transition-all duration-300",
+                      stepStatusClass(step.status)
+                    )}
+                  >
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-current text-[10px] font-semibold">
+                        {step.status === "active" ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : step.status === "complete" ? (
+                          <CheckCircle2 className="size-3.5" />
+                        ) : step.status === "blocked" ? (
+                          <AlertTriangle className="size-3.5" />
+                        ) : (
+                          stepIndex + 1
+                        )}
+                      </span>
+                      <div className="min-w-0 space-y-1">
+                        <div className="space-y-1">
+                          <p className="wrap-break-word font-semibold leading-tight">{step.label}</p>
+                          <p className="wrap-break-word text-[10px] uppercase tracking-[0.08em] leading-tight opacity-80">
+                            {stepStatusLabel(step.status)}
+                          </p>
+                        </div>
+                        {(step.status === "active" || step.status === "blocked") && (
+                          <p className="text-[11px] leading-4 opacity-80">{step.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
                 1
               </span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Configure
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                Prepare
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="gen-semester" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="gen-semester" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                   Semester
                 </Label>
                 <Select
@@ -1008,10 +1534,10 @@ const GenerateScheduleDialog = ({
                   onValueChange={handleSemesterChange}
                   disabled={semestersLoading || semesters.length === 0 || isBusy}
                 >
-                  <SelectTrigger id="gen-semester" className="h-10 rounded-none border-zinc-200 bg-transparent">
+                  <SelectTrigger id="gen-semester" className="h-11 w-full min-w-0 rounded-none border-zinc-200 bg-zinc-50/40 px-3 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50">
                     <SelectValue placeholder={semestersLoading ? "Loading…" : "Select semester"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-w-[min(30rem,var(--radix-select-trigger-width))]">
                     {semesters.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}{s.year ? ` (${s.year})` : ""}{s.isActive ? " · Active" : ""}
@@ -1021,16 +1547,16 @@ const GenerateScheduleDialog = ({
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="gen-name" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Schedule Name
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="gen-name" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                  Name
                 </Label>
                 <Input
                   id="gen-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Spring 2026 — Final Exams"
-                  className="h-10 rounded-none"
+                  className="h-11 rounded-none border-zinc-200 bg-zinc-50/40 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50"
                   disabled={isBusy}
                 />
                 {name.trim().length > 0 && name.trim().length < 3 && (
@@ -1043,7 +1569,6 @@ const GenerateScheduleDialog = ({
             </div>
           </div>
 
-          {/* ── Step 2: Pre-flight Checks ── */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -1051,116 +1576,155 @@ const GenerateScheduleDialog = ({
                   2
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Pre-flight Checks
+                  Automatic Generation Check
                 </span>
               </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={runPreflightChecks}
+                onClick={runSmartSchedulingFlow}
                 disabled={!canRunChecks}
                 className="h-8 rounded-none border-zinc-200 px-3 text-xs font-semibold inline-flex items-center gap-1.5"
               >
-                {isPreparing || isValidating ? (
+                {isRunningChecks ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
                   <ShieldCheck className="size-3.5" />
                 )}
-                {isPreparing ? "Preparing data..." : isValidating ? "Validating input..." : hasRun ? "Re-run Checks" : "Run Checks"}
+                {isPreparing ? "Preparing..." : isValidating ? "Validating..." : isBuildingDraft ? "Building..." : isEvaluating ? "Evaluating..." : isOptimizing ? "Optimizing..." : isReEvaluating ? "Re-evaluating..." : isConfirming ? "Confirming..." : hasRun ? "Run Again" : "Start"}
               </Button>
             </div>
 
-            {/* Idle hint */}
             {phase === "idle" && (
               <div className="flex items-center gap-2.5 rounded-none border border-dashed border-zinc-200 bg-zinc-50/60 px-4 py-3 text-xs text-zinc-500">
                 <ShieldCheck className="size-4 shrink-0 text-zinc-300" />
-                Select a semester above, then run pre-flight checks to validate all inputs.
+                Select a semester, then start the automated schedule generation check.
               </div>
             )}
 
-            {/* Preparing state */}
-            {isPreparing && (
-              <div className="flex items-center gap-3 rounded-none border border-zinc-200/60 bg-zinc-50/60 px-4 py-3">
-                <Loader2 className="size-4 animate-spin text-zinc-400" />
-                <span className="text-xs text-zinc-600">Preparing data…</span>
-              </div>
-            )}
+            {isBusy && <PipelineLoadingExperience steps={steps} activeStepKey={activeStepKey} />}
 
-            {/* Prepare preview — shown once prepare returns, hidden during validation/generation */}
             {prepare && !isPreparing && !isValidating && !isGenerating && (
-              <div className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-4 space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                  Ready to generate:
-                </p>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   {([
-                    { label: "Active Offerings", value: prepare.activeCourseOfferingsCount ?? 0 },
-                    { label: "Total Rooms", value: prepare.roomsCount ?? 0 },
-                    { label: "Available Rooms", value: prepare.availableRoomsCount ?? 0 },
-                    { label: "Supervisors", value: prepare.supervisorsCount ?? 0 },
-                    { label: "Time Slots", value: prepare.timeSlotsCount ?? 0 },
-                    ...(prepare.examsCount != null ? [{ label: "Exams", value: prepare.examsCount }] : []),
-                  ] as { label: string; value: number }[]).map(({ label, value }) => (
-                    <div key={label} className="flex items-baseline gap-1.5">
-                      <span className="text-xl font-bold tabular-nums text-zinc-950">{value}</span>
-                      <span className="text-[11px] leading-tight text-zinc-500">{label}</span>
-                    </div>
+                    { label: "Course Offerings", value: prepare.activeCourseOfferingsCount ?? 0, icon: BookOpen },
+                    { label: "Rooms", value: prepare.availableRoomsCount ?? prepare.roomsCount ?? 0, icon: DoorOpen },
+                    { label: "Proctors", value: prepare.proctorsCount ?? 0, icon: UserCheck },
+                    { label: "TimeSlots", value: prepare.timeSlotsCount ?? 0, icon: Clock },
+                  ] as { label: string; value: number; icon: React.ComponentType<{ className?: string }> }[]).map((stat) => (
+                    <ResourceStatCard key={stat.label} {...stat} />
                   ))}
                 </div>
                 {prepare.semester?.name && (
-                  <p className="text-[11px] text-zinc-500 flex items-center gap-1.5 pt-1 border-t border-zinc-200/60">
-                    <CalendarDays className="size-3 shrink-0" />
-                    Semester:{" "}
-                    <span className="font-semibold text-zinc-700">{prepare.semester.name}</span>
-                  </p>
+                  <div className="inline-flex items-center gap-2 rounded-none border border-zinc-200 bg-zinc-50/70 px-3 py-2 text-[11px] text-zinc-600 shadow-sm">
+                    <CalendarDays className="size-3.5 shrink-0 text-zinc-500" />
+                    <span className="font-semibold uppercase tracking-[0.14em] text-zinc-500">Semester</span>
+                    <span className="font-semibold text-zinc-900">{prepare.semester.name}</span>
+                  </div>
                 )}
               </div>
             )}
 
-            {/* Validating state */}
-            {isValidating && (
-              <div className="flex items-center gap-3 rounded-none border border-zinc-200/60 bg-zinc-50/60 px-4 py-3">
-                <Loader2 className="size-4 animate-spin text-zinc-400" />
-                <span className="text-xs text-zinc-600">Validating input…</span>
-              </div>
-            )}
-
-            {/* Generating state */}
-            {isGenerating && (
-              <div className="flex items-center gap-3 rounded-none border border-zinc-200/60 bg-zinc-50/60 px-4 py-3">
-                <Loader2 className="size-4 animate-spin text-zinc-400" />
-                <span className="text-xs text-zinc-600">Generating schedule…</span>
-              </div>
-            )}
-
-            {/* Validation passed — show only when ready and not generating yet */}
             {phase === "ready" && !zeroAssignments && (
-              <div className="flex items-center gap-2.5 rounded-none border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
-                <div>
-                  <p className="text-xs font-semibold text-emerald-800">All checks passed</p>
-                  {validation?.warnings && validation.warnings.length > 0 ? (
-                    <ul className="mt-1 space-y-0.5">
-                      {validation.warnings.map((w, i) => (
-                        <li key={i} className="text-[11px] text-emerald-700 flex items-start gap-1">
-                          <span className="mt-1 size-1 shrink-0 rounded-full bg-emerald-400 inline-block" />
-                          {w}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-[11px] text-emerald-700 mt-0.5">
-                      Scheduling data is valid. Enter a schedule name and click Generate.
-                    </p>
-                  )}
+              <div className="space-y-3">
+                <div className="rounded-none border border-emerald-200 bg-linear-to-r from-emerald-50 via-white to-emerald-100/70 px-4 py-4 shadow-[0_18px_36px_-24px_rgba(16,185,129,0.45)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm">
+                        <CheckCircle2 className="size-4" />
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Ready</p>
+                        <p className="mt-1 text-base font-semibold text-emerald-950">Ready to generate</p>
+                        <p className="mt-1 text-xs text-emerald-800">Feasible draft confirmed</p>
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm">
+                      Optimized
+                    </span>
+                  </div>
+                </div>
+
+                {shouldShowQuality && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.25fr_0.75fr]">
+                      <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/60 to-zinc-100/70 px-4 py-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Weak Areas</p>
+                            <p className="mt-1 text-sm font-semibold text-zinc-950">Priority quality gaps in the evaluated draft</p>
+                          </div>
+                          <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-500 shadow-sm">
+                            Evaluated Draft
+                          </span>
+                        </div>
+                        {weakAreas.length > 0 ? (
+                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {weakAreas.slice(0, 4).map((area, index) => (
+                              <WeakAreaItem key={`${area.area}-${area.score}`} area={area.area} score={area.score} index={index} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-none border border-emerald-200 bg-emerald-50/80 px-3 py-3 text-xs text-emerald-800">
+                            No weak areas detected in the evaluated draft.
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-none border border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 px-4 py-4 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.6)]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Optimization Changes Applied</p>
+                            <p className="mt-1 text-sm font-semibold text-emerald-950">Accepted repair actions and re-check summary</p>
+                          </div>
+                          <span className="inline-flex size-10 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm">
+                            <Sparkles className="size-4" />
+                          </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Changes</p>
+                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950">{optimizationChangesApplied}</p>
+                          </div>
+                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Strategies</p>
+                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950">{optimizationStrategyCount}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between gap-3 rounded-none border border-emerald-200/70 bg-white/80 px-3 py-2.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Search Coverage</p>
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
+                            {optimizationStrategyCount} strategies checked
+                          </span>
+                        </div>
+                        <p className="mt-3 text-xs font-medium text-emerald-800">Re-evaluated improved score: {formatScore(afterScore)}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <QualityMetricCard label="Room Utilization" value={getQualityMetric(validationResult, optimizationResult, "roomUtilization")} />
+                      <QualityMetricCard label="Proctor Balance" value={getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance")} />
+                      <QualityMetricCard label="Student Spacing" value={getQualityMetric(validationResult, optimizationResult, "studentSpacing")} />
+                      <QualityMetricCard label="Exam Distribution" value={getQualityMetric(validationResult, optimizationResult, "examDistribution")} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <ScoreSummaryCard label="After Optimization" value={formatScore(afterScore)} variant="optimized" />
+                      <ScoreSummaryCard label="Improvement" value={`+${Math.max(0, Math.round(improvement))}%`} variant="improvement" />
+                      <ScoreSummaryCard label="Before Score" value={formatScore(beforeScore)} variant="draft" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <FinalStatCard label="Assignments" value={assignmentCount} icon={ClipboardList} tone="neutral" />
+                  <FinalStatCard label="Hard Violations" value={hardViolationCount} icon={ShieldCheck} tone={hardViolationCount === 0 ? "success" : "neutral"} />
+                  <FinalStatCard label="Final Quality" value={formatScore(finalQualityScore)} icon={Sparkles} tone="quality" />
                 </div>
               </div>
             )}
 
-            {/* Validation failed / API error */}
             {phase === "failed" && (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {missingDates ? (
                   <div className="flex items-start gap-2.5 rounded-none border border-amber-200 bg-amber-50 px-4 py-3">
                     <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
@@ -1171,103 +1735,41 @@ const GenerateScheduleDialog = ({
                       </p>
                     </div>
                   </div>
-                ) : prepareMutation.isError ? (
-                  <div className="flex items-start gap-2.5 rounded-none border border-rose-200 bg-rose-50 px-4 py-3">
-                    <AlertTriangle className="size-4 shrink-0 text-rose-600 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-rose-800">Pre-flight preparation failed</p>
-                      <p className="text-[11px] text-rose-700 mt-0.5">
-                        {getApiErrorMessage(prepareMutation.error, "Could not prepare scheduling data. Please try again.")}
-                      </p>
-                    </div>
-                  </div>
-                ) : validateMutation.isError ? (
-                  <div className="flex items-start gap-2.5 rounded-none border border-rose-200 bg-rose-50 px-4 py-3">
-                    <AlertTriangle className="size-4 shrink-0 text-rose-600 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-rose-800">Validation request failed</p>
-                      <p className="text-[11px] text-rose-700 mt-0.5">
-                        {getApiErrorMessage(validateMutation.error, "Could not validate scheduling inputs. Please try again.")}
-                      </p>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="flex items-start gap-2.5 rounded-none border border-rose-200 bg-rose-50 px-4 py-3">
-                    <AlertTriangle className="size-4 shrink-0 text-rose-600 mt-0.5" />
+                  <div className="flex items-start gap-2.5 rounded-none border border-amber-200 bg-amber-50 px-4 py-3">
+                    <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
                     <div>
-                      <p className="text-xs font-semibold text-rose-800">
-                        Validation failed —{" "}
-                        {failItems.length}{" "}
-                        {failItems.length === 1 ? "category" : "categories"} with issues
-                      </p>
-                      <p className="text-[11px] text-rose-700 mt-0.5">
-                        Resolve these issues before generating a schedule.
-                      </p>
+                      <p className="text-xs font-semibold text-amber-900">{GENERATION_BLOCKED_MESSAGE}</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">{blockingMessage}</p>
                     </div>
                   </div>
                 )}
-
-                {failItems.length > 0 && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {failItems.map(({ key, meta, issues }) => {
-                      const CatIcon = meta.icon;
-                      return (
-                        <div
-                          key={key}
-                          className={cn("rounded-none border px-3 py-2.5 space-y-2", meta.cardClass)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <CatIcon className={cn("size-3.5 shrink-0", meta.labelClass)} />
-                            <p className={cn("text-[10px] font-bold uppercase tracking-wider flex-1", meta.labelClass)}>
-                              {meta.label}
-                            </p>
-                            <span
-                              className={cn(
-                                "inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
-                                meta.badgeClass
-                              )}
-                            >
-                              {issues.length}
-                            </span>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {issues.map((issue, j) => (
-                              <li key={j} className="flex items-start gap-1.5 text-xs text-zinc-800">
-                                <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", meta.dotClass)} />
-                                {issue}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(blockingSuggestions.length > 0 ? blockingSuggestions : [
+                    "Increase usable room capacity.",
+                    "Increase available proctor coverage.",
+                    "Add more valid exam time slots.",
+                  ]).map((suggestion) => (
+                    <div key={suggestion} className="rounded-none border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Zero-assignments warning (after generation returns empty) */}
             {zeroAssignments && (
               <div className="flex items-start gap-2.5 rounded-none border border-amber-200 bg-amber-50 px-4 py-3">
                 <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
                 <div>
                   <p className="text-xs font-semibold text-amber-800">No assignments were created</p>
                   <p className="text-[11px] text-amber-700 mt-0.5">
-                    No assignments were created because all exams failed validation. Check exam data, room capacity, and time slots, then try again.
+                    No schedule was created. Add resources, then run the automatic check again.
                   </p>
                 </div>
               </div>
             )}
-
-            {/* Generate error */}
-            {generateMutation.isError && phase === "ready" && (
-              <div className="flex items-start gap-2.5 rounded-none border border-rose-200 bg-rose-50/40 px-4 py-3">
-                <AlertTriangle className="size-4 shrink-0 text-rose-600 mt-0.5" />
-                <p className="text-xs text-rose-700">
-                  {getApiErrorMessage(generateMutation.error, "Failed to generate schedule.")}
-                </p>
-              </div>
-            )}
+          </div>
           </div>
         </div>
 
@@ -1296,7 +1798,7 @@ const GenerateScheduleDialog = ({
             ) : (
               <>
                 <Sparkles className="size-4" />
-                Generate
+                Generate Schedule
               </>
             )}
           </Button>
@@ -1364,6 +1866,22 @@ type CalendarPalette = {
   accent: string;
 };
 
+type ScheduleAssignmentListItem = ScheduleAssignment & {
+  assignmentIds: string[];
+  roomIds: string[];
+  proctorIds: string[];
+  centerIds: string[];
+  searchIndex: string;
+};
+
+const getLogicalAssignmentCount = (assignments: ScheduleAssignment[] = []) => {
+  const keys = new Set<string>();
+  for (const assignment of assignments) {
+    keys.add(`${assignment.examId}:${assignment.timeSlotId}`);
+  }
+  return keys.size;
+};
+
 const CALENDAR_PALETTES: CalendarPalette[] = [
   {
     cardBg: "bg-indigo-50/70",
@@ -1427,13 +1945,13 @@ const paletteForKey = (key: string): CalendarPalette => {
 
 const ScheduleCalendarView = ({
   assignments,
-  conflictTypesByAssignment,
+  isFinal,
   hasActiveFilters,
   onClearFilters,
   onSelectAssignment,
 }: {
   assignments: ScheduleAssignment[];
-  conflictTypesByAssignment: Map<string, string[]>;
+  isFinal?: boolean;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
   onSelectAssignment: (assignment: ScheduleAssignment) => void;
@@ -1764,8 +2282,6 @@ const ScheduleCalendarView = ({
                             a.exam?.courseOffering?.registrations?.length ??
                             a.exam?.courseOffering?.expectedStudents ??
                             0;
-                          const conflictTypes =
-                            conflictTypesByAssignment.get(a.id) ?? [];
                           const code = course?.code ?? "Not assigned";
                           const palette = paletteForKey(
                             course?.id ?? course?.code ?? a.id
@@ -1807,18 +2323,11 @@ const ScheduleCalendarView = ({
                                   </div>
                                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                                     <ExamStatusBadge
-                                      status={a.exam?.status}
+                                      status={getAssignmentDisplayStatus({ isFinal })}
                                       variant="pill"
                                     />
                                   </div>
                                 </div>
-
-                                {/* Conflict / confirmed indicators */}
-                                <ConflictBadges
-                                  types={conflictTypes}
-                                  compact
-                                  max={3}
-                                />
 
                                 {/* Time */}
                                 <div className="flex items-center gap-2 text-xs text-zinc-700">
@@ -1854,7 +2363,7 @@ const ScheduleCalendarView = ({
                                   <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-700">
                                     <UserCheck className="size-3.5 text-zinc-500" />
                                     <span className="truncate">
-                                      {a.supervisor?.user?.name ?? "Not assigned"}
+                                      {a.proctor?.user?.name ?? "Not assigned"}
                                     </span>
                                   </div>
                                 </div>
@@ -1888,10 +2397,10 @@ const ScheduleCalendarView = ({
   );
 };
 
-const ViewSupervisorsDialog = ({
+const ViewProctorsDialog = ({
   open,
   onOpenChange,
-  assignments: supervisorAssignments,
+  assignments: proctorAssignments,
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
@@ -1902,12 +2411,12 @@ const ViewSupervisorsDialog = ({
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <UserCheck className="size-4" />
-          Assigned Supervisors
+          Assigned Proctors
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-2 py-1 max-h-80 overflow-y-auto">
-        {supervisorAssignments.map((a, i) => {
-          const sup = a.supervisor;
+        {proctorAssignments.map((a, i) => {
+          const sup = a.proctor;
           return (
             <div
               key={a.id ?? i}
@@ -1958,14 +2467,12 @@ const ViewSupervisorsDialog = ({
 const AssignmentDetailsSheet = ({
   assignment,
   assignments,
-  conflicts,
-  conflictTypes,
+  isFinal,
   onOpenChange,
 }: {
   assignment: ScheduleAssignment | null;
   assignments: ScheduleAssignment[];
-  conflicts: Conflict[];
-  conflictTypes: string[];
+  isFinal?: boolean;
   onOpenChange: (next: boolean) => void;
 }) => {
   const open = Boolean(assignment);
@@ -2000,20 +2507,6 @@ const AssignmentDetailsSheet = ({
     } | null | undefined)?.program ??
     null;
 
-  // Filter conflicts that reference any of this assignment's identifiers (covers all grouped assignments).
-  const relatedConflicts = useMemo(() => {
-    if (!a) return [] as Conflict[];
-    // Collect IDs from ALL assignments in this exam+slot group (not just the primary)
-    const ids = new Set<string>();
-    for (const g of groupedAssignments) {
-      [g.examId, g.roomId, g.supervisorId, g.timeSlotId].forEach((id) => id && ids.add(id));
-    }
-    if (ids.size === 0) return [] as Conflict[];
-    return conflicts.filter((c) =>
-      [...ids].some((id) => (c.description ?? "").includes(id))
-    );
-  }, [a, groupedAssignments, conflicts]);
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -2044,8 +2537,10 @@ const AssignmentDetailsSheet = ({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <ExamStatusBadge status={a?.exam?.status} variant="pill" />
-            <ConflictBadges types={conflictTypes} compact />
+            <ExamStatusBadge
+              status={getAssignmentDisplayStatus({ isFinal })}
+              variant="pill"
+            />
           </div>
         </SheetHeader>
 
@@ -2175,15 +2670,15 @@ const AssignmentDetailsSheet = ({
                         </div>
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
                           <UserCheck className="size-3.5" />
-                          <span className="truncate">{item.supervisor?.user?.name ?? "No supervisor"}</span>
+                          <span className="truncate">{item.proctor?.user?.name ?? "No proctor"}</span>
                         </div>
                       </div>
                       <div className="shrink-0 text-right text-xs text-zinc-500">
                         <div className="font-semibold text-zinc-950 tabular-nums">
                           {item.room?.capacity ?? 0} seats
                         </div>
-                        {item.supervisor?.user?.email && (
-                          <div className="mt-1 max-w-42 truncate">{item.supervisor.user.email}</div>
+                        {item.proctor?.user?.email && (
+                          <div className="mt-1 max-w-42 truncate">{item.proctor.user.email}</div>
                         )}
                       </div>
                     </div>
@@ -2192,17 +2687,17 @@ const AssignmentDetailsSheet = ({
               </div>
             </SheetSection>
 
-            {/* Supervisor(s) */}
+            {/* Proctor(s) */}
             <SheetSection
               icon={UserCheck}
-              title={groupedAssignments.length > 1 ? `Supervisors (${groupedAssignments.length})` : "Supervisor"}
+              title={groupedAssignments.length > 1 ? `Proctors (${groupedAssignments.length})` : "Proctor"}
             >
-              {groupedAssignments.length === 0 || !groupedAssignments[0]?.supervisor ? (
+              {groupedAssignments.length === 0 || !groupedAssignments[0]?.proctor ? (
                 <div className="text-sm text-zinc-500">Not assigned</div>
               ) : (
                 <div className="space-y-2">
                   {groupedAssignments.map((item, idx) => {
-                    const sup = item.supervisor;
+                    const sup = item.proctor;
                     if (!sup?.user?.name) return null;
                     return (
                       <div key={item.id ?? idx} className="flex items-center gap-3">
@@ -2246,7 +2741,7 @@ const AssignmentDetailsSheet = ({
                     Status
                   </div>
                   <div className="mt-1.5">
-                    <ExamStatusBadge status={a.exam?.status} variant="pill" />
+                    <ExamStatusBadge status={getAssignmentDisplayStatus({ isFinal })} variant="pill" />
                   </div>
                 </div>
                 <div className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3">
@@ -2318,59 +2813,13 @@ const AssignmentDetailsSheet = ({
               )}
             </SheetSection>
 
-            {/* Related Conflicts */}
-            <SheetSection
-              icon={AlertTriangle}
-              title="Related Conflicts"
-              hint={
-                relatedConflicts.length === 0
-                  ? "Conflict-free"
-                  : `${relatedConflicts.length} ${
-                      relatedConflicts.length === 1 ? "issue" : "issues"
-                    }`
-              }
-            >
-              {relatedConflicts.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-none">
-                  <CheckCircle2 className="size-4" />
-                  This assignment is clean — no conflicts detected.
-                </div>
-              ) : (
-                <ul className="space-y-2.5">
-                  {relatedConflicts.map((c, idx) => (
-                    <li
-                      key={c.id ?? `conflict-${idx}`}
-                      className="rounded-none border border-rose-200/70 bg-rose-50/60 p-3"
-                    >
-                      <div className="flex items-start gap-2 flex-wrap">
-                        <ConflictBadges
-                          types={[String(c.type ?? c.conflictType ?? "")]}
-                          compact
-                        />
-                      </div>
-                      {c.description && (
-                        <div className="mt-2 text-sm text-rose-900/90">
-                          {c.description}
-                        </div>
-                      )}
-                      {c.suggestedFix && (
-                        <div className="mt-1.5 text-xs text-rose-700/80">
-                          <span className="font-semibold">Suggested:</span>{" "}
-                          {c.suggestedFix}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SheetSection>
           </div>
         ) : null}
 
-        <SheetFooter className="bg-white border-t border-zinc-200/70 px-5 py-3">
+        <SheetFooter className="bg-white border-t border-zinc-200/70 px-5 py-3 flex items-center gap-2">
           <Button
             variant="outline"
-            className="rounded-none h-10 border-zinc-200 font-semibold"
+            className="rounded-none h-10 border-zinc-200 font-semibold ml-auto"
             onClick={() => onOpenChange(false)}
           >
             Close
@@ -2384,9 +2833,11 @@ const AssignmentDetailsSheet = ({
 const EditAssignmentDialog = ({
   assignment,
   onOpenChange,
+  onChanged,
 }: {
   assignment: ScheduleAssignment | null;
   onOpenChange: (next: boolean) => void;
+  onChanged?: (scheduleId: string) => void;
 }) => {
   const open = Boolean(assignment);
   return (
@@ -2400,6 +2851,7 @@ const EditAssignmentDialog = ({
             key={assignment.id}
             assignment={assignment}
             onClose={() => onOpenChange(false)}
+            onChanged={onChanged}
           />
         ) : null}
       </DialogContent>
@@ -2419,18 +2871,20 @@ type ExamStatusValue = (typeof EXAM_STATUS_OPTIONS)[number];
 const EditAssignmentForm = ({
   assignment,
   onClose,
+  onChanged,
 }: {
   assignment: ScheduleAssignment;
   onClose: () => void;
+  onChanged?: (scheduleId: string) => void;
 }) => {
   const updateMutation = useUpdateAssignment();
   const roomsQuery = useRooms();
-  const supervisorsQuery = useSupervisors();
+  const proctorsQuery = useProctors();
   const timeSlotsQuery = useTimeSlots();
 
   const [roomId, setRoomId] = useState<string>(assignment.roomId ?? "");
-  const [supervisorId, setSupervisorId] = useState<string>(
-    assignment.supervisorId ?? ""
+  const [proctorId, setProctorId] = useState<string>(
+    assignment.proctorId ?? ""
   );
   const [timeSlotId, setTimeSlotId] = useState<string>(
     assignment.timeSlotId ?? ""
@@ -2444,7 +2898,7 @@ const EditAssignmentForm = ({
   const [status, setStatus] = useState<ExamStatusValue | "">(initialStatus);
 
   const rooms = roomsQuery.data ?? [];
-  const supervisors = supervisorsQuery.data ?? [];
+  const proctors = proctorsQuery.data ?? [];
   const timeSlots = timeSlotsQuery.data ?? [];
 
   const trimmedDuration = duration.trim();
@@ -2456,7 +2910,7 @@ const EditAssignmentForm = ({
 
   const dirty =
     roomId !== assignment.roomId ||
-    supervisorId !== assignment.supervisorId ||
+    proctorId !== assignment.proctorId ||
     timeSlotId !== assignment.timeSlotId ||
     parsedDuration !== (assignment.exam?.duration ?? null) ||
     (status || null) !== (assignment.exam?.status ?? null);
@@ -2467,14 +2921,14 @@ const EditAssignmentForm = ({
 
     const payload: {
       roomId?: string;
-      supervisorId?: string;
+      proctorId?: string;
       timeSlotId?: string;
       exam?: { duration?: number; status?: ExamStatusValue };
     } = {};
 
     if (roomId !== assignment.roomId) payload.roomId = roomId;
-    if (supervisorId !== assignment.supervisorId)
-      payload.supervisorId = supervisorId;
+    if (proctorId !== assignment.proctorId)
+      payload.proctorId = proctorId;
     if (timeSlotId !== assignment.timeSlotId)
       payload.timeSlotId = timeSlotId;
 
@@ -2495,6 +2949,7 @@ const EditAssignmentForm = ({
       },
       {
         onSuccess: () => {
+          onChanged?.(assignment.scheduleId);
           onClose();
           updateMutation.reset();
         },
@@ -2533,17 +2988,17 @@ const EditAssignmentForm = ({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="edit-supervisor">Supervisor</Label>
+        <Label htmlFor="edit-proctor">Proctor</Label>
         <Select
-          value={supervisorId}
-          onValueChange={setSupervisorId}
-          disabled={isPending || supervisorsQuery.isLoading}
+          value={proctorId}
+          onValueChange={setProctorId}
+          disabled={isPending || proctorsQuery.isLoading}
         >
-          <SelectTrigger id="edit-supervisor" className="rounded-none">
-            <SelectValue placeholder="Select a supervisor" />
+          <SelectTrigger id="edit-proctor" className="rounded-none">
+            <SelectValue placeholder="Select a proctor" />
           </SelectTrigger>
           <SelectContent>
-            {supervisors.map((s) => (
+            {proctors.map((s) => (
               <SelectItem key={s.id} value={s.id ?? ""}>
                 {s.user?.name ?? s.name ?? "—"}
                 {s.user?.email ? ` · ${s.user.email}` : ""}
@@ -2660,9 +3115,11 @@ const EditAssignmentForm = ({
 const DeleteAssignmentDialog = ({
   assignment,
   onOpenChange,
+  onChanged,
 }: {
-  assignment: ScheduleAssignment | null;
+  assignment: ScheduleAssignmentListItem | null;
   onOpenChange: (next: boolean) => void;
+  onChanged?: (scheduleId: string) => void;
 }) => {
   const open = Boolean(assignment);
   const deleteMutation = useDeleteAssignment();
@@ -2674,9 +3131,11 @@ const DeleteAssignmentDialog = ({
       {
         scheduleId: assignment.scheduleId,
         assignmentId: assignment.id,
+        deleteGroup: true,
       },
       {
         onSuccess: () => {
+          onChanged?.(assignment.scheduleId);
           onOpenChange(false);
           deleteMutation.reset();
         },
@@ -2695,15 +3154,14 @@ const DeleteAssignmentDialog = ({
           <DialogTitle>Delete Assignment</DialogTitle>
         </DialogHeader>
         <div className="mt-2 text-sm text-zinc-700">
-          Are you sure you want to delete the assignment for{" "}
+          Are you sure you want to delete the saved schedule event for{" "}
           <span className="font-semibold text-zinc-950">
             {course?.title ?? course?.name ?? "this exam"}
           </span>
           {course?.code ? (
             <span className="text-zinc-500"> ({course.code})</span>
           ) : null}
-          ? This removes only the room/supervisor/time-slot assignment. The
-          exam, course, students, and registrations are preserved.
+          ? This removes all persisted assignment rows for this exam at the selected time slot. The exam, course, students, and registrations are preserved.
         </div>
         {errorMessage && (
           <div className="border border-rose-200 bg-rose-50 text-rose-700 text-xs p-2 mt-3">
@@ -2747,13 +3205,14 @@ const DeleteAssignmentDialog = ({
 
 export function SchedulesPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [generateOpen, setGenerateOpen] = useState(false);
 
   // filters
   const [semesterFilter, setSemesterFilter] = useState<string>(ALL);
   const [courseFilter, setCourseFilter] = useState<string>(ALL);
-  const [supervisorFilter, setSupervisorFilter] = useState<string>(ALL);
+  const [proctorFilter, setProctorFilter] = useState<string>(ALL);
   const [centerFilter, setCenterFilter] = useState<string>(ALL);
   const [dateFilter, setDateFilter] = useState<string>(ALL);
 
@@ -2763,11 +3222,16 @@ export function SchedulesPage() {
   const schedulesQuery = useSchedules({ limit: 100 });
   const schedules = schedulesQuery.data?.data ?? [];
 
+  const routeScheduleId =
+    searchParams.get("scheduleId") ?? searchParams.get("id") ?? undefined;
+  const routeAssignmentId = searchParams.get("assignmentId") ?? undefined;
+
   // auto-select most recent
-  const effectiveId = selectedId ?? schedules[0]?.id;
+  const effectiveId = routeScheduleId ?? selectedId ?? schedules[0]?.id;
 
   const scheduleQuery = useSchedule(effectiveId);
-  const schedule: Schedule | undefined = scheduleQuery.data;
+  const schedule: Schedule | undefined = scheduleQuery.data?.id === effectiveId ? scheduleQuery.data : undefined;
+  const assignmentsQuery = useScheduleAssignments(effectiveId);
 
   const publishMutation = usePublishSchedule();
   const unpublishMutation = useUnpublishSchedule();
@@ -2777,15 +3241,57 @@ export function SchedulesPage() {
   const showPageLoading = useDelayedLoading(schedulesQuery.isLoading, 800);
 
   const assignments: ScheduleAssignment[] = useMemo(
-    () => schedule?.assignments ?? [],
-    [schedule]
+    () => (assignmentsQuery.data ?? []).filter((assignment) => assignment.scheduleId === effectiveId),
+    [assignmentsQuery.data, effectiveId]
   );
+
+  const persistedAssignments = useMemo<ScheduleAssignmentListItem[]>(() => {
+    const groups = new Map<string, ScheduleAssignment[]>();
+
+    for (const assignment of assignments) {
+      const key = `${assignment.examId}:${assignment.timeSlotId}`;
+      const list = groups.get(key) ?? [];
+      list.push(assignment);
+      groups.set(key, list);
+    }
+
+    return Array.from(groups.values()).map((group) => {
+      const primary = group[0];
+      const assignmentIds = group.map((assignment) => assignment.id);
+      const roomIds = [...new Set(group.map((assignment) => assignment.roomId).filter(Boolean))];
+      const proctorIds = [...new Set(group.map((assignment) => assignment.proctorId).filter(Boolean))];
+      const centerIds = [...new Set(group.map((assignment) => assignment.room?.center?.id).filter(Boolean))] as string[];
+      const searchIndex = group
+        .flatMap((assignment) => [
+          assignment.exam?.courseOffering?.course?.code,
+          assignment.exam?.courseOffering?.course?.name,
+          assignment.exam?.courseOffering?.course?.title,
+          assignment.exam?.courseOffering?.semester?.name,
+          assignment.room?.name,
+          assignment.room?.center?.name,
+          assignment.proctor?.user?.name,
+          assignment.proctor?.user?.email,
+        ])
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return {
+        ...primary,
+        assignmentIds,
+        roomIds,
+        proctorIds,
+        centerIds,
+        searchIndex,
+      };
+    });
+  }, [assignments]);
 
   // derived filter options from the current schedule
   const filterOptions = useMemo(() => {
     const semestersMap = new Map<string, string>();
     const coursesMap = new Map<string, string>();
-    const supervisorsMap = new Map<string, string>();
+    const proctorsMap = new Map<string, string>();
     const centersMap = new Map<string, string>();
     const datesSet = new Set<string>();
 
@@ -2794,8 +3300,8 @@ export function SchedulesPage() {
       if (sem?.id) semestersMap.set(sem.id, sem.name ?? sem.id);
       const course = a.exam?.courseOffering?.course;
       if (course?.id) coursesMap.set(course.id, course.code ?? course.name ?? course.id);
-      const sup = a.supervisor;
-      if (sup?.id) supervisorsMap.set(sup.id, sup.user?.name ?? sup.user?.email ?? sup.id);
+      const sup = a.proctor;
+      if (sup?.id) proctorsMap.set(sup.id, sup.user?.name ?? sup.user?.email ?? sup.id);
       const center = a.room?.center;
       if (center?.id) centersMap.set(center.id, center.name);
       const dKey = dateKey(a.timeSlot?.date ?? a.timeSlot?.startTime);
@@ -2806,7 +3312,7 @@ export function SchedulesPage() {
     return {
       semesters: Array.from(semestersMap.entries()),
       courses: Array.from(coursesMap.entries()),
-      supervisors: Array.from(supervisorsMap.entries()),
+      proctors: Array.from(proctorsMap.entries()),
       centers: Array.from(centersMap.entries()),
       dates: sortedDates,
     };
@@ -2815,101 +3321,57 @@ export function SchedulesPage() {
   // filtered + searched assignments
   const filteredAssignments = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return assignments.filter((a) => {
+    return persistedAssignments.filter((a) => {
       if (semesterFilter !== ALL && a.exam?.courseOffering?.semester?.id !== semesterFilter) return false;
       if (courseFilter !== ALL && a.exam?.courseOffering?.course?.id !== courseFilter) return false;
-      if (supervisorFilter !== ALL && a.supervisorId !== supervisorFilter) return false;
-      if (centerFilter !== ALL && a.room?.center?.id !== centerFilter) return false;
+      if (proctorFilter !== ALL && !a.proctorIds.includes(proctorFilter)) return false;
+      if (centerFilter !== ALL && !a.centerIds.includes(centerFilter)) return false;
       if (dateFilter !== ALL) {
         const k = dateKey(a.timeSlot?.date ?? a.timeSlot?.startTime);
         if (k !== dateFilter) return false;
       }
       if (!term) return true;
-      const haystack = [
-        a.exam?.courseOffering?.course?.code,
-        a.exam?.courseOffering?.course?.name,
-        a.exam?.courseOffering?.semester?.name,
-        a.room?.name,
-        a.room?.center?.name,
-        a.supervisor?.user?.name,
-        a.supervisor?.user?.email,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(term);
+      return a.searchIndex.includes(term);
     });
-  }, [assignments, search, semesterFilter, courseFilter, supervisorFilter, centerFilter, dateFilter]);
+  }, [persistedAssignments, search, semesterFilter, courseFilter, proctorFilter, centerFilter, dateFilter]);
 
-  // Group filtered assignments by examId+timeSlotId so each unique exam/slot appears as one table row
-  type GroupedRow = { key: string; primary: ScheduleAssignment; siblings: ScheduleAssignment[] };
-  const groupedRows = useMemo<GroupedRow[]>(() => {
-    const groups = new Map<string, ScheduleAssignment[]>();
-    for (const a of filteredAssignments) {
-      const key = `${a.examId}:${a.timeSlotId}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    }
-    return Array.from(groups.entries()).map(([key, items]) => ({
-      key,
-      primary: items[0],
-      siblings: items,
-    }));
-  }, [filteredAssignments]);
+  const calendarAssignments = filteredAssignments;
 
   const stats = useMemo(() => {
     const rooms = new Set<string>();
-    const supervisors = new Set<string>();
-    const uniqueExamSlots = new Set<string>();
+    const proctors = new Set<string>();
     for (const a of assignments) {
       if (a.roomId) rooms.add(a.roomId);
-      if (a.supervisorId) supervisors.add(a.supervisorId);
-      uniqueExamSlots.add(`${a.examId}:${a.timeSlotId}`);
+      if (a.proctorId) proctors.add(a.proctorId);
     }
     return {
-      total: uniqueExamSlots.size,
-      conflicts: schedule?.conflicts?.length ?? schedule?._count?.conflicts ?? 0,
+      total: persistedAssignments.length,
       rooms: rooms.size,
-      supervisors: supervisors.size,
+      proctors: proctors.size,
     };
-  }, [assignments, schedule]);
+  }, [assignments, persistedAssignments.length]);
 
-  // Per-assignment list of conflict types (one entry per matching conflict, may repeat).
-  const conflictTypesByAssignment = useMemo(() => {
-    const map = new Map<string, string[]>();
-    const conflicts = schedule?.conflicts ?? [];
-    if (conflicts.length === 0) return map;
-    for (const a of assignments) {
-      const tokens = [a.examId, a.roomId, a.supervisorId, a.timeSlotId].filter(
-        Boolean
-      ) as string[];
-      const types: string[] = [];
-      for (const c of conflicts) {
-        const desc = c.description ?? "";
-        if (tokens.some((t) => desc.includes(t))) {
-          const t = String(
-            (c as { type?: string; conflictType?: string }).type ??
-              (c as { conflictType?: string }).conflictType ??
-              ""
-          );
-          if (t) types.push(t);
-        }
-      }
-      if (types.length > 0) map.set(a.id, types);
-    }
-    return map;
-  }, [assignments, schedule]);
+  const versionCountOverrides = useMemo(() => {
+    if (!effectiveId) return {} as Record<string, { assignments?: number }>;
+
+    return {
+      [effectiveId]: {
+        assignments: persistedAssignments.length,
+      },
+    };
+  }, [effectiveId, persistedAssignments.length]);
 
   // Selected assignment for the row actions
   const [viewAssignment, setViewAssignment] = useState<ScheduleAssignment | null>(null);
   const [editAssignment, setEditAssignment] = useState<ScheduleAssignment | null>(null);
-  const [deleteAssignment, setDeleteAssignment] = useState<ScheduleAssignment | null>(null);
-  const [viewSupervisors, setViewSupervisors] = useState<ScheduleAssignment[] | null>(null);
+  const [deleteAssignment, setDeleteAssignment] = useState<ScheduleAssignmentListItem | null>(null);
+  const [viewProctors, setViewProctors] = useState<ScheduleAssignment[] | null>(null);
+  const [lastHighlightedAssignmentId, setLastHighlightedAssignmentId] = useState<string | null>(null);
 
   const clearFilters = () => {
     setSemesterFilter(ALL);
     setCourseFilter(ALL);
-    setSupervisorFilter(ALL);
+    setProctorFilter(ALL);
     setCenterFilter(ALL);
     setDateFilter(ALL);
     setSearch("");
@@ -2918,25 +3380,70 @@ export function SchedulesPage() {
   const activeFilterCount = [
     semesterFilter,
     courseFilter,
-    supervisorFilter,
+    proctorFilter,
     centerFilter,
     dateFilter,
   ].filter((v) => v !== ALL).length;
 
   const hasActiveFilters = search.trim() !== "" || activeFilterCount > 0;
+  const highlightedAssignmentId =
+    routeAssignmentId && routeAssignmentId !== lastHighlightedAssignmentId
+      ? routeAssignmentId
+      : null;
+  const activeViewMode = routeAssignmentId ? "table" : viewMode;
+
+  useEffect(() => {
+    if (!highlightedAssignmentId || activeViewMode !== "table") return;
+
+    const row = document.querySelector<HTMLElement>(
+      `[data-assignment-ids~="${highlightedAssignmentId}"]`
+    );
+    if (!row) return;
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = window.setTimeout(() => {
+      setLastHighlightedAssignmentId(highlightedAssignmentId);
+    }, 1800);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeViewMode, filteredAssignments, highlightedAssignmentId]);
 
   const handleGenerated = (result: { scheduleId?: string; schedule?: { id?: string } }) => {
     setGenerateOpen(false);
     const newId = result?.scheduleId ?? result?.schedule?.id;
     if (newId) {
-      setSelectedId(newId);
-      // Refetch the list first, then force-refresh the newly selected schedule's details
-      void schedulesQuery.refetch().then(() => void scheduleQuery.refetch());
+      // Delay navigation until after the dialog close animation (duration-200) to
+      // prevent the re-render from remounting the dialog mid-animation (reappear glitch).
+      setTimeout(() => {
+        setViewAssignment(null);
+        setEditAssignment(null);
+        setDeleteAssignment(null);
+        setViewProctors(null);
+        setLastHighlightedAssignmentId(null);
+        clearFilters();
+        setSelectedId(newId);
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set("scheduleId", newId);
+        nextParams.delete("id");
+        nextParams.delete("assignmentId");
+        setSearchParams(nextParams);
+        void schedulesQuery.refetch();
+      }, 250);
+    } else {
+      void schedulesQuery.refetch();
+    }
+  };
+
+  const handleAssignmentChanged = (scheduleId: string) => {
+    void schedulesQuery.refetch();
+    void assignmentsQuery.refetch();
+    if (scheduleId === effectiveId) {
+      void scheduleQuery.refetch();
     }
   };
 
   const handlePublish = () => {
-    if (!schedule?.id || schedule.isFinal) return;
+    if (!schedule?.id || schedule.isFinal === true) return;
     publishMutation.mutate(schedule.id, {
       onSuccess: () => scheduleQuery.refetch(),
     });
@@ -2992,7 +3499,12 @@ export function SchedulesPage() {
     );
   }
 
-  const isDetailLoading = scheduleQuery.isLoading || scheduleQuery.isFetching;
+  const isDetailLoading =
+    scheduleQuery.isLoading ||
+    scheduleQuery.isFetching ||
+    assignmentsQuery.isLoading ||
+    assignmentsQuery.isFetching;
+  const suppressDetailError = scheduleQuery.isError && isAuthExpiredError(scheduleQuery.error);
 
   return (
     <div className="p-5 sm:p-6 lg:p-8">
@@ -3005,33 +3517,14 @@ export function SchedulesPage() {
           <div className="flex-1">
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">Schedules</h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              Generate, review and publish exam schedules across semesters, centers and supervisors.
+              Generate, review and publish exam schedules across semesters, centers and proctors.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Action bar: selector + actions + status */}
+      {/* Action bar: actions + selected schedule status */}
       <StickyActionBar className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex items-center gap-2 lg:min-w-70">
-          <Select
-            value={effectiveId ?? ""}
-            onValueChange={(v) => setSelectedId(v)}
-            disabled={schedules.length === 0}
-          >
-            <SelectTrigger className="h-10 w-full rounded-none border-zinc-200 bg-transparent">
-              <SelectValue placeholder="Select schedule" />
-            </SelectTrigger>
-            <SelectContent>
-              {schedules.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <Button
           onClick={() => setGenerateOpen(true)}
           className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-950 bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
@@ -3040,19 +3533,31 @@ export function SchedulesPage() {
           Generate Schedule
         </Button>
 
-        <Button
-          variant="outline"
-          onClick={handlePublish}
-          disabled={!schedule || schedule.isFinal || publishMutation.isPending}
-          className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
-        >
-          {publishMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="size-4" />
-          )}
-          {schedule?.isFinal ? "Published" : "Mark as Final"}
-        </Button>
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  variant="outline"
+                  onClick={handlePublish}
+                  disabled={
+                    !schedule ||
+                    schedule.isFinal === true ||
+                    publishMutation.isPending
+                  }
+                  className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
+                >
+                  {publishMutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4" />
+                  )}
+                  {schedule?.isFinal ? "Published" : "Mark as Final"}
+                </Button>
+              </span>
+            </TooltipTrigger>
+          </Tooltip>
+        </TooltipProvider>
 
         {schedule?.isFinal && (
           <Button
@@ -3075,20 +3580,6 @@ export function SchedulesPage() {
           </Button>
         )}
 
-        <ComingSoonButton
-          icon={Wand2}
-          label="Optimize Schedule"
-          tooltip="Optimization will improve schedule quality using soft constraints. Coming soon."
-          disabled={!schedule}
-        />
-
-        <ComingSoonButton
-          icon={Wrench}
-          label="Fix Conflicts"
-          tooltip="Auto-suggest fixes for detected conflicts. Coming soon."
-          disabled={!schedule}
-        />
-
         <Button
           variant="outline"
           onClick={() => {
@@ -3109,6 +3600,9 @@ export function SchedulesPage() {
         <div className="lg:ml-auto flex items-center gap-3">
           {schedule && (
             <>
+              <span className="max-w-56 truncate text-sm font-semibold text-zinc-900">
+                {schedule.name}
+              </span>
               <StatusBadge isFinal={schedule.isFinal} />
             </>
           )}
@@ -3124,9 +3618,20 @@ export function SchedulesPage() {
       <ScheduleVersionsTable
         schedules={schedules}
         activeId={effectiveId}
+        countOverrides={versionCountOverrides}
         onSelect={(id) => {
+          setViewAssignment(null);
+          setEditAssignment(null);
+          setDeleteAssignment(null);
+          setViewProctors(null);
+          setLastHighlightedAssignmentId(null);
+          clearFilters();
           setSelectedId(id);
-          scheduleQuery.refetch();
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.set("scheduleId", id);
+          nextParams.delete("id");
+          nextParams.delete("assignmentId");
+          setSearchParams(nextParams);
         }}
         onDeleted={(deletedId) => {
           if (deletedId === effectiveId) {
@@ -3145,7 +3650,7 @@ export function SchedulesPage() {
             <EmptyState
               icon={CalendarDays}
               title="No schedules yet"
-              description="Generate your first schedule to start assigning exams to rooms, supervisors and time slots."
+              description="Generate your first schedule to start assigning exams to rooms, proctors and time slots."
               action={{
                 label: "Generate Schedule",
                 onClick: () => setGenerateOpen(true),
@@ -3165,7 +3670,7 @@ export function SchedulesPage() {
                 </p>
                 <p className="text-xs text-amber-700 mt-0.5">
                   Assignments cannot be edited or deleted while published. Use &ldquo;Return to
-                  Draft&rdquo; to unlock, make changes, re-run conflict check, then republish.
+                  Draft&rdquo; to unlock, make changes, then republish.
                 </p>
               </div>
               <Button
@@ -3191,9 +3696,9 @@ export function SchedulesPage() {
           )}
 
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {isDetailLoading && !schedule ? (
-              Array.from({ length: 4 }).map((_, i) => (
+              Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i} className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
                   <CardContent className="p-6 space-y-3">
                     <Skeleton className="h-3 w-24" />
@@ -3212,13 +3717,6 @@ export function SchedulesPage() {
                   tone="blue"
                 />
                 <StatCard
-                  label="Conflicts"
-                  value={stats.conflicts}
-                  hint={stats.conflicts === 0 ? "No conflicts detected" : "Detected in this schedule"}
-                  icon={AlertTriangle}
-                  tone="rose"
-                />
-                <StatCard
                   label="Rooms Used"
                   value={stats.rooms}
                   hint="Distinct rooms allocated"
@@ -3226,9 +3724,9 @@ export function SchedulesPage() {
                   tone="emerald"
                 />
                 <StatCard
-                  label="Supervisors"
-                  value={stats.supervisors}
-                  hint="Distinct supervisors assigned"
+                  label="Proctors"
+                  value={stats.proctors}
+                  hint="Distinct proctors assigned"
                   icon={ShieldCheck}
                   tone="violet"
                 />
@@ -3245,7 +3743,7 @@ export function SchedulesPage() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search course, room, supervisor…"
+                    placeholder="Search course, room, proctor…"
                     className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm"
                   />
                 </div>
@@ -3293,14 +3791,14 @@ export function SchedulesPage() {
                       </Select>
                     </FilterField>
 
-                    <FilterField label="Supervisor">
-                      <Select value={supervisorFilter} onValueChange={setSupervisorFilter}>
+                    <FilterField label="Proctor">
+                      <Select value={proctorFilter} onValueChange={setProctorFilter}>
                         <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All supervisors" />
+                          <SelectValue placeholder="All proctors" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={ALL}>All supervisors</SelectItem>
-                          {filterOptions.supervisors.map(([id, label]) => (
+                          <SelectItem value={ALL}>All proctors</SelectItem>
+                          {filterOptions.proctors.map(([id, label]) => (
                             <SelectItem key={id} value={id}>
                               {label}
                             </SelectItem>
@@ -3347,7 +3845,7 @@ export function SchedulesPage() {
           </Card>
 
           {/* Detail error */}
-          {scheduleQuery.isError && (
+          {scheduleQuery.isError && !suppressDetailError && (
             <Card className="rounded-none border border-rose-200/60 bg-rose-50/40 shadow-sm mb-4">
               <CardContent className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
@@ -3436,7 +3934,7 @@ export function SchedulesPage() {
                   Schedule Assignments
                 </CardTitle>
                 <p className="max-w-2xl text-sm leading-6 text-zinc-500">
-                  View generated exam assignments, rooms, supervisors, time slots, conflicts, and publication status in one relational schedule view.
+                  View generated exam assignments, rooms, proctors, time slots, and publication status in one relational schedule view.
                 </p>
               </div>
               <div className="flex items-center gap-2 rounded-none border border-zinc-200/60 bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 shadow-sm shrink-0">
@@ -3453,7 +3951,7 @@ export function SchedulesPage() {
           </Card>
 
           {/* Assignments table */}
-          {viewMode === "table" ? (
+          {activeViewMode === "table" ? (
           <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -3467,20 +3965,19 @@ export function SchedulesPage() {
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Time</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Room</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Center</TableHead>
-                      <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Supervisor</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Proctor</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500 text-right">Students</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Status</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500 text-right">Duration</TableHead>
-                      <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Conflict</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500 text-right w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isDetailLoading ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="p-0">
+                        <TableCell colSpan={12} className="p-0">
                           <TableSkeletonRows
-                            columns={13}
+                            columns={12}
                             rows={
                               filteredAssignments.length > 0
                                 ? filteredAssignments.length
@@ -3491,11 +3988,11 @@ export function SchedulesPage() {
                       </TableRow>
                     ) : filteredAssignments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="p-0">
+                        <TableCell colSpan={12} className="p-0">
                           <EmptyState
                             icon={ClipboardList}
-                            title={hasActiveFilters ? "No matching assignments" : stats.conflicts > 0 && assignments.length === 0 ? "No assignments were created" : "No assignments yet"}
-                            description={hasActiveFilters ? "Try clearing filters or selecting another schedule." : stats.conflicts > 0 && assignments.length === 0 ? "No assignments were created because all exams failed validation. Check exam data, room capacity, and time slots, then try again." : "This schedule has no assignments. Generate or regenerate to populate it."} 
+                            title={hasActiveFilters ? "No matching assignments" : "No assignments yet"}
+                            description={hasActiveFilters ? "Try clearing filters or selecting another schedule." : "This schedule has no assignments. Generate or regenerate to populate it."}
                             action={
                               hasActiveFilters
                                 ? { label: "Clear filters", onClick: clearFilters }
@@ -3505,25 +4002,30 @@ export function SchedulesPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      groupedRows.map(({ key, primary: a, siblings }) => {
+                      filteredAssignments.map((a) => {
                         const course = a.exam?.courseOffering?.course;
                         const sem = a.exam?.courseOffering?.semester;
                         const ts = a.timeSlot;
+                        const proctorAssignments = assignments.filter((assignment) =>
+                          a.assignmentIds.includes(assignment.id)
+                        );
+                        const hasMultipleProctors = a.proctorIds.length > 1;
                         const studentsCount =
                           a.exam?.courseOffering?.registrations?.length ??
                           a.exam?.courseOffering?.expectedStudents ??
                           0;
                         const duration = a.exam?.duration;
-                        // Collect conflict types across all sibling assignments for this exam+slot
-                        const conflictTypes = Array.from(
-                          new Set(siblings.flatMap((s) => conflictTypesByAssignment.get(s.id) ?? []))
-                        );
                         const courseTitle = course?.title ?? course?.name ?? "Not assigned";
-                        const isMultiSupervisor = siblings.length > 1;
+                        const isHighlighted = a.assignmentIds.includes(highlightedAssignmentId ?? "");
                         return (
                           <TableRow
-                            key={key}
-                            className="text-sm cursor-pointer transition-colors hover:bg-zinc-50/80 focus-visible:bg-zinc-50/80 focus:outline-none"
+                            key={a.id}
+                            data-assignment-ids={a.assignmentIds.join(" ")}
+                            className={cn(
+                              "text-sm cursor-pointer transition-all duration-300 hover:bg-zinc-50/80 focus-visible:bg-zinc-50/80 focus:outline-none",
+                              isHighlighted &&
+                                "bg-amber-50/80 ring-1 ring-inset ring-amber-300 shadow-[inset_4px_0_0_0_rgb(251_191_36)] animate-[pulse_1.1s_ease-out_2]"
+                            )}
                             tabIndex={0}
                             role="button"
                             aria-label={`View details for ${courseTitle}`}
@@ -3558,50 +4060,42 @@ export function SchedulesPage() {
                             </TableCell>
                             <TableCell className="text-zinc-700">{a.room?.center?.name ?? "Not assigned"}</TableCell>
                             <TableCell className="text-zinc-700">
-                              {isMultiSupervisor ? (
+                              <>
                                 <div className="flex items-center gap-2">
-                                  <div>
-                                    <div className="font-medium text-zinc-800">
-                                      {siblings.length} Supervisors
-                                    </div>
-                                    <div className="text-xs text-zinc-500 truncate max-w-40">
-                                      {siblings
-                                        .map((s) => s.supervisor?.user?.name)
-                                        .filter(Boolean)
-                                        .join(", ")}
-                                    </div>
+                                  <div className="min-w-0 truncate font-medium">
+                                    {a.proctor?.user?.name ?? "Not assigned"}
+                                    {hasMultipleProctors ? " and others" : ""}
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 shrink-0 rounded-none px-2.5 text-xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setViewSupervisors(siblings);
-                                    }}
-                                  >
-                                    <Eye className="size-3 mr-1" />
-                                    View
-                                  </Button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="font-medium">{a.supervisor?.user?.name ?? "Not assigned"}</div>
-                                  {a.supervisor?.user?.email && (
-                                    <div className="text-xs text-zinc-500">{a.supervisor.user.email}</div>
+                                  {hasMultipleProctors && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 rounded-none px-2 text-[11px] font-medium"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setViewProctors(proctorAssignments);
+                                      }}
+                                    >
+                                      View
+                                    </Button>
                                   )}
-                                </>
-                              )}
+                                </div>
+                                {a.proctor?.user?.email && (
+                                  <div className="text-xs text-zinc-500">{a.proctor.user.email}</div>
+                                )}
+                              </>
                             </TableCell>
                             <TableCell className="text-right tabular-nums text-zinc-700">{studentsCount}</TableCell>
                             <TableCell>
-                              <ExamStatusBadge status={a.exam?.status} />
+                              <ExamStatusBadge
+                                status={getAssignmentDisplayStatus({
+                                  isFinal: schedule?.isFinal,
+                                })}
+                              />
                             </TableCell>
                             <TableCell className="text-right tabular-nums text-zinc-700 whitespace-nowrap">
                               {duration != null ? `${duration} min` : "—"}
-                            </TableCell>
-                            <TableCell>
-                              <ConflictBadges types={conflictTypes} compact max={2} />
                             </TableCell>
                             <TableCell
                               className="text-right"
@@ -3629,6 +4123,15 @@ export function SchedulesPage() {
                                   >
                                     <Eye className="size-4 mr-2" /> View details
                                   </DropdownMenuItem>
+
+                                  {hasMultipleProctors && (
+                                    <DropdownMenuItem
+                                      className="rounded-none cursor-pointer"
+                                      onClick={() => setViewProctors(proctorAssignments)}
+                                    >
+                                      <UserCheck className="size-4 mr-2" /> View all proctors
+                                    </DropdownMenuItem>
+                                  )}
 
                                   <LockedActionTooltip isLocked={!!schedule?.isFinal}>
                                     <DropdownMenuItem
@@ -3686,8 +4189,8 @@ export function SchedulesPage() {
             </Card>
           ) : (
             <ScheduleCalendarView
-              assignments={filteredAssignments}
-              conflictTypesByAssignment={conflictTypesByAssignment}
+              assignments={calendarAssignments}
+              isFinal={schedule?.isFinal}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
               onSelectAssignment={setViewAssignment}
@@ -3707,11 +4210,8 @@ export function SchedulesPage() {
 
       <AssignmentDetailsSheet
         assignment={viewAssignment}
-        assignments={schedule?.assignments ?? []}
-        conflicts={schedule?.conflicts ?? []}
-        conflictTypes={
-          viewAssignment ? conflictTypesByAssignment.get(viewAssignment.id) ?? [] : []
-        }
+        assignments={assignments}
+        isFinal={schedule?.isFinal}
         onOpenChange={(next) => {
           if (!next) setViewAssignment(null);
         }}
@@ -3719,6 +4219,7 @@ export function SchedulesPage() {
 
       <EditAssignmentDialog
         assignment={editAssignment}
+        onChanged={handleAssignmentChanged}
         onOpenChange={(next) => {
           if (!next) setEditAssignment(null);
         }}
@@ -3726,17 +4227,18 @@ export function SchedulesPage() {
 
       <DeleteAssignmentDialog
         assignment={deleteAssignment}
+        onChanged={handleAssignmentChanged}
         onOpenChange={(next) => {
           if (!next) setDeleteAssignment(null);
         }}
       />
 
-      <ViewSupervisorsDialog
-        open={Boolean(viewSupervisors)}
+      <ViewProctorsDialog
+        open={Boolean(viewProctors)}
         onOpenChange={(next) => {
-          if (!next) setViewSupervisors(null);
+          if (!next) setViewProctors(null);
         }}
-        assignments={viewSupervisors ?? []}
+        assignments={viewProctors ?? []}
       />
     </div>
   );

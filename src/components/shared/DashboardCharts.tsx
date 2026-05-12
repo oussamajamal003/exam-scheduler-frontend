@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, BookOpen, MapPin, UserCheck } from 'lucide-react';
 
@@ -93,7 +93,7 @@ export const DashboardCharts: React.FC = () => {
     { name: 'West Block', value: 55 },
   ];
 
-  const supervisorData: ChartData[] = [
+  const proctorData: ChartData[] = [
     { name: 'Dr. Ahmed', value: 8 },
     { name: 'Dr. Fatima', value: 7 },
     { name: 'Dr. Omar', value: 6 },
@@ -122,8 +122,8 @@ export const DashboardCharts: React.FC = () => {
         type="bar"
       />
       <SimpleChart
-        title="Supervisor Workload"
-        data={supervisorData}
+        title="Proctor Workload"
+        data={proctorData}
         icon={UserCheck}
         type="bar"
       />
