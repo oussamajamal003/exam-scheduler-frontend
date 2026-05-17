@@ -141,6 +141,139 @@ const dateKey = (iso?: string | null) => {
   return d.toISOString().slice(0, 10);
 };
 
+const inferExamPeriod = (schedule?: Schedule | null) => {
+  const existing = schedule?.examPeriod?.trim();
+  if (existing) return existing;
+  const name = schedule?.name?.toLowerCase() ?? "";
+  if (name.includes("midterm") || name.includes("mid-term")) return "Midterm";
+  if (name.includes("final")) return "Final";
+  return "";
+};
+
+const PRESET_EXAM_PERIODS = ["Midterm", "Final"];
+
+const PublishScheduleDialog = ({
+  open,
+  schedule,
+  isPublishing,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  schedule: Schedule | null;
+  isPublishing: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (examPeriod: string) => void;
+}) => {
+  const [examPeriod, setExamPeriod] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setExamPeriod(inferExamPeriod(schedule));
+  }, [open, schedule]);
+
+  const trimmedExamPeriod = examPeriod.trim();
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!trimmedExamPeriod) return;
+    onConfirm(trimmedExamPeriod);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !isPublishing && onOpenChange(next)}>
+      <DialogContent className="overflow-hidden rounded-none border border-zinc-200/80 bg-white p-0 shadow-xl sm:max-w-lg">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.96)_45%,rgba(228,228,231,0.88))] px-6 py-5 text-left">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-950 shadow-sm">
+                <CalendarRange className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950">
+                  Publish Schedule
+                </DialogTitle>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Choose the exam period for this published schedule. Each semester can publish up to two schedules across different periods.
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 py-5">
+            <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Schedule
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-zinc-950">
+                {schedule?.name ?? "Selected schedule"}
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <Label htmlFor="publish-exam-period" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Exam Period
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {PRESET_EXAM_PERIODS.map((period) => {
+                  const isActive = trimmedExamPeriod.toLowerCase() === period.toLowerCase();
+                  return (
+                    <Button
+                      key={period}
+                      type="button"
+                      variant="outline"
+                      onClick={() => setExamPeriod(period)}
+                      className={cn(
+                        "h-9 rounded-none border-zinc-200 px-3 text-sm font-semibold shadow-sm",
+                        isActive
+                          ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white"
+                          : "bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
+                      )}
+                    >
+                      {period}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Input
+                id="publish-exam-period"
+                value={examPeriod}
+                onChange={(event) => setExamPeriod(event.target.value)}
+                placeholder="e.g. Midterm or Final"
+                autoFocus
+                className="h-11 rounded-none border-zinc-200 bg-white shadow-sm focus-visible:ring-zinc-300/60"
+              />
+              <p className="text-xs text-zinc-500">
+                Use a clear label like Midterm or Final. Publishing blocks duplicate periods within the same semester.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-zinc-200/70 bg-zinc-50/70 px-6 py-4 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPublishing}
+              className="h-10 rounded-none border-zinc-200 bg-white text-zinc-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!trimmedExamPeriod || isPublishing}
+              className="h-10 rounded-none border-0 bg-zinc-950 text-white hover:bg-zinc-900"
+            >
+              {isPublishing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}
+              Publish Schedule
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const StatusBadge = ({ isFinal }: { isFinal: boolean }) =>
   isFinal ? (
     <span className="inline-flex items-center gap-1 rounded-none border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
@@ -184,21 +317,24 @@ const ScheduleVersionsTable = ({
   activeId,
   countOverrides,
   onSelect,
+  onRequestPublish,
   onDeleted,
   isLoading,
+  isPublishing,
   onRefetch,
 }: {
   schedules: Schedule[];
   activeId?: string | null;
   countOverrides?: Record<string, { assignments?: number }>;
   onSelect: (id: string) => void;
+  onRequestPublish: (schedule: Schedule) => void;
   onDeleted: (deletedId: string) => void;
   isLoading: boolean;
+  isPublishing: boolean;
   onRefetch?: () => void;
 }) => {
   const deleteMutation = useDeleteSchedule();
   const updateMutation = useUpdateSchedule();
-  const publishMutation = usePublishSchedule();
   const unpublishMutation = useUnpublishSchedule();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<Schedule | null>(null);
@@ -367,10 +503,8 @@ const ScheduleVersionsTable = ({
                               <DropdownMenuSeparator />
                               {!s.isFinal ? (
                                 <DropdownMenuItem
-                                  disabled={publishMutation.isPending}
-                                  onClick={() => publishMutation.mutate(s.id, {
-                                    onSuccess: () => onRefetch?.()
-                                  })}
+                                  disabled={isPublishing}
+                                  onClick={() => onRequestPublish(s)}
                                   className="cursor-pointer px-3 py-2 text-sm font-medium text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700"
                                 >
                                   <CheckCircle2 className="size-4 mr-2" />
@@ -3208,6 +3342,7 @@ export function SchedulesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<Schedule | null>(null);
 
   // filters
   const [semesterFilter, setSemesterFilter] = useState<string>(ALL);
@@ -3442,11 +3577,32 @@ export function SchedulesPage() {
     }
   };
 
+  const openPublishDialog = (target?: Schedule | null) => {
+    if (!target || target.isFinal) return;
+    setPublishTarget(target);
+  };
+
+  const handleConfirmPublish = (examPeriod: string) => {
+    if (!publishTarget?.id) return;
+
+    const targetId = publishTarget.id;
+    publishMutation.mutate(
+      { id: targetId, examPeriod },
+      {
+        onSuccess: () => {
+          setPublishTarget(null);
+          void schedulesQuery.refetch();
+          if (targetId === effectiveId) {
+            void scheduleQuery.refetch();
+          }
+        },
+      }
+    );
+  };
+
   const handlePublish = () => {
     if (!schedule?.id || schedule.isFinal === true) return;
-    publishMutation.mutate(schedule.id, {
-      onSuccess: () => scheduleQuery.refetch(),
-    });
+    openPublishDialog(schedule);
   };
 
   // -------------------- render --------------------
@@ -3609,16 +3765,12 @@ export function SchedulesPage() {
         </div>
       </StickyActionBar>
 
-      <p className="-mt-1 mb-6 flex items-center gap-1.5 text-xs text-zinc-500">
-        <Wand2 className="size-3.5" />
-        Optimization will improve schedule quality using soft constraints.
-      </p>
-
       {/* Schedule Versions */}
       <ScheduleVersionsTable
         schedules={schedules}
         activeId={effectiveId}
         countOverrides={versionCountOverrides}
+        onRequestPublish={openPublishDialog}
         onSelect={(id) => {
           setViewAssignment(null);
           setEditAssignment(null);
@@ -3639,8 +3791,19 @@ export function SchedulesPage() {
           }
           schedulesQuery.refetch();
         }}
+        isPublishing={publishMutation.isPending}
         onRefetch={() => schedulesQuery.refetch()}
         isLoading={schedulesQuery.isLoading}
+      />
+
+      <PublishScheduleDialog
+        open={Boolean(publishTarget)}
+        schedule={publishTarget}
+        isPublishing={publishMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) setPublishTarget(null);
+        }}
+        onConfirm={handleConfirmPublish}
       />
 
       {/* Empty: no schedules at all */}

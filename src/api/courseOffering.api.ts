@@ -112,6 +112,8 @@ type BackendOfferingList = {
   time?: string | null;
   roomLabel?: string | null;
   notes?: string | null;
+  courseType?: "COURSE" | "PROJECT";
+  hasExam?: boolean;
   status?: "ACTIVE" | "INACTIVE" | "CANCELLED";
   createdAt?: string;
   updatedAt?: string;
@@ -217,6 +219,8 @@ const mapBackendOffering = (
     time: offering.time ?? null,
     roomLabel: offering.roomLabel ?? null,
     notes: offering.notes ?? null,
+    courseType: offering.courseType ?? "COURSE",
+    hasExam: offering.hasExam ?? offering.courseType !== "PROJECT",
     status: offering.status ?? "ACTIVE",
     createdAt: offering.createdAt,
     updatedAt: offering.updatedAt,

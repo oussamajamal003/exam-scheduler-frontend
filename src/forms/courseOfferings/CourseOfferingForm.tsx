@@ -43,6 +43,7 @@ const DAYS = [
 const offeringFormSchema = z.object({
   courseId: z.string().min(1, { message: "Please select a course" }),
   semesterId: z.string().min(1, { message: "Please select a semester" }),
+  courseType: z.enum(["COURSE", "PROJECT"]),
   instructor: z.string().min(1, { message: "Instructor name is required" }),
   days: z.array(z.string()).min(1, { message: "Please select at least one day" }),
   time: z.string().min(1, { message: "Class time is required" }),
@@ -116,6 +117,7 @@ export function CourseOfferingForm({
     defaultValues: {
       courseId: initialData?.courseId ?? "",
       semesterId: initialData?.semesterId ?? "",
+      courseType: initialData?.courseType ?? "COURSE",
       instructor: initialData?.instructor ?? "",
       days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
@@ -132,6 +134,7 @@ export function CourseOfferingForm({
     form.reset({
       courseId: initialData?.courseId ?? "",
       semesterId: initialData?.semesterId ?? "",
+      courseType: initialData?.courseType ?? "COURSE",
       instructor: initialData?.instructor ?? "",
       days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
@@ -155,6 +158,10 @@ export function CourseOfferingForm({
     control: form.control,
     name: "instructor",
   });
+  const selectedCourseType = useWatch({
+    control: form.control,
+    name: "courseType",
+  }) ?? "COURSE";
   const selectedDays = useWatch({
     control: form.control,
     name: "days",
@@ -276,6 +283,8 @@ export function CourseOfferingForm({
     const payload: CreateCourseOfferingDto = {
       courseId: courseForSemester?.id ?? values.courseId,
       semesterId: values.semesterId,
+      courseType: values.courseType,
+      hasExam: values.courseType === "COURSE",
       instructor: values.instructor?.trim() || undefined,
       day: values.days && values.days.length > 0 ? values.days.join(", ") : undefined,
       time: values.time?.trim() || undefined,
@@ -478,6 +487,49 @@ export function CourseOfferingForm({
         {semesterErrorMessage && (
           <p className="text-xs font-medium text-destructive">
             {semesterErrorMessage}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <Label htmlFor="offering-course-type" className="text-sm font-semibold text-zinc-950">
+          Course Type <span className="text-destructive">*</span>
+        </Label>
+        <Select
+          value={selectedCourseType}
+          onValueChange={(value) =>
+            form.setValue("courseType", value as OfferingFormValues["courseType"], {
+              shouldDirty: true,
+              shouldTouch: true,
+              shouldValidate: true,
+            })
+          }
+          disabled={isLoading}
+        >
+          <SelectTrigger
+            id="offering-course-type"
+            className={cn(
+              "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
+              form.formState.errors.courseType
+                ? "border-destructive/60 bg-destructive/5"
+                : "hover:border-zinc-300 focus-visible:border-zinc-400"
+            )}
+          >
+            <SelectValue placeholder="Select course type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="COURSE">Course - creates an exam</SelectItem>
+            <SelectItem value="PROJECT">Project - no exam</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-zinc-500">
+          {selectedCourseType === "PROJECT"
+            ? "Project-based offerings are saved for enrollments but excluded from exam generation and scheduling."
+            : "Course offerings are eligible for exam generation and scheduling."}
+        </p>
+        {form.formState.errors.courseType && (
+          <p className="text-xs font-medium text-destructive">
+            {form.formState.errors.courseType.message}
           </p>
         )}
       </div>

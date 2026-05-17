@@ -41,12 +41,18 @@ const datasetCards = [
     caption: 'Largest 55+ offerings',
     detail: '60 offerings with the highest realistic scale, expanded rooms, centers, enrollments, and proctor coverage.',
   },
+  {
+    key: 'REAL' as const,
+    title: 'Real Data',
+    caption: 'FEIT Spring 2026',
+    detail: 'Real FEIT Spring 2026 course offerings: 35 offerings (29 producing exams), real instructors, sections, lecture day/time, BME / CCE / CS / EE programs, 4 FEIT centers, and 12 rooms. PROJECT and LAB-only offerings keep their CourseOffering but do NOT generate exams or join scheduling.',
+  },
 ];
 
 export const SettingsPage: React.FC = () => {
   const [confirmClearOpen, setConfirmClearOpen] = React.useState(false);
-  const [selectedDataset, setSelectedDataset] = React.useState<'A' | 'B' | 'C'>('A');
-  const [selectedClearDataset, setSelectedClearDataset] = React.useState<'A' | 'B' | 'C'>('A');
+  const [selectedDataset, setSelectedDataset] = React.useState<'A' | 'B' | 'C' | 'REAL'>('A');
+  const [selectedClearDataset, setSelectedClearDataset] = React.useState<'A' | 'B' | 'C' | 'REAL'>('A');
   const generateMutation = useGenerateDemoData();
   const clearMutation = useClearDemoData();
   const isBusy = generateMutation.isPending || clearMutation.isPending;
@@ -105,7 +111,7 @@ export const SettingsPage: React.FC = () => {
               <div className="space-y-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Dataset Choice</p>
-                  <p className="mt-1 text-sm font-semibold text-zinc-950">Choose between dataset A, B, or C before generation.</p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-950">Choose between dataset A, B, C, or the FEIT Real Data before generation.</p>
                 </div>
                 <div className="inline-flex w-full flex-wrap items-center rounded-none border border-zinc-200 bg-white p-1 shadow-sm lg:w-auto">
                   {datasetCards.map((dataset) => {

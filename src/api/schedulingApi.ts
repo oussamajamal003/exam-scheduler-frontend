@@ -330,10 +330,18 @@ export const fetchScheduleAnalysis = async (id: string): Promise<ScheduleAnalysi
   return unwrap(response.data, "Schedule analysis");
 };
 
+export type PublishScheduleDto = {
+  examPeriod: string;
+};
+
 // PATCH /api/scheduling/:id/publish
-export const publishSchedule = async (id: string): Promise<Schedule> => {
+export const publishSchedule = async (
+  id: string,
+  payload: PublishScheduleDto
+): Promise<Schedule> => {
   const response = await axiosClient.patch<ApiEnvelope<Schedule>>(
-    `/scheduling/${id}/publish`
+    `/scheduling/${id}/publish`,
+    payload
   );
   return unwrap(response.data, "Publish schedule");
 };

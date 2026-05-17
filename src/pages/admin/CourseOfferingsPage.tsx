@@ -361,13 +361,13 @@ export function CourseOfferingsPage() {
         open={isFormOpen}
         onOpenChange={(open) => (open ? setIsFormOpen(true) : closeFormModal())}
       >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
+          <DialogHeader className="shrink-0">
             <DialogTitle>
               {editingOffering ? "Edit Course Offering" : "Add Course Offering"}
             </DialogTitle>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="mt-4 flex-1 overflow-y-auto pr-1">
             <CourseOfferingForm
               key={editingOffering?.id ?? "new-offering"}
               initialData={editingOffering ?? undefined}

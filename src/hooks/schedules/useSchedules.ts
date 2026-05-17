@@ -239,7 +239,8 @@ export const usePublishSchedule = () => {
   const { addToast } = useToast();
 
   return useMutation({
-    mutationFn: (id: string) => publishSchedule(id),
+    mutationFn: ({ id, examPeriod }: { id: string; examPeriod: string }) =>
+      publishSchedule(id, { examPeriod }),
     onSuccess: (schedule) => {
       queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
       addToast({

@@ -161,6 +161,7 @@ export function CourseOfferingList({
                       offering.registrationsCount ??
                       0;
                     const examsCount = offering.exams?.length ?? offering.examsCount ?? 0;
+                    const isProjectOffering = offering.courseType === "PROJECT" || offering.hasExam === false;
 
                     return (
                   <TableRow
@@ -215,9 +216,12 @@ export function CourseOfferingList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
-                      <span className="inline-flex items-center rounded-none bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                      <span className={cn(
+                        "inline-flex items-center rounded-none px-2.5 py-1 text-xs font-semibold",
+                        isProjectOffering ? "bg-zinc-100 text-zinc-600" : "bg-amber-50 text-amber-700"
+                      )}>
                         <ClipboardList className="mr-1.5 size-3.5" />
-                        {examsCount}
+                        {isProjectOffering ? "No exam" : examsCount}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">

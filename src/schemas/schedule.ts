@@ -37,6 +37,8 @@ export type ScheduleRegistration = {
 export type ScheduleCourseOffering = {
   id: string;
   expectedStudents?: number | null;
+  courseType?: "COURSE" | "PROJECT" | null;
+  hasExam?: boolean | null;
   course?: ScheduleCourse | null;
   semester?: ScheduleSemester | null;
   registrations?: ScheduleRegistration[];
@@ -102,6 +104,7 @@ export type ScheduleAssignment = {
 export type Schedule = {
   id: string;
   name: string;
+  examPeriod?: string | null;
   isFinal: boolean;
   algorithmType?: "HYBRID_CONSTRAINT_BASED" | string;
   generationStage?: string;

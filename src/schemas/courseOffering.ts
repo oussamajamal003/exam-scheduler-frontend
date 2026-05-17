@@ -3,6 +3,9 @@
 export const offeringStatusSchema = z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]);
 export type OfferingStatus = z.infer<typeof offeringStatusSchema>;
 
+export const courseTypeSchema = z.enum(["COURSE", "PROJECT"]);
+export type CourseType = z.infer<typeof courseTypeSchema>;
+
 export const offeringCourseSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
@@ -64,6 +67,8 @@ export const courseOfferingSchema = z.object({
   time: z.string().nullable().optional(),
   roomLabel: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  courseType: courseTypeSchema.optional().default("COURSE"),
+  hasExam: z.boolean().optional().default(true),
   status: offeringStatusSchema.optional().default("ACTIVE"),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
@@ -86,6 +91,8 @@ export type CreateCourseOfferingDto = {
   time?: string;
   roomLabel?: string;
   notes?: string;
+  courseType: CourseType;
+  hasExam: boolean;
   status?: OfferingStatus;
 };
 
