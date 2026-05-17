@@ -1,149 +1,465 @@
 ﻿import React from 'react';
-import { Users, BookOpen, CheckCircle, CalendarClock, Sparkles, ArrowRight, TrendingUp, CalendarDays, Cpu, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Users,
+  BookOpen,
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  UserCheck,
+  CalendarRange,
+  Gauge,
+  MapPin,
+  ClipboardList,
+  CalendarPlus,
+  Clock4,
+  Layers,
+  AlertTriangle,
+  TrendingUp,
+  ShieldCheck,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { PageSpinner } from '@/components/shared/PageSpinner';
-import { DashboardCharts } from '@/components/shared/DashboardCharts';
 
-const stats = [
-  { title: 'Total Students', value: '12,450', icon: Users, trend: '+5.2%' },
-  { title: 'Exams Scheduled', value: '342', icon: BookOpen, trend: '+12 this week' },
-  { title: 'Quality Score', value: '91%', icon: Sparkles, trend: '+13% improved' },
-  { title: 'System Health', value: 'Optimal', icon: CheckCircle, trend: '99.8% uptime' },
-];
+import { AnalyticsCard } from '@/components/dashboard/AnalyticsCard';
+import { SmartStatusCard } from '@/components/dashboard/SmartStatusCard';
+import { RealBarChart } from '@/components/dashboard/RealBarChart';
+import { EvaluationSummary } from '@/components/dashboard/EvaluationSummary';
+import { WeakAreasPanel } from '@/components/dashboard/WeakAreasPanel';
+import { ScheduleOverview } from '@/components/dashboard/ScheduleOverview';
+import { OptimizationSummary } from '@/components/dashboard/OptimizationSummary';
+import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 
-const upcomingExams = [
-  { course: 'Advanced Algorithms', date: 'May 12, 2026', room: 'A102', proctor: 'Dr. Hassan Ali', status: 'Finalized' },
-  { course: 'Database Systems', date: 'May 13, 2026', room: 'B201', proctor: 'Ms. Laila Farouk', status: 'Published' },
-  { course: 'Software Architecture', date: 'May 14, 2026', room: 'C303', proctor: 'Dr. Kareem Nasser', status: 'Draft' },
-];
+import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
+import { useDashboardSummary } from '@/hooks/dashboard/useDashboardSummary';
+import { useDashboardAnalytics } from '@/hooks/dashboard/useDashboardAnalytics';
 
-const quickSignals = [
-  { label: 'Next exam window', value: 'May 12 - 18', icon: CalendarDays },
-  { label: 'AI score', value: '91 / 100', icon: Cpu },
-  { label: 'Best capacity block', value: 'North Center', icon: MapPin },
-];
+// ---------- helpers ----------
+const SELECTED_SCHEDULE_STORAGE_KEY = 'selected_schedule_id';
 
+const formatSemesterRange = (start?: string, end?: string) => {
+  if (!start && !end) return null;
+  const fmt = (iso?: string) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return iso;
+    }
+  };
+  return [fmt(start), fmt(end)].filter(Boolean).join(' – ');
+};
+
+const buildSchedulesTarget = (params?: Record<string, string>) => {
+  const search = new URLSearchParams(params);
+  const query = search.toString();
+  return query ? `/schedules?${query}` : '/schedules';
+};
+
+const widthClassForPct = (value: number | null) => {
+  const pct = value ?? 0;
+  if (pct >= 95) return 'w-full';
+  if (pct >= 90) return 'w-11/12';
+  if (pct >= 80) return 'w-4/5';
+  if (pct >= 75) return 'w-3/4';
+  if (pct >= 66) return 'w-2/3';
+  if (pct >= 60) return 'w-3/5';
+  if (pct >= 50) return 'w-1/2';
+  if (pct >= 40) return 'w-2/5';
+  if (pct >= 33) return 'w-1/3';
+  if (pct >= 25) return 'w-1/4';
+  if (pct >= 20) return 'w-1/5';
+  if (pct >= 10) return 'w-[10%]';
+  if (pct > 0) return 'w-[5%]';
+  return 'w-0';
+};
+
+// ---------- component ----------
 export const Dashboard: React.FC = () => {
-  const [isLoading, setIsLoading] = React.useState(true);
+  const navigate = useNavigate();
 
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => setIsLoading(false), 1000);
-    return () => window.clearTimeout(timer);
-  }, []);
+  const goToScheduleGenerate = React.useCallback(() => {
+    navigate(buildSchedulesTarget({ openGenerate: 'true', view: 'table' }));
+  }, [navigate]);
 
-  if (isLoading) {
-    return <PageSpinner label="Loading dashboard" />;
-  }
+  const goToAssignmentsTable = React.useCallback(() => {
+    navigate(buildSchedulesTarget({ view: 'table' }));
+  }, [navigate]);
+
+  const userQ = useCurrentUser();
+  const summary = useDashboardSummary();
+  const [selectedScheduleId, setSelectedScheduleId] = React.useState<string | null>(() =>
+    localStorage.getItem(SELECTED_SCHEDULE_STORAGE_KEY)
+  );
+  const analytics = useDashboardAnalytics(summary.sortedSchedules, selectedScheduleId);
+
+  const { counts, sortedSchedules, activeSemester, isLoading: summaryLoading } = summary;
+  const {
+    selectedSchedule,
+    selectedDetailed,
+    assignments,
+    qualityMetrics,
+    optimization,
+    weakAreas,
+    charts,
+    qualityScores,
+    totalConflicts,
+    status,
+  } = analytics;
+
+  const optimizationScoreDisplay = qualityScores.optimizedScore ?? qualityScores.draftScore;
+
+  const qualityMetricEntries = [
+    {
+      key: 'roomUtilization',
+      label: 'Room Utilization',
+      value: qualityMetrics.roomUtilization,
+      tone: 'bg-indigo-500',
+    },
+    {
+      key: 'proctorWorkloadBalance',
+      label: 'Proctor Workload Balance',
+      value: qualityMetrics.proctorWorkloadBalance,
+      tone: 'bg-violet-500',
+    },
+    {
+      key: 'studentSpacing',
+      label: 'Student Spacing',
+      value: qualityMetrics.studentSpacing,
+      tone: 'bg-sky-500',
+    },
+    {
+      key: 'examDistribution',
+      label: 'Exam Distribution',
+      value: qualityMetrics.examDistribution,
+      tone: 'bg-emerald-500',
+    },
+  ];
+
+  const quickActions: QuickAction[] = [
+    {
+      label: 'Generate Schedule',
+      description: 'Run hybrid optimizer',
+      icon: CalendarPlus,
+      tone: 'indigo',
+      onClick: goToScheduleGenerate,
+    },
+    {
+      label: 'Manage Rooms',
+      description: `${counts.totalRooms} rooms`,
+      icon: Building2,
+      tone: 'emerald',
+      onClick: () => navigate('/rooms'),
+    },
+    {
+      label: 'Manage Proctors',
+      description: `${counts.totalProctors} proctors`,
+      icon: UserCheck,
+      tone: 'violet',
+      onClick: () => navigate('/proctors'),
+    },
+    {
+      label: 'View Exams',
+      description: `${counts.totalExams} assignment rows`,
+      icon: ClipboardList,
+      tone: 'sky',
+      onClick: goToAssignmentsTable,
+    },
+    {
+      label: 'Course Offerings',
+      icon: Layers,
+      tone: 'amber',
+      onClick: () => navigate('/course-offerings'),
+    },
+    {
+      label: 'Time Slots',
+      icon: Clock4,
+      tone: 'zinc',
+      onClick: () => navigate('/timeslots'),
+    },
+  ];
 
   return (
-    <div className="p-5 sm:p-6 lg:p-8 space-y-6">
-      {/* Hero card */}
-      <Card className="overflow-hidden rounded-none border border-zinc-200/60 bg-white shadow-sm">
-        <CardContent className="grid gap-6 p-6 lg:grid-cols-[1.5fr_0.9fr] lg:p-8">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
-              <TrendingUp className="size-3.5" />
-              Scheduling Command Center
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">Smart Exam Scheduler</h1>
-              <p className="max-w-2xl text-sm leading-6 text-zinc-500">
-                Live operational snapshot of exam scheduling quality, resource readiness, and AI-guided planning built for fast decisions.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              <Button className="rounded-none bg-zinc-950 text-white hover:bg-zinc-800">Open Schedule Pipeline</Button>
-              <Button variant="outline" className="rounded-none">Generate Schedule</Button>
-            </div>
-          </div>
+    <div className="space-y-6 p-5 sm:p-6 lg:p-8">
+      <DashboardHeader
+        userName={userQ.data?.name}
+        semesterName={activeSemester?.name}
+        semesterRange={formatSemesterRange(activeSemester?.startDate, activeSemester?.endDate)}
+        scheduleStatusLabel={status.label}
+        scheduleStatusTone={status.tone}
+        onGenerateSchedule={goToScheduleGenerate}
+        onViewSchedules={() => navigate('/schedules')}
+      />
 
-          <div className="grid gap-2.5">
-            {quickSignals.map((signal) => (
-              <div key={signal.label} className="flex items-center justify-between rounded-none border border-zinc-200/60 bg-zinc-50 p-4">
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">{signal.label}</p>
-                  <p className="text-sm font-semibold text-zinc-950">{signal.value}</p>
-                </div>
-                <signal.icon className="size-4.5 text-zinc-400" />
+      {/* KPI grid */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <AnalyticsCard
+          title="Total Students"
+          value={counts.totalStudents}
+          icon={Users}
+          accent="indigo"
+          loading={summaryLoading}
+          subtitle="Enrolled in system"
+        />
+        <AnalyticsCard
+          title="Total Courses"
+          value={counts.totalCourses}
+          icon={BookOpen}
+          accent="sky"
+          loading={summaryLoading}
+          subtitle="Across all programs"
+        />
+        <AnalyticsCard
+          title="Total Rooms"
+          value={counts.totalRooms}
+          icon={Building2}
+          accent="emerald"
+          loading={summaryLoading}
+          subtitle="Available capacity"
+        />
+        <AnalyticsCard
+          title="Total Proctors"
+          value={counts.totalProctors}
+          icon={UserCheck}
+          accent="violet"
+          loading={summaryLoading}
+          subtitle="Ready for assignment"
+        />
+        <AnalyticsCard
+          title="Total Schedules"
+          value={counts.totalSchedules}
+          icon={CalendarRange}
+          accent="zinc"
+          loading={summaryLoading}
+          subtitle={`${counts.activeExamPeriods} published`}
+        />
+        <AnalyticsCard
+          title="Published Assignments"
+          value={counts.publishedAssignments}
+          icon={CheckCircle2}
+          accent="emerald"
+          loading={summaryLoading}
+          subtitle="From final schedules"
+        />
+        <AnalyticsCard
+          title="Active Exam Periods"
+          value={counts.activeExamPeriods}
+          icon={CalendarClock}
+          accent="amber"
+          loading={summaryLoading}
+          subtitle="Currently published"
+        />
+        <AnalyticsCard
+          title="Optimization Score"
+          value={optimizationScoreDisplay ?? '—'}
+          icon={Gauge}
+          accent={
+            optimizationScoreDisplay == null
+              ? 'zinc'
+              : optimizationScoreDisplay >= 85
+                ? 'emerald'
+                : optimizationScoreDisplay >= 65
+                  ? 'sky'
+                  : optimizationScoreDisplay >= 40
+                    ? 'amber'
+                    : 'rose'
+          }
+          loading={analytics.isLoading}
+          subtitle={selectedSchedule ? 'Selected schedule quality' : 'No schedules yet'}
+        />
+      </div>
+
+      {/* Selected schedule score summaries */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AnalyticsCard
+          title="Draft Score"
+          value={qualityScores.draftScore != null ? `${qualityScores.draftScore}%` : '—'}
+          icon={ShieldCheck}
+          accent="zinc"
+          loading={analytics.isLoading}
+          subtitle="Before optimization"
+        />
+        <AnalyticsCard
+          title="Optimized Score"
+          value={
+            qualityScores.optimizedScore != null ? `${qualityScores.optimizedScore}%` : '—'
+          }
+          icon={Gauge}
+          accent="emerald"
+          loading={analytics.isLoading}
+          subtitle="After optimization"
+        />
+        <AnalyticsCard
+          title="Optimization Improvement"
+          value={
+            qualityScores.improvementScore != null
+              ? `${qualityScores.improvementScore}%`
+              : '—'
+          }
+          icon={TrendingUp}
+          accent="sky"
+          loading={analytics.isLoading}
+          subtitle="Score delta"
+        />
+        <AnalyticsCard
+          title="Detected Conflicts"
+          value={totalConflicts ?? '—'}
+          icon={AlertTriangle}
+          accent={totalConflicts && totalConflicts > 0 ? 'rose' : 'emerald'}
+          loading={analytics.isLoading}
+          subtitle="Analysis endpoint"
+        />
+      </div>
+
+      <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
+        <CardHeader className="border-b border-zinc-100 pb-3 dark:border-zinc-800/70">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            <Gauge className="size-4 text-zinc-400 dark:text-zinc-500" />
+            Selected Schedule Analytics
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+          {qualityMetricEntries.map((metric) => (
+            <div key={metric.key} className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  {metric.label}
+                </p>
+                <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-zinc-50">
+                  {metric.value != null ? `${metric.value}%` : '—'}
+                </span>
               </div>
-            ))}
-          </div>
+              <div className="h-2 overflow-hidden rounded-none bg-zinc-100 dark:bg-zinc-800/70">
+                <div
+                  className={`h-full rounded-none transition-all duration-700 ${metric.tone} ${widthClassForPct(metric.value)}`}
+                />
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
-      {/* Stat cards */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="rounded-none border border-zinc-200/60 bg-white shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex items-start justify-between p-5">
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">{stat.title}</p>
-                <p className="text-2xl font-bold tracking-tight text-zinc-950">{stat.value}</p>
-                <p className="text-xs text-zinc-500">{stat.trend}</p>
-              </div>
-              <div className="rounded-none bg-zinc-100 p-2.5 text-zinc-600">
-                <stat.icon className="size-4.5" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Smart status + Quick actions */}
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <SmartStatusCard
+          title={status.label}
+          description={status.description}
+          statusLabel={status.statusLabel}
+          tone={status.tone}
+          icon={status.tone === 'warning' ? AlertTriangle : CalendarClock}
+          loading={summaryLoading}
+          metadata={[
+            { label: 'Schedules', value: counts.totalSchedules },
+            { label: 'Published', value: counts.activeExamPeriods },
+            {
+              label: 'Assignments',
+              value: selectedSchedule?._count?.assignments ?? assignments.length ?? 0,
+            },
+            {
+              label: 'Quality',
+              value:
+                optimizationScoreDisplay != null ? `${optimizationScoreDisplay}/100` : '—',
+            },
+          ]}
+          action={{ label: 'Open Schedules', onClick: () => navigate('/schedules') }}
+        />
+        <QuickActions actions={quickActions} />
       </div>
 
-      {/* Charts Section */}
-      <DashboardCharts />
+      {/* Charts grid */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <RealBarChart
+          title="Assignments by Room"
+          icon={Building2}
+          data={charts.byRoom}
+          tone="indigo"
+          loading={analytics.isLoading}
+          emptyLabel={
+            selectedSchedule ? 'No assignments yet' : 'Generate a schedule to see room load'
+          }
+        />
+        <RealBarChart
+          title="Assignments by Proctor"
+          icon={UserCheck}
+          data={charts.byProctor}
+          tone="violet"
+          loading={analytics.isLoading}
+          emptyLabel={
+            selectedSchedule
+              ? 'No assignments yet'
+              : 'Generate a schedule to see proctor load'
+          }
+        />
+        <RealBarChart
+          title="Assignments by Day"
+          icon={CalendarClock}
+          data={charts.byDay}
+          tone="sky"
+          loading={analytics.isLoading}
+          emptyLabel={
+            selectedSchedule
+              ? 'No scheduled days yet'
+              : 'Generate a schedule to see day distribution'
+          }
+        />
+        <RealBarChart
+          title="Assignments by Center"
+          icon={MapPin}
+          data={charts.byCenter}
+          tone="emerald"
+          loading={analytics.isLoading}
+          emptyLabel={
+            selectedSchedule
+              ? 'No centers mapped yet'
+              : 'Generate a schedule to see center load'
+          }
+        />
+        <RealBarChart
+          title="Quality Metric Scores"
+          icon={Gauge}
+          data={charts.qualityMetricBars}
+          tone="amber"
+          total={100}
+          formatValue={(value) => `${value}%`}
+          loading={analytics.isLoading}
+          emptyLabel="No quality metrics available for the selected schedule"
+        />
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
-        <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
-          <CardHeader className="border-b border-zinc-100 px-6 py-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950">
-              <CalendarClock className="size-4 text-zinc-400" />
-              Upcoming Exams
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-zinc-100 p-0">
-            {upcomingExams.map((exam, index) => (
-              <div
-                key={`${exam.course}-${index}`}
-                className="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-zinc-50 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-zinc-950">{exam.course}</p>
-                    <span className="rounded-none border border-zinc-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-500">
-                      {exam.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500">
-                    {exam.date} · {exam.room} · {exam.proctor}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" className="w-fit rounded-none">
-                  Open
-                  <ArrowRight className="size-3.5" />
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      {/* Evaluation + Weak areas */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EvaluationSummary
+          qualityScore={selectedDetailed?.qualityScore}
+          hardConstraintScore={selectedDetailed?.hardConstraintScore}
+          softConstraintScore={selectedDetailed?.softConstraintScore}
+          loading={analytics.isLoading}
+        />
+        <WeakAreasPanel weakAreas={weakAreas} loading={analytics.isLoading} />
+      </div>
 
-        <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
-          <CardHeader className="border-b border-zinc-100 px-6 py-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950">
-              <Sparkles className="size-4 text-zinc-400" />
-              AI Scheduling Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-6">
-            <div className="rounded-none border border-zinc-200/60 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
-              AI suggests moving CS401 to the 10:00 AM slot to reduce overlap risk by 17%.
-            </div>
-            <div className="rounded-none border border-zinc-200/60 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
-              Room utilization can improve by 11% by rebalancing two large exams to North Center.
-            </div>
-            <Button variant="outline" className="w-full rounded-none sm:w-auto">Open Schedule Pipeline</Button>
-          </CardContent>
-        </Card>
+      {/* Optimization + Recent schedules */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+        <OptimizationSummary
+          beforeScore={optimization.before}
+          afterScore={optimization.after}
+          strategy={optimization.strategy}
+          attempted={optimization.attempted}
+          loading={analytics.isLoading}
+        />
+        <ScheduleOverview
+          schedules={sortedSchedules}
+          loading={summary.isLoading}
+          onOpen={(schedule) => {
+            localStorage.setItem(SELECTED_SCHEDULE_STORAGE_KEY, schedule.id);
+            setSelectedScheduleId(schedule.id);
+            navigate(buildSchedulesTarget({ scheduleId: schedule.id, view: 'table' }));
+          }}
+          onViewAll={() => navigate('/schedules')}
+        />
       </div>
     </div>
   );

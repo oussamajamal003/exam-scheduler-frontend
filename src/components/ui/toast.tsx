@@ -67,27 +67,27 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
     <div
       className={cn(
         "pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-none border p-4 pr-8 shadow-lg transition-all duration-300",
-        "bg-white border-zinc-200",
+        "border-zinc-200 bg-white dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:shadow-black/40",
         isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0",
-        toast.type === 'success' && "border-green-200 bg-green-50",
-        toast.type === 'error' && "border-red-200 bg-red-50",
-        toast.type === 'warning' && "border-yellow-200 bg-yellow-50",
-        toast.type === 'info' && "border-blue-200 bg-blue-50"
+        toast.type === 'success' && "border-green-200 bg-green-50 dark:border-emerald-800/80 dark:bg-emerald-950/40",
+        toast.type === 'error' && "border-red-200 bg-red-50 dark:border-rose-800/80 dark:bg-rose-950/40",
+        toast.type === 'warning' && "border-yellow-200 bg-yellow-50 dark:border-amber-800/80 dark:bg-amber-950/40",
+        toast.type === 'info' && "border-blue-200 bg-blue-50 dark:border-sky-800/80 dark:bg-sky-950/40"
       )}
     >
       <div className="flex items-start space-x-3">
         <ToastIcon type={toast.type} />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-zinc-950">{toast.title}</p>
+          <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{toast.title}</p>
           {toast.description && (
-            <p className="mt-1 text-sm text-zinc-600 whitespace-pre-line">{toast.description}</p>
+            <p className="mt-1 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-300">{toast.description}</p>
           )}
         </div>
       </div>
       <button
         onClick={handleClose}
         title="Close toast"
-        className="absolute right-2 top-2 rounded-none p-1 text-zinc-400 hover:text-zinc-600 transition-colors"
+        className="absolute right-2 top-2 rounded-none p-1 text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-200"
       >
         <X className="size-4" />
       </button>

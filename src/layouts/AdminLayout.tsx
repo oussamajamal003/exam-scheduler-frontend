@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   BookOpen,
   Building,
@@ -28,7 +28,15 @@ import {
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -38,12 +46,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import type { User } from '@/api/auth.api';
 import { cn } from '@/lib/utils';
 import { useLogout } from '@/hooks/auth/useLogout';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
-import { useSemesters } from '@/hooks/semesters/useSemesters';
+
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import {
   CommandSearch,
@@ -99,7 +108,7 @@ const routeMap: Record<string, { title: string; subtitle: string }> = {
   '/schedule': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
   '/scheduling': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
   '/departments': { title: 'Programs / Departments', subtitle: 'Manage relational program data, department ownership, and course coverage in one workspace.' },
-  '/semesters': { title: 'Semesters', subtitle: 'Control active terms, timelines, and planning windows precisely.' },
+  '/semesters': { title: 'Semesters', subtitle: 'Control academic timelines, calendars, and planning windows precisely.' },
   '/course-offerings': { title: 'Course Offerings', subtitle: 'Track semester offerings, sections, and readiness across the catalog.' },
   '/enrollments': { title: 'Enrollments', subtitle: 'Manage student registrations and import workflows with confidence.' },
   '/students': { title: 'Students', subtitle: 'Oversee student records, activity, and academic readiness.' },
@@ -170,10 +179,10 @@ const SectionGroup: React.FC<{
             type="button"
             aria-label={`${section.title} navigation`}
             className={cn(
-            'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
+            'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-600',
               hasActiveChild
-                ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15'
-                : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950'
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-lg shadow-zinc-900/15 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-white/5'
+                : 'border-zinc-200/70 bg-white/75 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-900/55 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
             )}
           >
             <Tooltip delayDuration={300}>
@@ -188,21 +197,21 @@ const SectionGroup: React.FC<{
             </Tooltip>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl p-2">
+        <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl border-zinc-200/80 bg-white/95 p-2 shadow-xl shadow-zinc-950/10 dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/40">
           <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {section.items.map((item) => {
             const isActive = location.pathname === item.to;
             return (
-              <DropdownMenuItem key={item.to} asChild className={cn(isActive && 'bg-zinc-950 text-white focus:bg-zinc-950 focus:text-white')}>
+              <DropdownMenuItem key={item.to} asChild className={cn(isActive && 'bg-zinc-950 text-white focus:bg-zinc-950 focus:text-white dark:bg-zinc-100 dark:text-zinc-950 dark:focus:bg-zinc-100 dark:focus:text-zinc-950')}>
                 <NavLink
                   to={item.to}
                   onClick={onItemSelect}
                   className={cn(
                     'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
                     isActive 
-                      ? 'bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white focus:bg-zinc-900 focus:text-white' 
-                      : 'text-zinc-700 hover:bg-zinc-100 focus:bg-zinc-100'
+                      ? 'bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white focus:bg-zinc-900 focus:text-white dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 dark:hover:text-zinc-950 dark:focus:bg-zinc-200' 
+                      : 'text-zinc-700 hover:bg-zinc-100 focus:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:focus:bg-zinc-800'
                   )}
                 >
                   <item.icon className="size-4 shrink-0" />
@@ -221,14 +230,14 @@ const SectionGroup: React.FC<{
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="group flex w-full items-center justify-between rounded-md bg-zinc-100 px-2.5 py-1.5 mb-1 hover:bg-zinc-200/70 transition-colors duration-150"
+          className="group mb-1 flex w-full items-center justify-between rounded-md bg-zinc-100 px-2.5 py-1.5 transition-colors duration-150 hover:bg-zinc-200/70 dark:bg-zinc-900/80 dark:hover:bg-zinc-800"
           aria-label={`${section.title} navigation group`}
         >
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 group-hover:text-zinc-700 transition-colors duration-150">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 transition-colors duration-150 group-hover:text-zinc-700 dark:text-zinc-500 dark:group-hover:text-zinc-300">
             {section.title}
           </span>
           <ChevronDown
-            className={cn('size-3 text-zinc-400 transition-transform duration-200', isOpen ? 'rotate-180' : '')}
+            className={cn('size-3 text-zinc-400 transition-transform duration-200 dark:text-zinc-500', isOpen ? 'rotate-180' : '')}
           />
         </button>
       </CollapsibleTrigger>
@@ -243,8 +252,8 @@ const SectionGroup: React.FC<{
                 cn(
                   'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
                   isActive
-                    ? 'bg-zinc-950 text-white shadow-sm'
-                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                    ? 'bg-zinc-950 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
+                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
                 )
               }
             >
@@ -272,6 +281,7 @@ export const AdminLayout: React.FC = () => {
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true');
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() =>
@@ -297,16 +307,6 @@ export const AdminLayout: React.FC = () => {
     localStorage.setItem('admin-theme', theme);
   }, [theme]);
 
-  // Active semester for navbar badge
-  const { data: allSemesters } = useSemesters('');
-  const activeSemester = React.useMemo(
-    () =>
-      allSemesters?.find((s) => s.isActive) ??
-      allSemesters?.find((s) => s.isCurrent) ??
-      allSemesters?.[0],
-    [allSemesters]
-  );
-
   const closeSidebar = () => setIsSidebarOpen(false);
   const toggleSidebarCollapse = () => setIsCollapsed((prev) => !prev);
 
@@ -326,8 +326,9 @@ export const AdminLayout: React.FC = () => {
   const tokenPayload = getTokenPayload();
 
   const userName = currentUser?.name ?? tokenPayload?.name ?? 'Admin User';
+  const userEmail = currentUser?.email ?? tokenPayload?.email ?? 'admin@example.com';
   const userRole = formatRole(currentUser?.role ?? tokenPayload?.role);
-  const userInitials = getInitials(currentUser?.name ?? tokenPayload?.name);
+  const userInitials = getInitials(userName);
 
   const toggleSection = (title: string, open: boolean) => {
     setOpenSections((prev) => ({ ...prev, [title]: open }));
@@ -337,7 +338,7 @@ export const AdminLayout: React.FC = () => {
     <>
       <div
         className={cn(
-          'mb-3 flex shrink-0 items-center border-b border-zinc-100 pb-4 transition-all duration-300',
+          'mb-3 flex shrink-0 items-center border-b border-zinc-100 pb-4 transition-all duration-300 dark:border-zinc-800/80',
           isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'
         )}
       >
@@ -346,10 +347,10 @@ export const AdminLayout: React.FC = () => {
           isCollapsed ? 'mx-auto size-11 pointer-events-none' : 'shrink-0'
         )}>
           <div className={cn(
-            'flex size-11 shrink-0 items-center justify-center rounded-[15px] border border-zinc-200/70 bg-zinc-950 shadow-sm transition-opacity duration-200',
+            'flex size-11 shrink-0 items-center justify-center rounded-[15px] border border-zinc-200/70 bg-zinc-950 shadow-sm transition-opacity duration-200 dark:border-zinc-700/80 dark:bg-zinc-100',
             isCollapsed ? 'group-hover/sidebar:opacity-0' : ''
           )}>
-            <Sparkles className="size-4.5 text-zinc-50" />
+            <Sparkles className="size-4.5 text-zinc-50 dark:text-zinc-950" />
           </div>
           {isCollapsed && (
             <Button
@@ -359,7 +360,7 @@ export const AdminLayout: React.FC = () => {
               aria-label="Expand sidebar"
               aria-expanded={false}
               onClick={(e) => { e.stopPropagation(); toggleSidebarCollapse(); }}
-              className="pointer-events-auto absolute inset-0 size-11 shrink-0 rounded-[15px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10 opacity-0 group-hover/sidebar:opacity-100 duration-200"
+              className="pointer-events-auto absolute inset-0 z-10 size-11 shrink-0 rounded-[15px] border border-zinc-200/70 bg-white text-zinc-500 opacity-0 shadow-sm transition-all duration-200 hover:bg-zinc-100 hover:text-zinc-950 group-hover/sidebar:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
             >
               <PanelLeftOpen className="size-4.5" />
             </Button>
@@ -371,8 +372,8 @@ export const AdminLayout: React.FC = () => {
             isCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'
           )}
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
-          <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
+          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">Admin Dashboard</h2>
         </div>
         {!isCollapsed && (
           <Tooltip>
@@ -384,7 +385,7 @@ export const AdminLayout: React.FC = () => {
                 aria-label="Collapse sidebar"
                 aria-expanded={true}
                 onClick={toggleSidebarCollapse}
-                className="ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10"
+                className="z-10 ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
               >
                 <PanelLeftClose className="size-5" />
               </Button>
@@ -413,59 +414,15 @@ export const AdminLayout: React.FC = () => {
     </>
   );
 
-  const mobileSidebarAccountMenu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Open account menu"
-          className="group mt-4 flex w-full shrink-0 items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white/85 px-3 py-3 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
-        >
-          <div className="flex size-9 shrink-0 transition-all duration-300 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15">
-            {userInitials}
-          </div>
-          <div className="w-full min-w-0 overflow-hidden whitespace-nowrap text-left">
-            <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
-            <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={14} className="w-64 rounded-2xl p-2">
-        <DropdownMenuLabel>
-          <div className="space-y-1 normal-case tracking-normal">
-            <p className="text-sm font-semibold tracking-tight text-zinc-950">{userName}</p>
-            <p className="text-xs font-medium text-zinc-500">{userRole}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/settings" className="cursor-pointer" onClick={closeSidebar}>
-            <UserRound className="size-4" />
-            <span>Manage Profile</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
-          <Trash2 className="size-4" />
-          <span>Delete Account</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
-          <LogOut className="size-4" />
-          <span>Logout</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
   const mobileSidebarContent = (
     <>
-      <div className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 pb-4 px-2">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm">
-          <Sparkles className="size-4 text-zinc-50" />
+      <div className="mb-3 flex shrink-0 items-center gap-3 border-b border-zinc-100 px-2 pb-4 dark:border-zinc-800/80">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 shadow-sm dark:bg-zinc-100">
+          <Sparkles className="size-4 text-zinc-50 dark:text-zinc-950" />
         </div>
         <div className="w-full min-w-0 overflow-hidden whitespace-nowrap">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Smart Exam Scheduler</p>
-          <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
+          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">Admin Dashboard</h2>
         </div>
         <Button
           type="button"
@@ -473,7 +430,7 @@ export const AdminLayout: React.FC = () => {
           size="icon"
           aria-label="Close sidebar"
           onClick={closeSidebar}
-          className="ml-auto size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950"
+          className="ml-auto size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
         >
           <X className="size-4.5" />
         </Button>
@@ -493,21 +450,20 @@ export const AdminLayout: React.FC = () => {
           ))}
         </div>
       </div>
-      {mobileSidebarAccountMenu}
     </>
   );
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="min-h-screen bg-zinc-50/60 text-zinc-950 selection:bg-zinc-200">
+      <div className="min-h-screen bg-zinc-50/60 text-zinc-950 selection:bg-zinc-200 dark:bg-zinc-950 dark:text-zinc-50 dark:selection:bg-zinc-800">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-zinc-200/30 blur-3xl" />
-        <div className="absolute right-0 top-24 h-80 w-80 rounded-full bg-sky-100/40 blur-3xl" />
+        <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-zinc-200/30 blur-3xl dark:bg-zinc-800/20" />
+        <div className="absolute right-0 top-24 h-80 w-80 rounded-full bg-sky-100/40 blur-3xl dark:bg-zinc-700/10" />
       </div>
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex group/sidebar',
+          'fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-zinc-200/70 bg-white/70 px-4 py-4 backdrop-blur-xl transition-[width] duration-300 ease-out md:flex group/sidebar dark:border-zinc-800/80 dark:bg-zinc-950/78 dark:shadow-2xl dark:shadow-black/30',
           isCollapsed ? 'w-24 cursor-default [&_button]:cursor-pointer [&_a]:cursor-pointer' : 'w-80'
         )}
         onClick={isCollapsed ? toggleSidebarCollapse : undefined}
@@ -519,7 +475,7 @@ export const AdminLayout: React.FC = () => {
         type="button"
         aria-label="Close sidebar overlay"
         className={cn(
-          'fixed inset-0 z-40 bg-zinc-950/35 backdrop-blur-sm md:hidden transition-opacity duration-500 ease-in-out',
+          'fixed inset-0 z-40 bg-zinc-950/35 backdrop-blur-sm transition-opacity duration-500 ease-in-out md:hidden dark:bg-black/60',
           isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         )}
         onClick={closeSidebar}
@@ -528,7 +484,7 @@ export const AdminLayout: React.FC = () => {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,opacity] duration-500 ease-in-out md:hidden w-[86vw] max-w-[320px]',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[86vw] max-w-[320px] flex-col border-r border-zinc-200/70 bg-white/88 px-4 py-4 backdrop-blur-xl transition-[transform,opacity] duration-500 ease-in-out md:hidden dark:border-zinc-800/80 dark:bg-zinc-950/92',
           isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
         )}
       >
@@ -562,24 +518,6 @@ export const AdminLayout: React.FC = () => {
                 onOpen={() => setIsCommandOpen(true)}
                 className="md:hidden"
               />
-
-              {activeSemester && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      to="/semesters"
-                      className="hidden h-10 items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition-all hover:border-zinc-300 hover:bg-white sm:inline-flex dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                    >
-                      <span className="flex size-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" aria-hidden />
-                      <Calendar className="size-3.5 text-zinc-500 dark:text-zinc-400" />
-                      <span className="max-w-40 truncate">{activeSemester.name}</span>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={8} className="font-medium">
-                    Active semester
-                  </TooltipContent>
-                </Tooltip>
-              )}
 
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -623,16 +561,10 @@ export const AdminLayout: React.FC = () => {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings" className="cursor-pointer">
-                      <UserRound className="size-4" />
-                      <span>Manage Profile</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
-                    <Trash2 className="size-4" />
-                    <span>Delete Account</span>
-                  </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsProfileDialogOpen(true)}>
+                        <UserRound className="size-4" />
+                        <span>Manage Profile</span>
+                      </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
                     <LogOut className="size-4" />
@@ -699,10 +631,99 @@ export const AdminLayout: React.FC = () => {
           deleteAccountMutation.mutate(undefined, {
             onSuccess: () => {
               setIsDeleteModalOpen(false);
+              setIsProfileDialogOpen(false);
             },
           });
         }}
       />
+
+      <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
+        <DialogContent className="max-w-lg rounded-2xl border-zinc-200/80 bg-white/95 p-0 shadow-2xl shadow-zinc-950/20 backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/50">
+          <DialogHeader className="border-b border-zinc-200/70 px-6 py-5 dark:border-zinc-800/80">
+            <DialogTitle className="text-base font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+              Manage Profile
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+              Review your admin identity, access role, and account details for this session.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 py-5">
+            <Card className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 py-0 shadow-none ring-0 dark:border-zinc-800/80 dark:bg-zinc-900/45">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-base font-bold text-white shadow-lg shadow-zinc-900/15 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-white/5">
+                    {userInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-bold text-zinc-950 dark:text-zinc-50">{userName}</p>
+                      <Badge className="border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
+                        {userRole}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{userEmail}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border border-zinc-200/70 bg-white/85 py-0 shadow-none ring-0 dark:border-zinc-800/80 dark:bg-zinc-950/55">
+              <CardContent className="grid gap-4 p-4">
+                <div className="grid gap-1.5 rounded-xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                    Name
+                  </p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{userName}</p>
+                </div>
+
+                <div className="grid gap-1.5 rounded-xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                    Email
+                  </p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{userEmail}</p>
+                </div>
+
+                <div className="grid gap-1.5 rounded-xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/60">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                    Role
+                  </p>
+                  <div>
+                    <Badge className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                      {userRole}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border border-rose-200/80 bg-rose-50/80 py-0 shadow-none ring-0 dark:border-rose-900/70 dark:bg-rose-950/25">
+              <CardContent className="space-y-4 p-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-rose-700 dark:text-rose-300">
+                    <Trash2 className="size-3.5" />
+                    Danger Zone
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Delete Account</p>
+                  <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                    Permanently remove this administrator account from the system. This action cannot be undone.
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="h-10 rounded-xl px-4 font-semibold"
+                >
+                  <Trash2 className="mr-2 size-4" />
+                  Delete Account
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CommandSearch open={isCommandOpen} onOpenChange={setIsCommandOpen} />
     </div>

@@ -374,7 +374,7 @@ export function CourseForm({
           <SelectContent>
             {semesters.map((semester) => (
               <SelectItem key={semester.id} value={semester.id}>
-                {semester.isActive ? `${semester.name} (Active)` : semester.name}
+                {semester.name}
               </SelectItem>
             ))}
           </SelectContent>

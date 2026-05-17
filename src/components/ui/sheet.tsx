@@ -73,7 +73,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col bg-popover text-popover-foreground shadow-2xl shadow-zinc-950/15 ring-1 ring-foreground/10 outline-none duration-300 ease-out data-open:animate-in data-closed:animate-out data-open:duration-300 data-closed:duration-200",
+            "fixed z-50 flex flex-col bg-popover text-popover-foreground shadow-2xl shadow-zinc-950/15 ring-1 ring-foreground/10 outline-none duration-300 ease-out data-open:animate-in data-closed:animate-out data-open:duration-300 data-closed:duration-200 dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:shadow-black/40 dark:ring-white/5",
           sideClasses[side],
           className
         )}
@@ -102,7 +102,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-header"
       className={cn(
-        "flex flex-col gap-1 border-b border-zinc-200/60 p-5 text-left",
+        "flex flex-col gap-1 border-b border-zinc-200/60 p-5 text-left dark:border-zinc-800/80",
         className
       )}
       {...props}
@@ -115,7 +115,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-footer"
       className={cn(
-        "mt-auto flex flex-col-reverse gap-2 border-t border-zinc-200/60 p-5 sm:flex-row sm:justify-end",
+        "mt-auto flex flex-col-reverse gap-2 border-t border-zinc-200/60 p-5 sm:flex-row sm:justify-end dark:border-zinc-800/80",
         className
       )}
       {...props}
@@ -130,7 +130,7 @@ function SheetTitle({
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-base font-semibold tracking-tight text-zinc-950", className)}
+      className={cn("text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50", className)}
       {...props}
     />
   )
@@ -143,7 +143,7 @@ function SheetDescription({
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-xs text-zinc-500", className)}
+      className={cn("text-xs text-zinc-500 dark:text-zinc-400", className)}
       {...props}
     />
   )

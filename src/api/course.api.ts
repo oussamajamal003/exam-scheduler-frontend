@@ -36,16 +36,12 @@ type BackendCourse = {
   semester?: {
     id: string;
     name: string;
-    isActive?: boolean;
-    isCurrent?: boolean;
   } | null;
   courseOfferings?: Array<{
     id?: string;
     semester?: {
       id: string;
       name: string;
-      isActive?: boolean;
-      isCurrent?: boolean;
       startDate?: string;
     } | null;
     _count?: { registrations?: number; exams?: number };
@@ -67,11 +63,8 @@ const resolveSemester = (course: BackendCourse) => {
     return { semesterId: course.semesterId, semesterName: "" };
   }
   const offerings = course.courseOfferings ?? [];
-  const currentOffering = offerings.find(
-    (offering) => offering.semester?.isCurrent || offering.semester?.isActive
-  );
   const latestOffering = offerings[0];
-  const semester = currentOffering?.semester ?? latestOffering?.semester;
+  const semester = latestOffering?.semester;
 
   return {
     semesterId: semester?.id ?? "",

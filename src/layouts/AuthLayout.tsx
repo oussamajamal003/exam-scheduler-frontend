@@ -3,6 +3,42 @@ import { Outlet } from 'react-router-dom';
 import { SplashScreen } from '@/components/shared/SplashScreen';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 
+// Place a university exam room photo at /public/exam-bg.jpg to activate.
+// Falls back to a premium dark gradient if the image is unavailable.
+const AuthBackground: React.FC = () => (
+  <>
+    {/* Background image layer */}
+    <div
+      className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url('/exam-bg.jpg')" }}
+      aria-hidden="true"
+    />
+    {/* Gradient overlay: dark vignette for readability */}
+    <div
+      className="absolute inset-0 z-0"
+      style={{
+        background:
+          'linear-gradient(135deg, rgba(9,9,11,0.82) 0%, rgba(9,9,11,0.68) 40%, rgba(9,9,11,0.78) 100%)',
+      }}
+      aria-hidden="true"
+    />
+    {/* Subtle top glow accent */}
+    <div
+      className="absolute inset-x-0 top-0 z-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
+      aria-hidden="true"
+    />
+    {/* Bottom glow accent */}
+    <div
+      className="absolute inset-x-0 bottom-0 z-0 h-32"
+      style={{
+        background:
+          'linear-gradient(to top, rgba(9,9,11,0.9) 0%, transparent 100%)',
+      }}
+      aria-hidden="true"
+    />
+  </>
+);
+
 const SPLASH_SEEN_KEY = 'sis-auth-splash-seen';
 const OPEN_TAB_COUNT_KEY = 'sis-auth-open-tabs';
 const LAST_CLOSE_AT_KEY = 'sis-auth-last-close-at';
@@ -72,8 +108,8 @@ export const AuthLayout: React.FC = () => {
 
   if (stage === 'spinner') {
     return (
-      <div className="relative grid min-h-screen place-items-center bg-zinc-50 p-4 selection:bg-zinc-200">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-zinc-200/50 via-zinc-50 to-zinc-50" />
+      <div className="relative grid min-h-screen place-items-center bg-zinc-950 p-4 selection:bg-zinc-700">
+        <AuthBackground />
         <PageSpinner label="Opening secure workspace" />
       </div>
     );
@@ -84,9 +120,9 @@ export const AuthLayout: React.FC = () => {
   }
 
   return (
-    <div className="relative grid min-h-screen place-items-center bg-zinc-50 p-4 selection:bg-zinc-200">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-zinc-200/50 via-zinc-50 to-zinc-50" />
-      <div className="w-full max-w-105 animate-in zoom-in-95 fade-in duration-500">
+    <div className="relative grid min-h-screen place-items-center bg-zinc-950 p-4 selection:bg-zinc-700">
+      <AuthBackground />
+      <div className="relative z-10 w-full max-w-105 animate-in zoom-in-95 fade-in duration-500">
         <Outlet />
       </div>
     </div>

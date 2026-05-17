@@ -50,7 +50,7 @@ export const LoginForm: React.FC = () => {
           />
         </div>
 
-        <Button type="submit" disabled={isPending} className="h-11 w-full bg-zinc-950 font-medium text-zinc-50 shadow-sm transition-all hover:bg-zinc-900 disabled:opacity-70">
+        <Button type="submit" disabled={isPending} className="h-11 w-full bg-zinc-950 text-white font-semibold shadow-sm transition-all hover:bg-zinc-800 disabled:opacity-60">
           {isPending ? 'Authenticating...' : 'Sign In'}
         </Button>
       </form>

@@ -5,10 +5,7 @@ export const semesterSchema = z.object({
   name: z.string(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  isActive: z.boolean().optional().default(false),
-  isCurrent: z.boolean().optional().default(false),
   academicYear: z.string().optional(),
-  status: z.enum(["ACTIVE", "UPCOMING", "PAST"]).optional(),
   courseOfferings: z.array(z.unknown()).optional(),
   courseOfferingsCount: z.number().optional().default(0),
 });
@@ -41,16 +38,4 @@ export type CreateSemesterDto = {
 };
 
 export type UpdateSemesterDto = Partial<CreateSemesterDto>;
-
-export type DerivedSemesterStatus = "ACTIVE" | "UPCOMING" | "PAST";
-
-export const computeStatus = (semester: Semester): DerivedSemesterStatus => {
-  if (semester.status) return semester.status as DerivedSemesterStatus;
-  const now = Date.now();
-  const start = semester.startDate ? new Date(semester.startDate).getTime() : NaN;
-  const end = semester.endDate ? new Date(semester.endDate).getTime() : NaN;
-  if (!Number.isNaN(start) && now < start) return "UPCOMING";
-  if (!Number.isNaN(end) && now > end) return "PAST";
-  return "ACTIVE";
-};
 

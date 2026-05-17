@@ -8,7 +8,7 @@ interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
 const Skeleton: React.FC<SkeletonProps> = ({ className, ...props }) => {
   return (
     <div
-      className={cn("animate-pulse rounded-none bg-zinc-200", className)}
+      className={cn("animate-pulse rounded-none bg-zinc-200 dark:bg-zinc-800", className)}
       {...props}
     />
   );
@@ -30,7 +30,7 @@ export const TableSkeletonRows: React.FC<TableSkeletonProps> = ({
       {Array.from({ length: rows }).map((_, rowIndex) => (
         <div
           key={`row-${rowIndex}`}
-          className="flex items-center gap-4 border-b border-zinc-100 px-0 py-3.5 last:border-0"
+          className="flex items-center gap-4 border-b border-zinc-100 px-0 py-3.5 last:border-0 dark:border-zinc-800/80"
         >
           {Array.from({ length: columns }).map((_, colIndex) => (
             <Skeleton
@@ -53,9 +53,9 @@ export const TableSkeleton: React.FC<TableSkeletonProps> = ({
   className
 }) => {
   return (
-    <div className={cn("overflow-hidden rounded-none border border-zinc-200/60", className)}>
+    <div className={cn("overflow-hidden rounded-none border border-zinc-200/60 dark:border-zinc-800/80 dark:bg-zinc-950/35", className)}>
       {/* Header row */}
-      <div className="flex items-center gap-4 border-b border-zinc-200/60 bg-zinc-50 px-4 py-3">
+      <div className="flex items-center gap-4 border-b border-zinc-200/60 bg-zinc-50 px-4 py-3 dark:border-zinc-800/80 dark:bg-zinc-900/70">
         {Array.from({ length: columns }).map((_, i) => (
           <Skeleton key={`header-${i}`} className={cn('h-3', i === columns - 1 ? 'w-16' : 'flex-1')} />
         ))}

@@ -119,6 +119,7 @@ import { cn } from "../../lib/utils";
 // -------------------- helpers --------------------
 
 const ALL = "__all__";
+const SELECTED_SCHEDULE_STORAGE_KEY = "selected_schedule_id";
 
 const formatTime = (iso?: string | null) => {
   if (!iso) return "—";
@@ -165,12 +166,12 @@ const PublishScheduleDialog = ({
   onOpenChange: (open: boolean) => void;
   onConfirm: (examPeriod: string) => void;
 }) => {
-  const [examPeriod, setExamPeriod] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setExamPeriod(inferExamPeriod(schedule));
-  }, [open, schedule]);
+  const scheduleKey = open ? schedule?.id ?? "__new__" : "__closed__";
+  const [examPeriodState, setExamPeriodState] = useState({ scheduleKey: "", value: "" });
+  const examPeriod = examPeriodState.scheduleKey === scheduleKey
+    ? examPeriodState.value
+    : inferExamPeriod(schedule);
+  const setExamPeriod = (value: string) => setExamPeriodState({ scheduleKey, value });
 
   const trimmedExamPeriod = examPeriod.trim();
 
@@ -436,7 +437,7 @@ const ScheduleVersionsTable = ({
                     <TableRow
                       key={s.id}
                       className={cn(
-                        "border-b border-zinc-100 transition-colors hover:bg-zinc-50/70",
+                        "border-b border-zinc-200/40 transition-all duration-200 cursor-pointer hover:bg-zinc-50/60",
                         isActive && "bg-zinc-50"
                       )}
                     >
@@ -750,7 +751,6 @@ type SemesterOption = {
   id: string;
   name: string;
   year?: number | null;
-  isActive?: boolean | null;
   startDate?: string | null;
   endDate?: string | null;
 };
@@ -947,6 +947,22 @@ const getQualityTone = (value: number) => {
     glow: "shadow-[0_18px_40px_-24px_rgba(244,63,94,0.55)]",
   };
 };
+const widthClassForPct = (value: number) => {
+  if (value >= 95) return "w-full";
+  if (value >= 90) return "w-11/12";
+  if (value >= 80) return "w-4/5";
+  if (value >= 75) return "w-3/4";
+  if (value >= 66) return "w-2/3";
+  if (value >= 60) return "w-3/5";
+  if (value >= 50) return "w-1/2";
+  if (value >= 40) return "w-2/5";
+  if (value >= 33) return "w-1/3";
+  if (value >= 25) return "w-1/4";
+  if (value >= 20) return "w-1/5";
+  if (value >= 10) return "w-[10%]";
+  if (value > 0) return "w-[5%]";
+  return "w-0";
+};
 const normalizeBlockingMessage = (message: string | null | undefined) => {
   if (!message) return GENERATION_BLOCKED_DETAIL_FALLBACK;
 
@@ -985,13 +1001,13 @@ const ResourceStatCard = ({
   label: string;
   value: number;
 }) => (
-  <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70 px-4 py-4 shadow-sm">
+  <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70 px-4 py-4 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30">
     <div className="flex items-start justify-between gap-3">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-        <p className="mt-2 text-3xl font-bold tabular-nums text-zinc-950">{value}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">{label}</p>
+        <p className="mt-2 text-3xl font-bold tabular-nums text-zinc-950 dark:text-zinc-50">{value}</p>
       </div>
-      <span className="inline-flex size-10 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-700 shadow-sm">
+      <span className="inline-flex size-10 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
         <Icon className="size-4" />
       </span>
     </div>
@@ -1008,17 +1024,17 @@ const QualityMetricCard = ({ label, value }: { label: string; value: number }) =
       <div className={cn("rounded-none border px-4 py-4", tone.shell, tone.glow)}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">{label}</p>
             <p className={cn("mt-2 text-3xl font-bold tabular-nums", tone.score)}>{formatScore(value)}</p>
           </div>
         </div>
         <div className="mt-4 space-y-2">
           <div className={cn("h-2.5 overflow-hidden rounded-full", tone.track)}>
-            <div className={cn("h-full rounded-full", tone.fill)} style={{ width: `${normalizedValue}%` }} />
+            <div className={cn("h-full rounded-full", tone.fill, widthClassForPct(normalizedValue))} />
           </div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
+          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
             <span className={cn("uppercase tracking-wide", tone.score)}>{descriptor}</span>
-            <span className="tabular-nums text-zinc-400">{normalizedValue}/100</span>
+            <span className="tabular-nums text-zinc-400 dark:text-zinc-500">{normalizedValue}/100</span>
           </div>
         </div>
       </div>
@@ -1037,18 +1053,18 @@ const ScoreSummaryCard = ({
 }) => {
   const styles = {
     draft: {
-      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70",
-      eyebrow: "text-zinc-500",
-      value: "text-zinc-950",
-      caption: "text-zinc-500",
-      iconWrap: "bg-white text-zinc-700 border border-zinc-200",
+      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70 dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80",
+      eyebrow: "text-zinc-500 dark:text-zinc-400",
+      value: "text-zinc-950 dark:text-zinc-50",
+      caption: "text-zinc-500 dark:text-zinc-400",
+      iconWrap: "bg-white text-zinc-700 border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
     },
     optimized: {
-      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.65)]",
-      eyebrow: "text-emerald-700",
-      value: "text-emerald-950",
-      caption: "text-emerald-800",
-      iconWrap: "bg-white text-emerald-700 border border-emerald-200",
+      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.65)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30",
+      eyebrow: "text-emerald-700 dark:text-emerald-300",
+      value: "text-emerald-950 dark:text-emerald-100",
+      caption: "text-emerald-800 dark:text-emerald-300",
+      iconWrap: "bg-white text-emerald-700 border border-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
     },
     improvement: {
       shell: "border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_18px_40px_-24px_rgba(24,24,27,0.8)]",
@@ -1087,19 +1103,19 @@ const WeakAreaItem = ({ area, score, index }: { area: string; score: number; ind
   ][index % 4];
 
   return (
-    <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-3 py-3 shadow-sm">
+    <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-3 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-black/20">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-zinc-900">{formatQualityArea(area)}</p>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500">{descriptor}</p>
-          <p className="mt-1 text-[11px] text-zinc-400">Before optimization</p>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{formatQualityArea(area)}</p>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{descriptor}</p>
+          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Before optimization</p>
         </div>
-        <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+        <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
           {formatScore(score)}
         </span>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200/80">
-        <div className={cn("h-full rounded-full bg-linear-to-r", stripeTone)} style={{ width: `${width}%` }} />
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
+        <div className={cn("h-full rounded-full bg-linear-to-r", stripeTone, widthClassForPct(width))} />
       </div>
     </div>
   );
@@ -1118,22 +1134,22 @@ const FinalStatCard = ({
 }) => {
   const styles = {
     neutral: {
-      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70",
-      label: "text-zinc-500",
-      value: "text-zinc-950",
-      icon: "border-zinc-200 bg-white text-zinc-700",
+      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/80 to-zinc-100/70 dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80",
+      label: "text-zinc-500 dark:text-zinc-400",
+      value: "text-zinc-950 dark:text-zinc-50",
+      icon: "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
     },
     success: {
-      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.55)]",
-      label: "text-emerald-700",
-      value: "text-emerald-950",
-      icon: "border-emerald-200 bg-white text-emerald-700",
+      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.55)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30",
+      label: "text-emerald-700 dark:text-emerald-300",
+      value: "text-emerald-950 dark:text-emerald-100",
+      icon: "border-emerald-200 bg-white text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
     },
     quality: {
-      shell: "border-sky-200 bg-linear-to-br from-sky-50 via-white to-indigo-50 shadow-[0_18px_40px_-24px_rgba(59,130,246,0.5)]",
-      label: "text-sky-700",
-      value: "text-sky-950",
-      icon: "border-sky-200 bg-white text-sky-700",
+      shell: "border-sky-200 bg-linear-to-br from-sky-50 via-white to-indigo-50 shadow-[0_18px_40px_-24px_rgba(59,130,246,0.5)] dark:border-sky-900/70 dark:from-sky-950/50 dark:via-zinc-950 dark:to-indigo-950/40 dark:shadow-black/30",
+      label: "text-sky-700 dark:text-sky-300",
+      value: "text-sky-950 dark:text-sky-100",
+      icon: "border-sky-200 bg-white text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
     },
   }[tone];
 
@@ -1246,11 +1262,7 @@ const GenerateScheduleDialog = ({
   const optimizationResult = optimizeMutation.data;
   const finalPipelineResult = optimizationResult ?? validationResult;
 
-  const defaultSemesterId = useMemo(() => {
-    if (semesters.length === 0) return "";
-    return (semesters.find((s) => s.isActive) ?? semesters[0]).id;
-  }, [semesters]);
-  const effectiveSemesterId = semesterId || defaultSemesterId;
+  const effectiveSemesterId = semesterId;
 
   const clearPipelineTimers = () => {
     for (const timerId of pipelineTimerIdsRef.current) {
@@ -1550,10 +1562,10 @@ const GenerateScheduleDialog = ({
   }, [activeStepKey, steps]);
 
   const stepStatusClass = (status: PipelineStepStatus) => {
-    if (status === "complete") return "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 text-emerald-700 shadow-[0_18px_36px_-26px_rgba(16,185,129,0.5)]";
+    if (status === "complete") return "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 text-emerald-700 shadow-[0_18px_36px_-26px_rgba(16,185,129,0.5)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:text-emerald-300 dark:shadow-black/30";
     if (status === "active") return "border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_18px_36px_-24px_rgba(24,24,27,0.8)]";
-    if (status === "blocked") return "border-amber-200 bg-linear-to-br from-amber-50 via-white to-orange-50 text-amber-700";
-    return "border-zinc-200 bg-linear-to-br from-white to-zinc-50 text-zinc-400";
+    if (status === "blocked") return "border-amber-200 bg-linear-to-br from-amber-50 via-white to-orange-50 text-amber-700 dark:border-amber-900/70 dark:from-amber-950/50 dark:via-zinc-950 dark:to-orange-950/30 dark:text-amber-300";
+    return "border-zinc-200 bg-linear-to-br from-white to-zinc-50 text-zinc-400 dark:border-zinc-800 dark:from-zinc-950 dark:to-zinc-900 dark:text-zinc-500";
   };
 
   const stepStatusLabel = (status: PipelineStepStatus) => {
@@ -1565,26 +1577,26 @@ const GenerateScheduleDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!isBusy) onOpenChange(next); }}>
-      <DialogContent className="!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-none p-0 gap-0 sm:max-w-3xl">
+      <DialogContent className="flex! max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-none border-zinc-200/80 bg-white p-0 gap-0 shadow-2xl shadow-zinc-950/15 dark:border-zinc-800/80 dark:bg-zinc-950 dark:shadow-black/50 sm:max-w-3xl">
         {/* Dialog header */}
-        <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.92)_42%,rgba(228,228,231,0.82))] px-5 py-4 sm:px-6 sm:py-5">
-          <div className="relative rounded-none border border-zinc-200/80 bg-white/80 p-4 shadow-[0_20px_48px_-34px_rgba(24,24,27,0.35)] backdrop-blur-sm sm:p-5">
-            <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-32 bg-[linear-gradient(135deg,rgba(24,24,27,0.05),rgba(24,24,27,0))] lg:block" />
+        <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.92)_42%,rgba(228,228,231,0.82))] px-5 py-4 dark:border-zinc-800/80 dark:bg-[radial-gradient(circle_at_top_left,rgba(39,39,42,0.96),rgba(24,24,27,0.98)_44%,rgba(9,9,11,0.98))] sm:px-6 sm:py-5">
+          <div className="relative rounded-none border border-zinc-200/80 bg-white/80 p-4 shadow-[0_20px_48px_-34px_rgba(24,24,27,0.35)] backdrop-blur-sm dark:border-zinc-800/80 dark:bg-zinc-950/80 dark:shadow-black/40 sm:p-5">
+            <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-32 bg-[linear-gradient(135deg,rgba(24,24,27,0.05),rgba(24,24,27,0))] dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0))] lg:block" />
             <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
                 <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-none border border-zinc-900 bg-zinc-950 text-white shadow-[0_18px_36px_-22px_rgba(24,24,27,0.8)]">
                   <Sparkles className="size-4.5" />
                 </span>
                 <div className="space-y-1.5">
-                  <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                  <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
                     <ShieldCheck className="size-3.5" />
                     Confirmed Schedule Only
                   </span>
                   <div className="space-y-1">
-                    <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl">
+                    <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-xl">
                       Generate Schedule
                     </DialogTitle>
-                    <p className="max-w-2xl text-xs leading-5 text-zinc-600 sm:text-sm sm:leading-6">
+                    <p className="max-w-2xl text-xs leading-5 text-zinc-600 dark:text-zinc-400 sm:text-sm sm:leading-6">
                       Smart generation prepares resources, validates feasibility, optimizes quality, and saves only a confirmed schedule.
                     </p>
                   </div>
@@ -1596,13 +1608,13 @@ const GenerateScheduleDialog = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="space-y-6">
-          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70 p-4 shadow-sm">
+          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70 p-4 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Schedule Flow</p>
-                <p className="mt-1 text-sm font-semibold text-zinc-950">End-to-end generation pipeline</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Schedule Flow</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">End-to-end generation pipeline</p>
               </div>
-              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm">
+              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
                 {visibleStepCount}/8 steps
               </span>
             </div>
@@ -1648,33 +1660,33 @@ const GenerateScheduleDialog = ({
             </div>
           </div>
 
-          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-white p-4 shadow-sm">
+          <div className="space-y-4 rounded-none border border-zinc-200/70 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70 dark:shadow-black/30">
             <div className="flex items-center gap-2.5">
               <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
                 1
               </span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
                 Prepare
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="gen-semester" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                <Label htmlFor="gen-semester" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
                   Semester
                 </Label>
                 <Select
-                  value={effectiveSemesterId}
+                  value={semesterId}
                   onValueChange={handleSemesterChange}
                   disabled={semestersLoading || semesters.length === 0 || isBusy}
                 >
-                  <SelectTrigger id="gen-semester" className="h-11 w-full min-w-0 rounded-none border-zinc-200 bg-zinc-50/40 px-3 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50">
+                  <SelectTrigger id="gen-semester" className="h-11 w-full min-w-0 rounded-none border-zinc-200 bg-zinc-50/40 px-3 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700">
                     <SelectValue placeholder={semestersLoading ? "Loading…" : "Select semester"} />
                   </SelectTrigger>
                   <SelectContent className="max-w-[min(30rem,var(--radix-select-trigger-width))]">
                     {semesters.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.name}{s.year ? ` (${s.year})` : ""}{s.isActive ? " · Active" : ""}
+                        {s.name}{s.year ? ` (${s.year})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1682,7 +1694,7 @@ const GenerateScheduleDialog = ({
               </div>
 
               <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="gen-name" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                <Label htmlFor="gen-name" className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
                   Name
                 </Label>
                 <Input
@@ -1690,7 +1702,7 @@ const GenerateScheduleDialog = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Spring 2026 — Final Exams"
-                  className="h-11 rounded-none border-zinc-200 bg-zinc-50/40 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50"
+                  className="h-11 rounded-none border-zinc-200 bg-zinc-50/40 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700"
                   disabled={isBusy}
                 />
                 {name.trim().length > 0 && name.trim().length < 3 && (
@@ -1709,7 +1721,7 @@ const GenerateScheduleDialog = ({
                 <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
                   2
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                   Automatic Generation Check
                 </span>
               </div>
@@ -1731,8 +1743,8 @@ const GenerateScheduleDialog = ({
             </div>
 
             {phase === "idle" && (
-              <div className="flex items-center gap-2.5 rounded-none border border-dashed border-zinc-200 bg-zinc-50/60 px-4 py-3 text-xs text-zinc-500">
-                <ShieldCheck className="size-4 shrink-0 text-zinc-300" />
+              <div className="flex items-center gap-2.5 rounded-none border border-dashed border-zinc-200 bg-zinc-50/60 px-4 py-3 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+                <ShieldCheck className="size-4 shrink-0 text-zinc-300 dark:text-zinc-500" />
                 Select a semester, then start the automated schedule generation check.
               </div>
             )}
@@ -1752,10 +1764,10 @@ const GenerateScheduleDialog = ({
                   ))}
                 </div>
                 {prepare.semester?.name && (
-                  <div className="inline-flex items-center gap-2 rounded-none border border-zinc-200 bg-zinc-50/70 px-3 py-2 text-[11px] text-zinc-600 shadow-sm">
-                    <CalendarDays className="size-3.5 shrink-0 text-zinc-500" />
-                    <span className="font-semibold uppercase tracking-[0.14em] text-zinc-500">Semester</span>
-                    <span className="font-semibold text-zinc-900">{prepare.semester.name}</span>
+                  <div className="inline-flex items-center gap-2 rounded-none border border-zinc-200 bg-zinc-50/70 px-3 py-2 text-[11px] text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
+                    <CalendarDays className="size-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+                    <span className="font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">Semester</span>
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{prepare.semester.name}</span>
                   </div>
                 )}
               </div>
@@ -1763,19 +1775,19 @@ const GenerateScheduleDialog = ({
 
             {phase === "ready" && !zeroAssignments && (
               <div className="space-y-3">
-                <div className="rounded-none border border-emerald-200 bg-linear-to-r from-emerald-50 via-white to-emerald-100/70 px-4 py-4 shadow-[0_18px_36px_-24px_rgba(16,185,129,0.45)]">
+                <div className="rounded-none border border-emerald-200 bg-linear-to-r from-emerald-50 via-white to-emerald-100/70 px-4 py-4 shadow-[0_18px_36px_-24px_rgba(16,185,129,0.45)] dark:border-emerald-900/70 dark:from-emerald-950/50 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm">
+                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                         <CheckCircle2 className="size-4" />
                       </span>
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Ready</p>
-                        <p className="mt-1 text-base font-semibold text-emerald-950">Ready to generate</p>
-                        <p className="mt-1 text-xs text-emerald-800">Feasible draft confirmed</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Ready</p>
+                        <p className="mt-1 text-base font-semibold text-emerald-950 dark:text-emerald-100">Ready to generate</p>
+                        <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">Feasible draft confirmed</p>
                       </div>
                     </div>
-                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm">
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                       Optimized
                     </span>
                   </div>
@@ -1784,13 +1796,13 @@ const GenerateScheduleDialog = ({
                 {shouldShowQuality && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-                      <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/60 to-zinc-100/70 px-4 py-4 shadow-sm">
+                      <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/60 to-zinc-100/70 px-4 py-4 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Weak Areas</p>
-                            <p className="mt-1 text-sm font-semibold text-zinc-950">Priority quality gaps in the evaluated draft</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Weak Areas</p>
+                            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">Priority quality gaps in the evaluated draft</p>
                           </div>
-                          <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-500 shadow-sm">
+                          <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
                             Evaluated Draft
                           </span>
                         </div>
@@ -1801,38 +1813,38 @@ const GenerateScheduleDialog = ({
                             ))}
                           </div>
                         ) : (
-                          <div className="mt-4 rounded-none border border-emerald-200 bg-emerald-50/80 px-3 py-3 text-xs text-emerald-800">
+                          <div className="mt-4 rounded-none border border-emerald-200 bg-emerald-50/80 px-3 py-3 text-xs text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
                             No weak areas detected in the evaluated draft.
                           </div>
                         )}
                       </div>
-                      <div className="rounded-none border border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 px-4 py-4 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.6)]">
+                      <div className="rounded-none border border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 px-4 py-4 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.6)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Optimization Changes Applied</p>
-                            <p className="mt-1 text-sm font-semibold text-emerald-950">Accepted repair actions and re-check summary</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Optimization Changes Applied</p>
+                            <p className="mt-1 text-sm font-semibold text-emerald-950 dark:text-emerald-100">Accepted repair actions and re-check summary</p>
                           </div>
-                          <span className="inline-flex size-10 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm">
+                          <span className="inline-flex size-10 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                             <Sparkles className="size-4" />
                           </span>
                         </div>
                         <div className="mt-4 grid grid-cols-2 gap-3">
-                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3">
+                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3 dark:border-emerald-900/60 dark:bg-zinc-950/50">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Changes</p>
-                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950">{optimizationChangesApplied}</p>
+                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950 dark:text-emerald-100">{optimizationChangesApplied}</p>
                           </div>
-                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3">
+                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3 dark:border-emerald-900/60 dark:bg-zinc-950/50">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Strategies</p>
-                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950">{optimizationStrategyCount}</p>
+                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950 dark:text-emerald-100">{optimizationStrategyCount}</p>
                           </div>
                         </div>
-                        <div className="mt-4 flex items-center justify-between gap-3 rounded-none border border-emerald-200/70 bg-white/80 px-3 py-2.5">
+                        <div className="mt-4 flex items-center justify-between gap-3 rounded-none border border-emerald-200/70 bg-white/80 px-3 py-2.5 dark:border-emerald-900/60 dark:bg-zinc-950/50">
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Search Coverage</p>
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
                             {optimizationStrategyCount} strategies checked
                           </span>
                         </div>
-                        <p className="mt-3 text-xs font-medium text-emerald-800">Re-evaluated improved score: {formatScore(afterScore)}</p>
+                        <p className="mt-3 text-xs font-medium text-emerald-800 dark:text-emerald-300">Re-evaluated improved score: {formatScore(afterScore)}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1884,7 +1896,7 @@ const GenerateScheduleDialog = ({
                     "Increase available proctor coverage.",
                     "Add more valid exam time slots.",
                   ]).map((suggestion) => (
-                    <div key={suggestion} className="rounded-none border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+                    <div key={suggestion} className="rounded-none border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                       {suggestion}
                     </div>
                   ))}
@@ -1908,7 +1920,7 @@ const GenerateScheduleDialog = ({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-zinc-200/70 bg-zinc-50/60 flex sm:items-center gap-3">
+        <DialogFooter className="px-6 py-4 border-t border-zinc-200/70 bg-zinc-50/60 flex sm:items-center gap-3 dark:border-zinc-800/80 dark:bg-zinc-900/70">
           <Button
             type="button"
             variant="outline"
@@ -2018,53 +2030,53 @@ const getLogicalAssignmentCount = (assignments: ScheduleAssignment[] = []) => {
 
 const CALENDAR_PALETTES: CalendarPalette[] = [
   {
-    cardBg: "bg-indigo-50/70",
-    cardBorder: "border-indigo-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-indigo-700",
-    accent: "text-indigo-700",
+    cardBg: "bg-indigo-50/70 dark:bg-indigo-950/40",
+    cardBorder: "border-indigo-200/70 dark:border-indigo-800/60",
+    badgeBg: "bg-white dark:bg-indigo-950/60",
+    badgeText: "text-indigo-700 dark:text-indigo-300",
+    accent: "text-indigo-700 dark:text-indigo-400",
   },
   {
-    cardBg: "bg-amber-50/80",
-    cardBorder: "border-amber-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-amber-700",
-    accent: "text-amber-700",
+    cardBg: "bg-amber-50/80 dark:bg-amber-950/40",
+    cardBorder: "border-amber-200/70 dark:border-amber-800/60",
+    badgeBg: "bg-white dark:bg-amber-950/60",
+    badgeText: "text-amber-700 dark:text-amber-300",
+    accent: "text-amber-700 dark:text-amber-400",
   },
   {
-    cardBg: "bg-rose-50/70",
-    cardBorder: "border-rose-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-rose-700",
-    accent: "text-rose-700",
+    cardBg: "bg-rose-50/70 dark:bg-rose-950/40",
+    cardBorder: "border-rose-200/70 dark:border-rose-800/60",
+    badgeBg: "bg-white dark:bg-rose-950/60",
+    badgeText: "text-rose-700 dark:text-rose-300",
+    accent: "text-rose-700 dark:text-rose-400",
   },
   {
-    cardBg: "bg-emerald-50/70",
-    cardBorder: "border-emerald-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-emerald-700",
-    accent: "text-emerald-700",
+    cardBg: "bg-emerald-50/70 dark:bg-emerald-950/40",
+    cardBorder: "border-emerald-200/70 dark:border-emerald-800/60",
+    badgeBg: "bg-white dark:bg-emerald-950/60",
+    badgeText: "text-emerald-700 dark:text-emerald-300",
+    accent: "text-emerald-700 dark:text-emerald-400",
   },
   {
-    cardBg: "bg-sky-50/70",
-    cardBorder: "border-sky-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-sky-700",
-    accent: "text-sky-700",
+    cardBg: "bg-sky-50/70 dark:bg-sky-950/40",
+    cardBorder: "border-sky-200/70 dark:border-sky-800/60",
+    badgeBg: "bg-white dark:bg-sky-950/60",
+    badgeText: "text-sky-700 dark:text-sky-300",
+    accent: "text-sky-700 dark:text-sky-400",
   },
   {
-    cardBg: "bg-violet-50/70",
-    cardBorder: "border-violet-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-violet-700",
-    accent: "text-violet-700",
+    cardBg: "bg-violet-50/70 dark:bg-violet-950/40",
+    cardBorder: "border-violet-200/70 dark:border-violet-800/60",
+    badgeBg: "bg-white dark:bg-violet-950/60",
+    badgeText: "text-violet-700 dark:text-violet-300",
+    accent: "text-violet-700 dark:text-violet-400",
   },
   {
-    cardBg: "bg-teal-50/70",
-    cardBorder: "border-teal-200/70",
-    badgeBg: "bg-white",
-    badgeText: "text-teal-700",
-    accent: "text-teal-700",
+    cardBg: "bg-teal-50/70 dark:bg-teal-950/40",
+    cardBorder: "border-teal-200/70 dark:border-teal-800/60",
+    badgeBg: "bg-white dark:bg-teal-950/60",
+    badgeText: "text-teal-700 dark:text-teal-300",
+    accent: "text-teal-700 dark:text-teal-400",
   },
 ];
 
@@ -2224,7 +2236,7 @@ const ScheduleCalendarView = ({
 
   if (assignments.length === 0) {
     return (
-      <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
+      <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-zinc-950">
         <CardContent className="p-12">
           <EmptyState
             icon={CalendarRange}
@@ -2258,10 +2270,10 @@ const ScheduleCalendarView = ({
   };
 
   return (
-    <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
+    <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-zinc-950">
       <CardContent className="p-0">
         {/* Sticky month switcher */}
-        <div className="sticky top-0 z-10 border-b border-zinc-200/70 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-6">
+        <div className="sticky top-0 z-10 border-b border-zinc-200/70 bg-white/95 px-4 py-3 backdrop-blur-sm dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -2270,7 +2282,7 @@ const ScheduleCalendarView = ({
               }}
               disabled={!canGoPrev}
               aria-label="Previous month"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -2286,10 +2298,10 @@ const ScheduleCalendarView = ({
                     className={cn(
                       "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors",
                       isActive
-                        ? "border-zinc-900 bg-zinc-900 text-white shadow-sm"
+                        ? "border-zinc-900 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
                         : hasExams
-                        ? "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
+                        ? "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+                        : "border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300 hover:text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-600 dark:hover:border-zinc-700 dark:hover:text-zinc-500"
                     )}
                   >
                     {formatMonthLabel(mKey)}
@@ -2297,7 +2309,7 @@ const ScheduleCalendarView = ({
                       <span
                         className={cn(
                           "inline-block size-1.5 rounded-full",
-                          isActive ? "bg-white/80" : "bg-zinc-900"
+                          isActive ? "bg-zinc-950/70 dark:bg-zinc-100/70" : "bg-zinc-900 dark:bg-zinc-300"
                         )}
                       />
                     )}
@@ -2312,16 +2324,16 @@ const ScheduleCalendarView = ({
               }}
               disabled={!canGoNext}
               aria-label="Next month"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <ChevronRight className="size-4" />
             </button>
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             {effectiveMonth && (
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 {formatMonthFullLabel(effectiveMonth)}
-                <span className="ml-2 normal-case tracking-normal text-zinc-400">
+                <span className="ml-2 normal-case tracking-normal text-zinc-400 dark:text-zinc-500">
                   · {examsThisMonth} {examsThisMonth === 1 ? "exam" : "exams"}
                 </span>
               </div>
@@ -2341,8 +2353,8 @@ const ScheduleCalendarView = ({
                       className={cn(
                         "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors",
                         isActive
-                          ? "bg-zinc-900 text-white"
-                          : "text-zinc-500 hover:text-zinc-900"
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
+                          : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                       )}
                     >
                       {y}
@@ -2357,16 +2369,16 @@ const ScheduleCalendarView = ({
         {/* Days list */}
         {examsThisMonth === 0 ? (
           <div className="px-6 py-16 text-center">
-            <CalendarRange className="mx-auto size-8 text-zinc-300" />
-            <div className="mt-2 text-sm font-semibold text-zinc-700">
+            <CalendarRange className="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+            <div className="mt-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
               No exam available
             </div>
-            <div className="text-xs text-zinc-500">
+            <div className="text-xs text-zinc-500 dark:text-zinc-500">
               No exams are scheduled in {formatMonthFullLabel(effectiveMonth)}.
             </div>
           </div>
         ) : (
-          <ul className="divide-y divide-zinc-100">
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
             {calendarRows.map((row) => {
               if (row.kind === "empty") {
                 const startNum = Number(row.startKey.slice(8, 10));
@@ -2451,7 +2463,7 @@ const ScheduleCalendarView = ({
                                     >
                                       {code}
                                     </span>
-                                    <h3 className="mt-2 line-clamp-2 text-base font-semibold leading-snug text-zinc-900">
+                                    <h3 className="mt-2 line-clamp-2 text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
                                       {title}
                                     </h3>
                                   </div>
@@ -2464,7 +2476,7 @@ const ScheduleCalendarView = ({
                                 </div>
 
                                 {/* Time */}
-                                <div className="flex items-center gap-2 text-xs text-zinc-700">
+                                <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
                                   <Clock
                                     className={cn("size-3.5", palette.accent)}
                                   />
@@ -2472,21 +2484,21 @@ const ScheduleCalendarView = ({
                                     {formatTime(ts?.startTime)} – {formatTime(ts?.endTime)}
                                   </span>
                                   {a.exam?.duration != null && (
-                                    <span className="ml-auto inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <span className="ml-auto inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
                                       {a.exam.duration} min
                                     </span>
                                   )}
                                 </div>
 
                                 {/* Inner mini card */}
-                                <div className="rounded-xl border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur-sm">
-                                  <div className="flex items-center gap-2 text-xs text-zinc-700">
-                                    <DoorOpen className="size-3.5 text-zinc-500" />
+                                <div className="rounded-xl border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
+                                  <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                                    <DoorOpen className="size-3.5 text-zinc-500 dark:text-zinc-400" />
                                     <span className="truncate font-medium">
                                       {a.room?.name ?? "Not assigned"}
                                     </span>
                                     {a.room?.center?.name && (
-                                      <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                                      <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
                                         <MapPin className="size-3" />
                                         <span className="truncate">
                                           {a.room.center.name}
@@ -2494,8 +2506,8 @@ const ScheduleCalendarView = ({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-700">
-                                    <UserCheck className="size-3.5 text-zinc-500" />
+                                  <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                                    <UserCheck className="size-3.5 text-zinc-500 dark:text-zinc-400" />
                                     <span className="truncate">
                                       {a.proctor?.user?.name ?? "Not assigned"}
                                     </span>
@@ -2503,14 +2515,14 @@ const ScheduleCalendarView = ({
                                 </div>
 
                                 {/* Footer */}
-                                <div className="flex items-center justify-between border-t border-white/70 pt-2.5">
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
+                                <div className="flex items-center justify-between border-t border-white/70 pt-2.5 dark:border-white/10">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-zinc-700 dark:bg-white/10 dark:text-zinc-300">
                                     <Users className="size-3.5" />
                                     {studentsCount}{" "}
                                     {studentsCount === 1 ? "student" : "students"}
                                   </span>
                                   {a.exam?.courseOffering?.semester?.name && (
-                                    <span className="truncate text-[11px] text-zinc-500">
+                                    <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
                                       {a.exam.courseOffering.semester.name}
                                     </span>
                                   )}
@@ -2554,17 +2566,17 @@ const ViewProctorsDialog = ({
           return (
             <div
               key={a.id ?? i}
-              className="flex items-center gap-3 p-3 rounded-none border border-zinc-200/60 bg-zinc-50/40"
+              className="flex items-center gap-3 p-3 rounded-none border border-zinc-200/60 bg-zinc-50/40 dark:border-zinc-800/60 dark:bg-zinc-900/40"
             >
               <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 font-semibold text-sm">
                 {(sup?.user?.name?.[0] ?? "?").toUpperCase()}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-zinc-950 truncate">
+                <div className="text-sm font-semibold text-zinc-950 truncate dark:text-zinc-100">
                   {sup?.user?.name ?? "Unknown"}
                 </div>
                 {sup?.user?.email && (
-                  <div className="text-xs text-zinc-500 flex items-center gap-1 truncate">
+                  <div className="text-xs text-zinc-500 flex items-center gap-1 truncate dark:text-zinc-400">
                     <Mail className="size-3 shrink-0" />
                     {sup.user.email}
                   </div>
@@ -3338,7 +3350,9 @@ const DeleteAssignmentDialog = ({
 };
 
 export function SchedulesPage() {
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [selectedId, setSelectedId] = useState<string | undefined>(() => {
+    return localStorage.getItem(SELECTED_SCHEDULE_STORAGE_KEY) ?? undefined;
+  });
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -3357,12 +3371,30 @@ export function SchedulesPage() {
   const schedulesQuery = useSchedules({ limit: 100 });
   const schedules = schedulesQuery.data?.data ?? [];
 
+  const openGenerateFromRoute = searchParams.get("openGenerate") === "true";
+  const routeView = searchParams.get("view");
   const routeScheduleId =
     searchParams.get("scheduleId") ?? searchParams.get("id") ?? undefined;
   const routeAssignmentId = searchParams.get("assignmentId") ?? undefined;
 
+  const setGenerateDialogOpen = (next: boolean) => {
+    setGenerateOpen(next);
+    const nextParams = new URLSearchParams(searchParams);
+    if (next) {
+      nextParams.set("openGenerate", "true");
+    } else {
+      nextParams.delete("openGenerate");
+    }
+    setSearchParams(nextParams);
+  };
+
   // auto-select most recent
   const effectiveId = routeScheduleId ?? selectedId ?? schedules[0]?.id;
+
+  useEffect(() => {
+    if (!effectiveId) return;
+    localStorage.setItem(SELECTED_SCHEDULE_STORAGE_KEY, effectiveId);
+  }, [effectiveId]);
 
   const scheduleQuery = useSchedule(effectiveId);
   const schedule: Schedule | undefined = scheduleQuery.data?.id === effectiveId ? scheduleQuery.data : undefined;
@@ -3525,7 +3557,13 @@ export function SchedulesPage() {
     routeAssignmentId && routeAssignmentId !== lastHighlightedAssignmentId
       ? routeAssignmentId
       : null;
-  const activeViewMode = routeAssignmentId ? "table" : viewMode;
+  const activeViewMode = routeAssignmentId
+    ? "table"
+    : routeView === "calendar"
+      ? "calendar"
+      : routeView === "table"
+        ? "table"
+        : viewMode;
 
   useEffect(() => {
     if (!highlightedAssignmentId || activeViewMode !== "table") return;
@@ -3544,7 +3582,7 @@ export function SchedulesPage() {
   }, [activeViewMode, filteredAssignments, highlightedAssignmentId]);
 
   const handleGenerated = (result: { scheduleId?: string; schedule?: { id?: string } }) => {
-    setGenerateOpen(false);
+    setGenerateDialogOpen(false);
     const newId = result?.scheduleId ?? result?.schedule?.id;
     if (newId) {
       // Delay navigation until after the dialog close animation (duration-200) to
@@ -3561,6 +3599,7 @@ export function SchedulesPage() {
         nextParams.set("scheduleId", newId);
         nextParams.delete("id");
         nextParams.delete("assignmentId");
+        nextParams.delete("openGenerate");
         setSearchParams(nextParams);
         void schedulesQuery.refetch();
       }, 250);
@@ -3682,7 +3721,7 @@ export function SchedulesPage() {
       {/* Action bar: actions + selected schedule status */}
       <StickyActionBar className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <Button
-          onClick={() => setGenerateOpen(true)}
+          onClick={() => setGenerateDialogOpen(true)}
           className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-950 bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
         >
           <Sparkles className="size-4" />
@@ -3772,6 +3811,7 @@ export function SchedulesPage() {
         countOverrides={versionCountOverrides}
         onRequestPublish={openPublishDialog}
         onSelect={(id) => {
+          localStorage.setItem(SELECTED_SCHEDULE_STORAGE_KEY, id);
           setViewAssignment(null);
           setEditAssignment(null);
           setDeleteAssignment(null);
@@ -3787,6 +3827,7 @@ export function SchedulesPage() {
         }}
         onDeleted={(deletedId) => {
           if (deletedId === effectiveId) {
+            localStorage.removeItem(SELECTED_SCHEDULE_STORAGE_KEY);
             setSelectedId(undefined);
           }
           schedulesQuery.refetch();
@@ -3816,7 +3857,7 @@ export function SchedulesPage() {
               description="Generate your first schedule to start assigning exams to rooms, proctors and time slots."
               action={{
                 label: "Generate Schedule",
-                onClick: () => setGenerateOpen(true),
+                onClick: () => setGenerateDialogOpen(true),
               }}
             />
           </CardContent>
@@ -4057,7 +4098,12 @@ export function SchedulesPage() {
                 type="button"
                 role="tab"
                 data-state={viewMode === "table" ? "active" : "inactive"}
-                onClick={() => setViewMode("table")}
+                onClick={() => {
+                  setViewMode("table");
+                  const nextParams = new URLSearchParams(searchParams);
+                  nextParams.set("view", "table");
+                  setSearchParams(nextParams);
+                }}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewMode === "table"
@@ -4072,7 +4118,12 @@ export function SchedulesPage() {
                 type="button"
                 role="tab"
                 data-state={viewMode === "calendar" ? "active" : "inactive"}
-                onClick={() => setViewMode("calendar")}
+                onClick={() => {
+                  setViewMode("calendar");
+                  const nextParams = new URLSearchParams(searchParams);
+                  nextParams.set("view", "calendar");
+                  setSearchParams(nextParams);
+                }}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewMode === "calendar"
@@ -4185,7 +4236,7 @@ export function SchedulesPage() {
                             key={a.id}
                             data-assignment-ids={a.assignmentIds.join(" ")}
                             className={cn(
-                              "text-sm cursor-pointer transition-all duration-300 hover:bg-zinc-50/80 focus-visible:bg-zinc-50/80 focus:outline-none",
+                              "text-sm cursor-pointer transition-all duration-200 hover:bg-zinc-50/60 focus-visible:bg-zinc-50/60 focus:outline-none",
                               isHighlighted &&
                                 "bg-amber-50/80 ring-1 ring-inset ring-amber-300 shadow-[inset_4px_0_0_0_rgb(251_191_36)] animate-[pulse_1.1s_ease-out_2]"
                             )}
@@ -4363,8 +4414,8 @@ export function SchedulesPage() {
       )}
 
       <GenerateScheduleDialog
-        open={generateOpen}
-        onOpenChange={setGenerateOpen}
+        open={generateOpen || openGenerateFromRoute}
+        onOpenChange={setGenerateDialogOpen}
         semesters={semesters}
         semestersLoading={semestersQuery.isLoading}
         onGenerated={handleGenerated}

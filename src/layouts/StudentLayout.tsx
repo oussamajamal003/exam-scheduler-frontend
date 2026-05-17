@@ -29,7 +29,6 @@ export default function StudentLayout() {
       navSections={studentNavSections}
       fallbackName="Student User"
       fallbackInitials="SU"
-      profilePath="/student/settings"
       searchPlaceholder="Search schedules, courses, exams..."
     />
   );

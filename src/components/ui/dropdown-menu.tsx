@@ -49,7 +49,7 @@ function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<ty
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        'text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 z-50 min-w-32 overflow-hidden rounded-xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-900/10 backdrop-blur-md',
+        'text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 z-50 min-w-32 overflow-hidden rounded-xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-xl shadow-zinc-900/10 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:shadow-black/40',
         className,
       )}
       {...props}
@@ -64,7 +64,7 @@ function DropdownMenuContent({ className, sideOffset = 8, ...props }: React.Comp
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          'text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-56 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-2xl shadow-zinc-900/10 backdrop-blur-md',
+          'text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-56 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-2xl shadow-zinc-900/10 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:shadow-black/40',
           className,
         )}
         {...props}
@@ -83,7 +83,7 @@ function DropdownMenuItem({ className, inset, variant = 'default', ...props }: R
         'relative flex cursor-default select-none items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium outline-hidden transition-colors data-disabled:pointer-events-none data-disabled:opacity-50 data-[inset=true]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0',
         variant === 'destructive'
           ? 'text-destructive focus:bg-destructive/10 focus:text-destructive'
-          : 'text-zinc-700 focus:bg-zinc-100 focus:text-zinc-950',
+          : 'text-zinc-700 focus:bg-zinc-100 focus:text-zinc-950 dark:text-zinc-200 dark:focus:bg-zinc-800 dark:focus:text-zinc-50',
         className,
       )}
       {...props}
@@ -96,7 +96,7 @@ function DropdownMenuCheckboxItem({ className, children, checked, ...props }: Re
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-hidden transition-colors focus:bg-zinc-100 focus:text-zinc-950 data-disabled:pointer-events-none data-disabled:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-hidden transition-colors focus:bg-zinc-100 focus:text-zinc-950 data-disabled:pointer-events-none data-disabled:opacity-50 dark:text-zinc-200 dark:focus:bg-zinc-800 dark:focus:text-zinc-50',
         className,
       )}
       checked={checked}
@@ -117,7 +117,7 @@ function DropdownMenuRadioItem({ className, children, ...props }: React.Componen
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-hidden transition-colors focus:bg-zinc-100 focus:text-zinc-950 data-disabled:pointer-events-none data-disabled:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-hidden transition-colors focus:bg-zinc-100 focus:text-zinc-950 data-disabled:pointer-events-none data-disabled:opacity-50 dark:text-zinc-200 dark:focus:bg-zinc-800 dark:focus:text-zinc-50',
         className,
       )}
       {...props}
@@ -137,14 +137,14 @@ function DropdownMenuLabel({ className, inset, ...props }: React.ComponentProps<
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn('px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400 data-[inset=true]:pl-8', className)}
+      className={cn('px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400 data-[inset=true]:pl-8 dark:text-zinc-500', className)}
       {...props}
     />
   );
 }
 
 function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
-  return <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn('my-1 h-px bg-zinc-200/80', className)} {...props} />;
+  return <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn('my-1 h-px bg-zinc-200/80 dark:bg-zinc-800/90', className)} {...props} />;
 }
 
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {

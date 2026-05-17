@@ -36,7 +36,7 @@ const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
     return <PageSpinner label={`Loading ${title.toLowerCase()}`} />;
   }
 
-  return <div className="p-4 text-zinc-950">{title}</div>;
+  return <div className="p-4 text-zinc-950 dark:text-zinc-50">{title}</div>;
 };
 
 const ScrollToTop: React.FC = () => {

@@ -29,7 +29,6 @@ export default function ProctorLayout() {
       navSections={proctorNavSections}
       fallbackName="Proctor User"
       fallbackInitials="SV"
-      profilePath="/proctor/settings"
       searchPlaceholder="Search schedules, students, assignments..."
     />
   );

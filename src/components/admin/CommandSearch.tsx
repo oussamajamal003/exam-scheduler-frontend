@@ -439,7 +439,7 @@ const Row: React.FC<{
     className={cn(
       'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
       active
-        ? 'bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950'
+        ? 'bg-zinc-950 text-white dark:bg-zinc-800 dark:text-zinc-50'
         : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
       muted && !active && 'opacity-90'
     )}
@@ -448,7 +448,7 @@ const Row: React.FC<{
       className={cn(
         'flex size-9 shrink-0 items-center justify-center rounded-xl border transition-colors',
         active
-          ? 'border-transparent bg-white/15 text-white dark:bg-zinc-950/10 dark:text-zinc-950'
+          ? 'border-transparent bg-white/15 text-white dark:bg-zinc-700/80 dark:text-zinc-50'
           : tone === 'accent'
             ? 'border-zinc-200/80 bg-linear-to-br from-zinc-100 to-zinc-50 text-zinc-700 dark:border-zinc-700/80 dark:from-zinc-800 dark:to-zinc-900 dark:text-zinc-200'
             : 'border-zinc-200/70 bg-white text-zinc-600 group-hover:border-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-900 dark:text-zinc-300'
@@ -462,7 +462,7 @@ const Row: React.FC<{
         <span
           className={cn(
             'mt-0.5 block truncate text-xs font-medium',
-            active ? 'text-white/70 dark:text-zinc-950/70' : 'text-zinc-500 dark:text-zinc-400'
+            active ? 'text-white/70 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-400'
           )}
         >
           {subtitle}
@@ -474,7 +474,7 @@ const Row: React.FC<{
         className={cn(
           'hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider sm:inline-flex',
           active
-            ? 'border-white/20 bg-white/10 text-white dark:border-zinc-950/20 dark:bg-zinc-950/10 dark:text-zinc-950'
+            ? 'border-white/20 bg-white/10 text-white dark:border-zinc-700 dark:bg-zinc-700/70 dark:text-zinc-100'
             : 'border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400'
         )}
       >

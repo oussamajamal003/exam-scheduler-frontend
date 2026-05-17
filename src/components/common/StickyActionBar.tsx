@@ -55,7 +55,7 @@ export function StickyActionBar({ children, className }: StickyActionBarProps) {
       className={cn(
         "group sticky top-[76px] z-20 mb-8 flex transition-all duration-200 items-start border-y",
         isStuck
-          ? "sm:h-[76px] sm:items-center border-zinc-200/70 bg-transparent backdrop-blur-md -mx-5 px-5 py-3 sm:py-0 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 shadow-sm"
+          ? "-mx-5 border-zinc-200/70 bg-transparent px-5 py-3 shadow-sm backdrop-blur-md sm:-mx-6 sm:h-[76px] sm:items-center sm:px-6 sm:py-0 lg:-mx-8 lg:px-8 dark:border-zinc-800/80 dark:bg-zinc-950/35 dark:shadow-black/10"
           : "py-2 border-transparent bg-transparent",
       )}
     >

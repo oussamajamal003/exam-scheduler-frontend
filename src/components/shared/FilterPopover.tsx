@@ -45,15 +45,15 @@ export function FilterPopover({
         <Button
           variant="outline"
           className={cn(
-            "h-10 rounded-none border-zinc-200 bg-white text-zinc-950 font-semibold inline-flex items-center gap-2 hover:bg-zinc-50 active:scale-95 transition-all",
-            hasActive && "border-zinc-950",
+            "inline-flex h-10 items-center gap-2 rounded-none border-zinc-200 bg-white font-semibold text-zinc-950 transition-all hover:bg-zinc-50 active:scale-95 dark:border-zinc-700/80 dark:bg-zinc-950/70 dark:text-zinc-100 dark:hover:bg-zinc-900",
+            hasActive && "border-zinc-950 dark:border-zinc-400",
             className
           )}
         >
           <SlidersHorizontal className="size-4" />
           <span>{label}</span>
           {hasActive && (
-            <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-zinc-950 text-[11px] font-semibold text-white">
+            <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-zinc-950 text-[11px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
               {activeCount}
             </span>
           )}
@@ -63,15 +63,15 @@ export function FilterPopover({
         align="end"
         className={cn("w-80 p-0", contentClassName)}
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-          <div className="text-[11px] uppercase tracking-wide font-semibold text-zinc-500">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800/80">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Filters
           </div>
           {hasActive && (
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-700 hover:text-zinc-950"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
             >
               <X className="size-3.5" />
               Clear all
@@ -93,7 +93,7 @@ interface FilterFieldProps {
 export function FilterField({ label, children }: FilterFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] uppercase tracking-wide font-semibold text-zinc-500">
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         {label}
       </label>
       {children}

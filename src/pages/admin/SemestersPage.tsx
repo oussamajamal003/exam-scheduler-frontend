@@ -1,6 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { SemesterList } from "../../features/semesters/SemesterList";
-import { computeStatus } from "../../schemas/semester";
 import { SemesterForm } from "../../forms/semesters/SemesterForm";
 import {
   useCreateSemester,
@@ -99,13 +98,11 @@ export function SemestersPage() {
   const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
-    const counts = { active: 0, upcoming: 0, past: 0, totalOfferings: 0 };
+    const counts = { totalOfferings: 0, datedTerms: 0, academicYears: 0 };
     for (const semester of semesters) {
-      const status = computeStatus(semester);
-      if (status === "ACTIVE") counts.active += 1;
-      else if (status === "UPCOMING") counts.upcoming += 1;
-      else counts.past += 1;
       counts.totalOfferings += semester?.courseOfferings?.length ?? semester?.courseOfferingsCount ?? 0;
+      if (semester.startDate && semester.endDate) counts.datedTerms += 1;
+      if (semester.academicYear?.trim()) counts.academicYears += 1;
     }
     return counts;
   }, [semesters]);
@@ -199,12 +196,12 @@ export function SemestersPage() {
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Active Now</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.active}</p>
-                <p className="text-xs text-zinc-500 mt-2">In-session terms</p>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Academic Years</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.academicYears}</p>
+                <p className="text-xs text-zinc-500 mt-2">Terms tagged with an academic year</p>
               </div>
-              <div className="p-2 rounded-none bg-emerald-50">
-                <Sparkles className="size-5 text-emerald-600" />
+              <div className="p-2 rounded-none bg-amber-50">
+                <Sparkles className="size-5 text-amber-600" />
               </div>
             </div>
           </CardContent>
@@ -214,12 +211,12 @@ export function SemestersPage() {
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Upcoming</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.upcoming}</p>
-                <p className="text-xs text-zinc-500 mt-2">Future planning</p>
+                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Dated Terms</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{stats.datedTerms}</p>
+                <p className="text-xs text-zinc-500 mt-2">Semesters with start and end windows</p>
               </div>
               <div className="p-2 rounded-none bg-blue-50">
-                <Plus className="size-5 text-blue-600" />
+                <Calendar className="size-5 text-blue-600" />
               </div>
             </div>
           </CardContent>

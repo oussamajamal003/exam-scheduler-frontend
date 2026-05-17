@@ -6,7 +6,6 @@ import { CalendarRange, Edit2, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
-import { computeStatus, DerivedSemesterStatus } from "../../schemas/semester";
 
 interface SemesterListProps {
   semesters: Semester[];
@@ -28,31 +27,6 @@ const formatDate = (value?: string) => {
     day: "numeric",
   });
 };
-
-const STATUS_STYLES: Record<DerivedSemesterStatus, string> = {
-  ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  UPCOMING: "bg-blue-50 text-blue-700 border-blue-200",
-  PAST: "bg-zinc-100 text-zinc-500 border-zinc-200",
-};
-
-const StatusBadge = ({ status }: { status: DerivedSemesterStatus }) => (
-  <span
-    className={cn(
-      "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1 text-xs font-bold uppercase tracking-widest",
-      STATUS_STYLES[status]
-    )}
-  >
-    <span
-      className={cn(
-        "size-1.5 rounded-full",
-        status === "ACTIVE" && "bg-emerald-500 animate-pulse",
-        status === "UPCOMING" && "bg-blue-500",
-        status === "PAST" && "bg-zinc-400"
-      )}
-    />
-    {status}
-  </span>
-);
 
 export function SemesterList({
   semesters,
@@ -76,7 +50,7 @@ export function SemesterList({
             Semester Management
           </CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">
-            Define academic terms, track active periods, and align course offerings with each semester window.
+            Define academic terms, set planning windows, and align course offerings with each semester timeline.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
@@ -94,7 +68,6 @@ export function SemesterList({
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Start Date</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">End Date</TableHead>
-                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Status</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Total Offerings</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
               </TableRow>
@@ -102,13 +75,13 @@ export function SemesterList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={semesterRows.length > 0 ? semesterRows.length : 10} />
+                  <TableCell colSpan={5} className="p-0">
+                    <TableSkeletonRows columns={5} rows={semesterRows.length > 0 ? semesterRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : semesterRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
+                  <TableCell colSpan={5} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={CalendarRange}
@@ -131,9 +104,6 @@ export function SemesterList({
                 </TableRow>
               ) : (
                 semesterRows.map((semester, idx) => {
-                  const status = computeStatus(semester);
-                  const isActiveRow = status === "ACTIVE";
-                  const isPastRow = status === "PAST";
                   const offeringsCount = semester?.courseOfferings?.length ?? semester?.courseOfferingsCount ?? 0;
 
                   return (
@@ -141,20 +111,11 @@ export function SemesterList({
                       key={semester.id}
                       className={cn(
                         "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                        idx === semesterRows.length - 1 && "border-b-0",
-                        isActiveRow && "bg-emerald-50/40 shadow-[inset_4px_0_0_0_#10b981]",
-                        isPastRow && "opacity-70"
+                        idx === semesterRows.length - 1 && "border-b-0"
                       )}
                     >
                       <TableCell className="px-4 py-4 sm:px-6">
-                        <div className="font-semibold text-zinc-950 text-sm flex items-center gap-2">
-                          {semester?.name ?? "Untitled"}
-                          {semester?.isCurrent && (
-                            <span className="inline-flex items-center rounded-none border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
-                              Current
-                            </span>
-                          )}
-                        </div>
+                        <div className="font-semibold text-zinc-950 text-sm">{semester?.name ?? "Untitled"}</div>
                         {semester?.academicYear && (
                           <p className="text-xs text-zinc-500 mt-0.5">AY {semester.academicYear}</p>
                         )}
@@ -164,9 +125,6 @@ export function SemesterList({
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700">
                         {formatDate(semester?.endDate)}
-                      </TableCell>
-                      <TableCell className="px-4 py-4 sm:px-6">
-                        <StatusBadge status={status} />
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-right">
                         <span className="inline-flex items-center justify-center rounded-none bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 min-w-10">
