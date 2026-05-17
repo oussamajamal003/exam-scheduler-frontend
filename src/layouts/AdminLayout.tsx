@@ -1,7 +1,6 @@
 ﻿import React from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  Bell,
   BookOpen,
   Building,
   Building2,
@@ -15,19 +14,19 @@ import {
   LayoutDashboard,
   Layers,
   LogOut,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
   X,
-  Search,
   Settings,
   Sparkles,
+  Sun,
   Trash2,
   UserCog,
   UserRound,
   Users,
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -44,7 +43,14 @@ import { cn } from '@/lib/utils';
 import { useLogout } from '@/hooks/auth/useLogout';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
+import { useSemesters } from '@/hooks/semesters/useSemesters';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
+import {
+  CommandSearch,
+  CommandSearchTrigger,
+  CompactSearchButton,
+  useCommandSearchShortcut,
+} from '@/components/admin/CommandSearch';
 
 type NavItem = {
   label: string;
@@ -272,6 +278,35 @@ export const AdminLayout: React.FC = () => {
     Object.fromEntries(sidebarSections.map((section) => [section.title, true]))
   );
 
+  // Command palette state + global Ctrl/Cmd+K shortcut
+  const [isCommandOpen, setIsCommandOpen] = React.useState(false);
+  const toggleCommand = React.useCallback(() => setIsCommandOpen((prev) => !prev), []);
+  useCommandSearchShortcut(toggleCommand);
+
+  // Theme toggle (light / dark) — persists across sessions
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    const stored = localStorage.getItem('admin-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('admin-theme', theme);
+  }, [theme]);
+
+  // Active semester for navbar badge
+  const { data: allSemesters } = useSemesters('');
+  const activeSemester = React.useMemo(
+    () =>
+      allSemesters?.find((s) => s.isActive) ??
+      allSemesters?.find((s) => s.isCurrent) ??
+      allSemesters?.[0],
+    [allSemesters]
+  );
+
   const closeSidebar = () => setIsSidebarOpen(false);
   const toggleSidebarCollapse = () => setIsCollapsed((prev) => !prev);
 
@@ -297,76 +332,6 @@ export const AdminLayout: React.FC = () => {
   const toggleSection = (title: string, open: boolean) => {
     setOpenSections((prev) => ({ ...prev, [title]: open }));
   };
-
-  const sidebarAccountMenu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Open account menu"
-          className={cn(
-            'group mt-4 flex shrink-0 items-center border border-zinc-200/80 bg-white/85 shadow-sm shadow-zinc-200/40 transition-all duration-300 hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300',
-            isCollapsed ? 'mx-auto size-12 justify-center rounded-2xl p-0' : 'w-full gap-3 rounded-2xl px-3 py-3'
-          )}
-        >
-          {isCollapsed ? (
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <div className="flex size-9 shrink-0 transition-all duration-300 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15">
-                  {userInitials}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={14} className="font-medium">
-                {userName} &middot; {userRole}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className="flex size-9 shrink-0 transition-all duration-300 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white shadow-sm shadow-zinc-900/15">
-              {userInitials}
-            </div>
-          )}
-          <div
-            className={cn(
-              'min-w-0 text-left transition-all duration-300 opacity-100 whitespace-nowrap overflow-hidden',
-              isCollapsed ? 'w-0 px-0 opacity-0' : 'w-full'
-            )}
-          >
-            <p className="truncate text-sm font-bold text-zinc-950">{userName}</p>
-            <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side={isCollapsed ? 'right' : 'top'}
-        align={isCollapsed ? 'center' : 'start'}
-        sideOffset={14}
-        className="w-64 rounded-2xl p-2"
-      >
-        <DropdownMenuLabel>
-          <div className="space-y-1 normal-case tracking-normal">
-            <p className="text-sm font-semibold tracking-tight text-zinc-950">{userName}</p>
-            <p className="text-xs font-medium text-zinc-500">{userRole}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/settings" className="cursor-pointer" onClick={closeSidebar}>
-            <UserRound className="size-4" />
-            <span>Manage Profile</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteModalOpen(true)}>
-          <Trash2 className="size-4" />
-          <span>Delete Account</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
-          <LogOut className="size-4" />
-          <span>Logout</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 
   const sidebarContent = (
     <>
@@ -410,17 +375,24 @@ export const AdminLayout: React.FC = () => {
           <h2 className="truncate text-sm font-bold leading-none mt-0.5 text-zinc-950">Admin Dashboard</h2>
         </div>
         {!isCollapsed && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Collapse sidebar"
-            aria-expanded={true}
-            onClick={toggleSidebarCollapse}
-            className="ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10"
-          >
-            <PanelLeftClose className="size-5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Collapse sidebar"
+                aria-expanded={true}
+                onClick={toggleSidebarCollapse}
+                className="ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 z-10"
+              >
+                <PanelLeftClose className="size-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={10} className="font-medium">
+              Collapse sidebar
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -438,7 +410,6 @@ export const AdminLayout: React.FC = () => {
           ))}
         </div>
       </div>
-      <div onClick={(e) => { e.stopPropagation(); if (isCollapsed && !(e.target as Element).closest('button, a, [role]')) toggleSidebarCollapse(); }}>{sidebarAccountMenu}</div>
     </>
   );
 
@@ -565,8 +536,8 @@ export const AdminLayout: React.FC = () => {
       </aside>
 
       <div className={cn('flex min-h-screen flex-col transition-[padding-left] duration-300 ease-out', isCollapsed ? 'md:pl-24' : 'md:pl-80')}>
-        <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/72 backdrop-blur-xl">
-          <div className="flex h-19 items-center gap-4 px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/72 backdrop-blur-xl supports-backdrop-filter:bg-white/60 dark:border-zinc-800/70 dark:bg-zinc-950/70">
+          <div className="flex h-19 items-center gap-3 px-4 sm:px-6 lg:gap-4 lg:px-8">
             <Button
               type="button"
               variant="ghost"
@@ -578,37 +549,68 @@ export const AdminLayout: React.FC = () => {
               <Menu className="size-5" />
             </Button>
 
-            <div className="relative hidden max-w-xl flex-1 md:block">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-              <Input
-                placeholder="Search students, schedules, rooms, proctors..."
-                className="h-11 rounded-full border-zinc-200/80 bg-zinc-50/70 pl-10 pr-4 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300"
-              />
+            {/* CENTER: command search */}
+            <div className="hidden flex-1 justify-center px-2 md:flex md:pl-0">
+              <div className="w-full max-w-xl">
+                <CommandSearchTrigger onOpen={() => setIsCommandOpen(true)} />
+              </div>
             </div>
 
+            {/* RIGHT: actions */}
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Notifications"
-                className="relative rounded-full border border-zinc-200/70 bg-white/80 text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900"
-              >
-                <Bell className="size-4.5" />
-                <span className="absolute right-2.5 top-2.5 size-2 rounded-full border-2 border-white bg-emerald-500" />
-              </Button>
+              <CompactSearchButton
+                onOpen={() => setIsCommandOpen(true)}
+                className="md:hidden"
+              />
+
+              {activeSemester && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to="/semesters"
+                      className="hidden h-10 items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 text-xs font-semibold text-zinc-700 shadow-sm transition-all hover:border-zinc-300 hover:bg-white sm:inline-flex dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      <span className="flex size-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" aria-hidden />
+                      <Calendar className="size-3.5 text-zinc-500 dark:text-zinc-400" />
+                      <span className="max-w-40 truncate">{activeSemester.name}</span>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={8} className="font-medium">
+                    Active semester
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                    aria-pressed={theme === 'dark'}
+                    onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                    className="rounded-full border border-zinc-200/70 bg-white/80 text-zinc-600 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {theme === 'dark' ? <Sun className="size-4.5" /> : <Moon className="size-4.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8} className="font-medium">
+                  {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                </TooltipContent>
+              </Tooltip>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white/80 px-2.5 py-2 shadow-sm shadow-zinc-200/40 transition-all hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+                    className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white/80 px-2.5 py-2 shadow-sm shadow-zinc-200/40 transition-all hover:border-zinc-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:hover:bg-zinc-900"
                   >
                     <div className="hidden min-w-0 text-right sm:block">
-                      <p className="truncate text-sm font-semibold text-zinc-950">{userName}</p>
-                      <p className="mt-0.5 truncate text-xs font-medium text-zinc-500">{userRole}</p>
+                      <p className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">{userName}</p>
+                      <p className="mt-0.5 truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{userRole}</p>
                     </div>
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-zinc-50 shadow-sm shadow-zinc-900/15">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-zinc-50 shadow-sm shadow-zinc-900/15 dark:bg-zinc-50 dark:text-zinc-950">
                       {userInitials}
                     </div>
                   </button>
@@ -701,6 +703,8 @@ export const AdminLayout: React.FC = () => {
           });
         }}
       />
+
+      <CommandSearch open={isCommandOpen} onOpenChange={setIsCommandOpen} />
     </div>
     </TooltipProvider>
   );
