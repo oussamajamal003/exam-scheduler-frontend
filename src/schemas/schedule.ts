@@ -99,6 +99,7 @@ export type ScheduleAssignment = {
   room?: ScheduleRoom | null;
   proctor?: ScheduleProctor | null;
   timeSlot?: ScheduleTimeSlot | null;
+  schedule?: Pick<Schedule, "id" | "name" | "examPeriod" | "isFinal" | "createdAt" | "updatedAt"> | null;
 };
 
 export type Schedule = {

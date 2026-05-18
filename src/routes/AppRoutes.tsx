@@ -6,6 +6,12 @@ import StudentLayout from '@/layouts/StudentLayout';
 import ProctorLayout from '@/layouts/ProctorLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
+import { StudentDashboardPage } from '@/pages/student/StudentDashboardPage';
+import { StudentSchedulePage } from '@/pages/student/StudentSchedulePage';
+import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
+import { ProctorDashboardPage } from '@/pages/supervisor/ProctorDashboardPage';
+import { ProctorSchedulePage } from '@/pages/supervisor/ProctorSchedulePage';
+import { ProctorStudentsPage } from '@/pages/supervisor/ProctorStudentsPage';
 import { StudentsPage } from '@/pages/admin/StudentsPage';
 import { CoursesPage } from '../pages/admin/CoursesPage';
 import { ProctorsPage } from '@/pages/admin/ProctorsPage';
@@ -120,9 +126,9 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
-            <Route path="/student/dashboard" element={<PlaceholderPage title="Student Dashboard" />} />
-            <Route path="/student/schedule" element={<PlaceholderPage title="Student Exam Schedule" />} />
-            <Route path="/student/courses" element={<PlaceholderPage title="Student Courses" />} />
+            <Route path="/student/dashboard" element={<StudentDashboardPage />} />
+            <Route path="/student/schedule" element={<StudentSchedulePage />} />
+            <Route path="/student/courses" element={<StudentCoursesPage />} />
             <Route path="/student/settings" element={<PlaceholderPage title="Student Settings" />} />
           </Route>
 
@@ -134,9 +140,9 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/proctor" element={<Navigate to="/proctor/dashboard" replace />} />
-            <Route path="/proctor/dashboard" element={<PlaceholderPage title="Proctor Dashboard" />} />
-            <Route path="/proctor/schedule" element={<PlaceholderPage title="Proctor Exam Schedule" />} />
-            <Route path="/proctor/students" element={<PlaceholderPage title="Assigned Students" />} />
+            <Route path="/proctor/dashboard" element={<ProctorDashboardPage />} />
+            <Route path="/proctor/schedule" element={<ProctorSchedulePage />} />
+            <Route path="/proctor/students" element={<ProctorStudentsPage />} />
             <Route path="/proctor/settings" element={<PlaceholderPage title="Proctor Settings" />} />
           </Route>
         </Route>

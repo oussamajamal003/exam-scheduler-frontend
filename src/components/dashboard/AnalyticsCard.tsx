@@ -53,13 +53,9 @@ export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({
   loading,
 }) => {
   const accentClasses = ACCENTS[accent];
-  const numericValue = typeof value === 'number' ? value : Number(String(value).replace(/[^\d.-]/g, '')) || 0;
-  const animated = useCountUp(numericValue);
-  const displayValue = typeof value === 'string' && Number.isNaN(Number(value.replace(/[^\d.-]/g, '')))
-    ? value
-    : typeof value === 'string'
-      ? value.replace(/[\d.]+/, animated.toLocaleString())
-      : animated.toLocaleString();
+  const isNumericValue = typeof value === 'number';
+  const animated = useCountUp(isNumericValue ? value : 0);
+  const displayValue = isNumericValue ? animated.toLocaleString() : value;
 
   const TrendIcon = trend?.direction === 'up' ? TrendingUp : trend?.direction === 'down' ? TrendingDown : Minus;
   const trendColor =
