@@ -6,7 +6,6 @@ import {
   CalendarClock,
   Clock4,
   GraduationCap,
-  Info,
   MapPin,
   Megaphone,
   School,
@@ -19,8 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
+import { useStudentNotifications } from '@/hooks/studentNotifications/useStudentNotifications';
 import { formatUtcDate, formatUtcTime } from '@/lib/dateTime';
 import type { ScheduleAssignment } from '@/schemas/schedule';
+import type { StudentNotification } from '@/api/studentNotifications.api';
 
 const getCourse = (assignment?: ScheduleAssignment | null) => assignment?.exam?.courseOffering?.course;
 
@@ -97,57 +98,10 @@ const formatWeekLabel = (assignment: ScheduleAssignment) => {
   return `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 };
 
-type DashboardUpdate = {
-  id: string;
-  title: string;
-  detail: string;
-  date?: string | null;
-  kind: 'published' | 'changed' | 'message';
-};
-
-const buildUpdates = (assignments: ScheduleAssignment[]) => {
-  const updates: DashboardUpdate[] = [];
-  const schedules = new Map<string, NonNullable<ScheduleAssignment['schedule']>>();
-
-  for (const assignment of assignments) {
-    if (assignment.schedule?.id && !schedules.has(assignment.schedule.id)) {
-      schedules.set(assignment.schedule.id, assignment.schedule);
-    }
-  }
-
-  for (const schedule of schedules.values()) {
-    updates.push({
-      id: `schedule-${schedule.id}`,
-      title: 'Schedule published',
-      detail: `${schedule.name} is now available for student viewing.`,
-      date: schedule.updatedAt ?? schedule.createdAt,
-      kind: 'published',
-    });
-
-    if (schedule.updatedAt && schedule.createdAt && schedule.updatedAt !== schedule.createdAt) {
-      updates.push({
-        id: `schedule-change-${schedule.id}`,
-        title: 'Schedule changed',
-        detail: `${schedule.name} has been updated. Review your latest room and time details.`,
-        date: schedule.updatedAt,
-        kind: 'changed',
-      });
-    }
-  }
-
-  if (assignments.length > 0) {
-    updates.push({
-      id: 'messages-empty',
-      title: 'Announcements / Messages',
-      detail: 'No direct announcements or messages are available from the system yet.',
-      date: assignments[0]?.schedule?.updatedAt ?? assignments[0]?.schedule?.createdAt,
-      kind: 'message',
-    });
-  }
-
-  return updates
-    .sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime())
-    .slice(0, 5);
+const getNotificationIcon = (notification: StudentNotification) => {
+  if (notification.type === 'SCHEDULE_UPDATED' || notification.type === 'ROOM_TIME_CHANGE') return Sparkles;
+  if (notification.type === 'ANNOUNCEMENT') return Megaphone;
+  return Megaphone;
 };
 
 const DashboardSkeleton = () => (
@@ -197,6 +151,7 @@ const NoUpcomingExamState = () => (
 
 export const StudentDashboardPage: React.FC = () => {
   const dashboardQuery = useStudentDashboard();
+  const notificationsQuery = useStudentNotifications({ limit: 5 });
   const data = dashboardQuery.data;
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
@@ -235,7 +190,7 @@ export const StudentDashboardPage: React.FC = () => {
   const examsByDay = groupCount(publishedAssignments, formatDayLabel);
   const examsByWeek = groupCount(upcomingAssignments, formatWeekLabel);
   const courseLoad = groupCount(data.courses, (courseOffering) => courseOffering.semester?.name ?? 'Unassigned');
-  const updates = buildUpdates(publishedAssignments);
+  const notifications = notificationsQuery.data?.notifications ?? [];
   const hasPublishedSchedule = publishedAssignments.length > 0;
 
   return (
@@ -348,21 +303,28 @@ export const StudentDashboardPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 p-5">
-                {updates.length === 0 ? (
+                {notificationsQuery.isLoading ? (
+                  [0, 1, 2].map((item) => <Skeleton key={item} className="h-20" />)
+                ) : notificationsQuery.isError ? (
+                  <p className="py-8 text-center text-sm text-rose-600 dark:text-rose-300">Unable to load notifications.</p>
+                ) : notifications.length === 0 ? (
                   <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No schedule updates available yet.</p>
                 ) : (
-                  updates.map((update) => (
-                    <div key={update.id} className="flex gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/45">
+                  notifications.map((notification) => {
+                    const NotificationIcon = getNotificationIcon(notification);
+                    return (
+                    <div key={notification.id} className="flex gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/45">
                       <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-none bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-                        {update.kind === 'changed' ? <Sparkles className="size-4" /> : update.kind === 'message' ? <Info className="size-4" /> : <Megaphone className="size-4" />}
+                        <NotificationIcon className="size-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{update.title}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{update.detail}</p>
-                        <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{update.date ? formatUtcDate(update.date) : 'No date available'}</p>
+                        <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{notification.title}</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{notification.message}</p>
+                        <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{formatUtcDate(notification.createdAt)}</p>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>

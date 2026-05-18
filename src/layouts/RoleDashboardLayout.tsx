@@ -42,6 +42,7 @@ import type { User } from '@/api/auth.api';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
 import { useLogout } from '@/hooks/auth/useLogout';
+import { useStudentNotifications } from '@/hooks/studentNotifications/useStudentNotifications';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 
@@ -311,6 +312,9 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const deleteAccountMutation = useDeleteAccount();
   const { data } = useCurrentUser();
   const currentUser = data as User | undefined;
+  const isStudentPortal = roleName.toLowerCase() === 'student';
+  const notificationQuery = useStudentNotifications({ limit: 1, enabled: isStudentPortal });
+  const unreadNotifications = notificationQuery.data?.unreadCount ?? 0;
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
@@ -572,10 +576,21 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                   variant="ghost"
                   size="icon"
                   aria-label="Notifications"
+                  asChild={isStudentPortal}
                   className="relative rounded-full border border-zinc-200/70 bg-white/80 text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 >
-                  <Bell className="size-4.5" />
-                  <span className="absolute right-2.5 top-2.5 size-2 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900" />
+                  {isStudentPortal ? (
+                    <NavLink to="/student/notifications">
+                      <Bell className="size-4.5" />
+                      {unreadNotifications > 0 && (
+                        <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 px-1 text-[10px] font-bold leading-4 text-white dark:border-zinc-900">
+                          {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                        </span>
+                      )}
+                    </NavLink>
+                  ) : (
+                    <Bell className="size-4.5" />
+                  )}
                 </Button>
 
                 <DropdownMenu>

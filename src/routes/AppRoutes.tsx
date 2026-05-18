@@ -9,6 +9,7 @@ import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { StudentDashboardPage } from '@/pages/student/StudentDashboardPage';
 import { StudentSchedulePage } from '@/pages/student/StudentSchedulePage';
 import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
+import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPage';
 import { ProctorDashboardPage } from '@/pages/supervisor/ProctorDashboardPage';
 import { ProctorSchedulePage } from '@/pages/supervisor/ProctorSchedulePage';
 import { ProctorStudentsPage } from '@/pages/supervisor/ProctorStudentsPage';
@@ -129,6 +130,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/student/dashboard" element={<StudentDashboardPage />} />
             <Route path="/student/schedule" element={<StudentSchedulePage />} />
             <Route path="/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/student/notifications" element={<StudentNotificationsPage />} />
             <Route path="/student/settings" element={<PlaceholderPage title="Student Settings" />} />
           </Route>
 
