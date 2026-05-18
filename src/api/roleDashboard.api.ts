@@ -1,6 +1,6 @@
 import { axiosClient } from './axiosclient';
 import type { ChartDatum } from '@/components/dashboard/RealBarChart';
-import type { ScheduleAssignment } from '@/schemas/schedule';
+import type { Schedule, ScheduleAssignment } from '@/schemas/schedule';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -128,6 +128,8 @@ export type ProctorDashboardResponse = {
   nextAssignment?: ScheduleAssignment | null;
 };
 
+export type RolePublishedSchedulesResponse = Schedule[];
+
 export const fetchStudentDashboard = async (): Promise<StudentDashboardResponse> => {
   const response = await axiosClient.get<ApiEnvelope<StudentDashboardResponse>>('/role-dashboards/student');
   return unwrap(response.data, 'Student dashboard');
@@ -136,4 +138,9 @@ export const fetchStudentDashboard = async (): Promise<StudentDashboardResponse>
 export const fetchProctorDashboard = async (): Promise<ProctorDashboardResponse> => {
   const response = await axiosClient.get<ApiEnvelope<ProctorDashboardResponse>>('/role-dashboards/proctor');
   return unwrap(response.data, 'Proctor dashboard');
+};
+
+export const fetchPublishedSchedulesForRole = async (): Promise<RolePublishedSchedulesResponse> => {
+  const response = await axiosClient.get<ApiEnvelope<RolePublishedSchedulesResponse>>('/role-dashboards/published-schedules');
+  return unwrap(response.data, 'Published schedules');
 };
