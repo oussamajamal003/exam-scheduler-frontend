@@ -3,13 +3,49 @@ import {
   fetchPublishedSchedulesForRole,
   fetchProctorDashboard,
   fetchStudentDashboard,
+  type RolePortal,
 } from '@/api/roleDashboard.api';
+import { normalizeRole } from '@/lib/authRoutes';
+
+const AUTH_USER_STORAGE_KEY = 'auth_user';
+
+const decodeTokenRole = () => {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { role?: string };
+    return decoded.role ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const getPortalFromCurrentUser = (): RolePortal | null => {
+  const storedUser = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+  let storedRole: string | null = null;
+
+  if (storedUser) {
+    try {
+      storedRole = (JSON.parse(storedUser) as { role?: string }).role ?? null;
+    } catch {
+      storedRole = null;
+    }
+  }
+
+  const role = normalizeRole(storedRole ?? decodeTokenRole());
+  if (role === 'STUDENT') return 'student';
+  if (role === 'PROCTOR') return 'proctor';
+  return null;
+};
 
 export const roleDashboardKeys = {
-  all: ['role-dashboards'] as const,
+  all: ['role-portals'] as const,
   student: () => [...roleDashboardKeys.all, 'student'] as const,
   proctor: () => [...roleDashboardKeys.all, 'proctor'] as const,
-  publishedSchedules: () => [...roleDashboardKeys.all, 'published-schedules'] as const,
+  publishedSchedules: (portal?: RolePortal | null) => [...roleDashboardKeys.all, portal ?? 'unknown', 'published-schedules'] as const,
 };
 
 export const useStudentDashboard = () =>
@@ -24,8 +60,12 @@ export const useProctorDashboard = () =>
     queryFn: fetchProctorDashboard,
   });
 
-export const usePublishedSchedulesForRole = () =>
-  useQuery({
-    queryKey: roleDashboardKeys.publishedSchedules(),
-    queryFn: fetchPublishedSchedulesForRole,
+export const usePublishedSchedulesForRole = () => {
+  const portal = getPortalFromCurrentUser();
+
+  return useQuery({
+    queryKey: roleDashboardKeys.publishedSchedules(portal),
+    queryFn: () => fetchPublishedSchedulesForRole(portal as RolePortal),
+    enabled: Boolean(portal),
   });
+};

@@ -10,9 +10,11 @@ import { StudentDashboardPage } from '@/pages/student/StudentDashboardPage';
 import { StudentSchedulePage } from '@/pages/student/StudentSchedulePage';
 import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
 import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPage';
+import { StudentSettingsPage } from '@/pages/student/StudentSettingsPage';
 import { ProctorDashboardPage } from '@/pages/supervisor/ProctorDashboardPage';
 import { ProctorSchedulePage } from '@/pages/supervisor/ProctorSchedulePage';
 import { ProctorStudentsPage } from '@/pages/supervisor/ProctorStudentsPage';
+import { ProctorSettingsPage } from '@/pages/supervisor/ProctorSettingsPage';
 import { StudentsPage } from '@/pages/admin/StudentsPage';
 import { CoursesPage } from '../pages/admin/CoursesPage';
 import { ProctorsPage } from '@/pages/admin/ProctorsPage';
@@ -131,7 +133,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/student/schedule" element={<StudentSchedulePage />} />
             <Route path="/student/courses" element={<StudentCoursesPage />} />
             <Route path="/student/notifications" element={<StudentNotificationsPage />} />
-            <Route path="/student/settings" element={<PlaceholderPage title="Student Settings" />} />
+            <Route path="/student/settings" element={<StudentSettingsPage />} />
           </Route>
 
           <Route
@@ -145,7 +147,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/proctor/dashboard" element={<ProctorDashboardPage />} />
             <Route path="/proctor/schedule" element={<ProctorSchedulePage />} />
             <Route path="/proctor/students" element={<ProctorStudentsPage />} />
-            <Route path="/proctor/settings" element={<PlaceholderPage title="Proctor Settings" />} />
+            <Route path="/proctor/settings" element={<ProctorSettingsPage />} />
           </Route>
         </Route>
 

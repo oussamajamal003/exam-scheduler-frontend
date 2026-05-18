@@ -49,7 +49,7 @@ export const fetchStudentNotifications = async ({
   limit?: number;
   unreadOnly?: boolean;
 } = {}): Promise<StudentNotificationsResponse> => {
-  const response = await axiosClient.get<ApiEnvelope<StudentNotificationsResponse>>('/student-notifications', {
+  const response = await axiosClient.get<ApiEnvelope<StudentNotificationsResponse>>('/student/notifications', {
     params: { limit, unreadOnly: unreadOnly || undefined },
   });
   return unwrap(response.data, 'Student notifications');

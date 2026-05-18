@@ -129,18 +129,19 @@ export type ProctorDashboardResponse = {
 };
 
 export type RolePublishedSchedulesResponse = Schedule[];
+export type RolePortal = 'student' | 'proctor';
 
 export const fetchStudentDashboard = async (): Promise<StudentDashboardResponse> => {
-  const response = await axiosClient.get<ApiEnvelope<StudentDashboardResponse>>('/role-dashboards/student');
+  const response = await axiosClient.get<ApiEnvelope<StudentDashboardResponse>>('/student/dashboard');
   return unwrap(response.data, 'Student dashboard');
 };
 
 export const fetchProctorDashboard = async (): Promise<ProctorDashboardResponse> => {
-  const response = await axiosClient.get<ApiEnvelope<ProctorDashboardResponse>>('/role-dashboards/proctor');
+  const response = await axiosClient.get<ApiEnvelope<ProctorDashboardResponse>>('/proctor/dashboard');
   return unwrap(response.data, 'Proctor dashboard');
 };
 
-export const fetchPublishedSchedulesForRole = async (): Promise<RolePublishedSchedulesResponse> => {
-  const response = await axiosClient.get<ApiEnvelope<RolePublishedSchedulesResponse>>('/role-dashboards/published-schedules');
+export const fetchPublishedSchedulesForRole = async (portal: RolePortal): Promise<RolePublishedSchedulesResponse> => {
+  const response = await axiosClient.get<ApiEnvelope<RolePublishedSchedulesResponse>>(`/${portal}/published-schedules`);
   return unwrap(response.data, 'Published schedules');
 };
