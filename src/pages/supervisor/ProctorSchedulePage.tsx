@@ -25,6 +25,7 @@ export const ProctorSchedulePage: React.FC = () => {
         emptyLabel="No published duties are assigned to you yet."
         errorLabel="Unable to load your published duty schedule."
         secondaryLabel={(assignment) => `${assignment.exam?.courseOffering?.registrations?.length ?? 0} related students`}
+        tableMode="proctor"
       />
 
       <FullPublishedScheduleSection />

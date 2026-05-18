@@ -26,10 +26,16 @@ export type ScheduleRegistration = {
   status?: string | null;
   student?: {
     id?: string;
+    universityId?: string | null;
     user?: {
       id?: string;
       name?: string | null;
       email?: string | null;
+    } | null;
+    program?: {
+      id?: string;
+      name?: string | null;
+      code?: string | null;
     } | null;
   } | null;
 };

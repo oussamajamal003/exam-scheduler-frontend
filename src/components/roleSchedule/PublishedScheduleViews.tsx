@@ -23,6 +23,7 @@ type RoleScheduleViewProps = {
   emptyLabel: string;
   errorLabel: string;
   secondaryLabel?: (assignment: ScheduleAssignment) => string;
+  tableMode?: 'default' | 'proctor';
 };
 
 const getAssignmentTime = (assignment: ScheduleAssignment) => {
@@ -38,6 +39,7 @@ const courseCode = (assignment: ScheduleAssignment) => assignment.exam?.courseOf
 const roomName = (assignment: ScheduleAssignment) => assignment.room?.name ?? 'Room TBD';
 const centerName = (assignment: ScheduleAssignment) => assignment.room?.center?.name ?? 'Center TBD';
 const proctorName = (assignment: ScheduleAssignment) => assignment.proctor?.user?.name ?? 'Proctor TBD';
+const studentCount = (assignment: ScheduleAssignment) => assignment.exam?.courseOffering?.registrations?.length ?? assignment.exam?.courseOffering?.expectedStudents ?? 0;
 const durationLabel = (assignment: ScheduleAssignment) => {
   const duration = assignment.exam?.duration ?? assignment.timeSlot?.duration;
   return duration ? `${duration} min` : 'Duration TBD';
@@ -106,7 +108,17 @@ const EmptyState = ({ label }: { label: string }) => (
   </div>
 );
 
-const ScheduleTable = ({ assignments, onSelect, secondaryLabel }: { assignments: ScheduleAssignment[]; onSelect: (assignment: ScheduleAssignment) => void; secondaryLabel?: (assignment: ScheduleAssignment) => string }) => (
+const ScheduleTable = ({
+  assignments,
+  onSelect,
+  secondaryLabel,
+  mode = 'default',
+}: {
+  assignments: ScheduleAssignment[];
+  onSelect: (assignment: ScheduleAssignment) => void;
+  secondaryLabel?: (assignment: ScheduleAssignment) => string;
+  mode?: 'default' | 'proctor';
+}) => (
   <div className="overflow-x-auto rounded-none border border-zinc-200/70 dark:border-zinc-800/80">
     <table className="min-w-full divide-y divide-zinc-200 text-left text-sm dark:divide-zinc-800">
       <thead className="bg-zinc-50 text-[11px] uppercase tracking-[0.16em] text-zinc-500 dark:bg-zinc-900/70 dark:text-zinc-400">
@@ -117,8 +129,8 @@ const ScheduleTable = ({ assignments, onSelect, secondaryLabel }: { assignments:
           <th className="px-4 py-3 font-semibold">Time</th>
           <th className="px-4 py-3 font-semibold">Room</th>
           <th className="px-4 py-3 font-semibold">Center</th>
-          <th className="px-4 py-3 font-semibold">Proctor</th>
-          <th className="px-4 py-3 font-semibold">Exam Duration</th>
+          <th className="px-4 py-3 font-semibold">{mode === 'proctor' ? 'Student Count' : 'Proctor'}</th>
+          <th className="px-4 py-3 font-semibold">Duration</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-800/70 dark:bg-zinc-950">
@@ -137,7 +149,7 @@ const ScheduleTable = ({ assignments, onSelect, secondaryLabel }: { assignments:
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{formatUtcTime(assignment.timeSlot?.startTime)}</td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{roomName(assignment)}</td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{centerName(assignment)}</td>
-            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{proctorName(assignment)}</td>
+            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{mode === 'proctor' ? studentCount(assignment) : proctorName(assignment)}</td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{durationLabel(assignment)}</td>
           </tr>
         ))}
@@ -225,6 +237,7 @@ const DetailSheet = ({ assignment, onOpenChange }: { assignment: ScheduleAssignm
             <DetailItem label="Room" value={roomName(assignment)} />
             <DetailItem label="Center" value={centerName(assignment)} />
             <DetailItem label="Proctor" value={proctorName(assignment)} />
+            <DetailItem label="Students" value={`${studentCount(assignment)} students`} />
             <DetailItem label="Duration" value={durationLabel(assignment)} />
           </div>
         </div>
@@ -257,6 +270,7 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
   emptyLabel,
   errorLabel,
   secondaryLabel,
+  tableMode = 'default',
 }) => {
   const [viewMode, setViewMode] = React.useState<ViewMode>('table');
   const [selectedAssignment, setSelectedAssignment] = React.useState<ScheduleAssignment | null>(null);
@@ -285,7 +299,7 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
         ) : sortedAssignments.length === 0 ? (
           <EmptyState label={emptyLabel} />
         ) : viewMode === 'table' ? (
-          <ScheduleTable assignments={sortedAssignments} onSelect={setSelectedAssignment} secondaryLabel={secondaryLabel} />
+          <ScheduleTable assignments={sortedAssignments} onSelect={setSelectedAssignment} secondaryLabel={secondaryLabel} mode={tableMode} />
         ) : (
           <ScheduleCalendar assignments={sortedAssignments} onSelect={setSelectedAssignment} />
         )}
