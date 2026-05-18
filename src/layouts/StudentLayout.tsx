@@ -1,4 +1,4 @@
-import { Bell, BookOpen, CalendarClock, LayoutDashboard, Settings } from 'lucide-react';
+import { BookOpen, CalendarClock, LayoutDashboard, Settings } from 'lucide-react';
 import { RoleDashboardLayout, type RoleNavSection } from './RoleDashboardLayout';
 
 const studentNavSections: RoleNavSection[] = [
@@ -10,7 +10,6 @@ const studentNavSections: RoleNavSection[] = [
       { label: 'Dashboard', to: '/student/dashboard', icon: LayoutDashboard },
       { label: 'Exam Schedule', to: '/student/schedule', icon: CalendarClock },
       { label: 'Courses', to: '/student/courses', icon: BookOpen },
-      { label: 'Notifications', to: '/student/notifications', icon: Bell },
     ],
   },
   {

@@ -1,27 +1,24 @@
 import React from 'react';
 import {
-  Bell,
   Building2,
   BookOpen,
   CalendarClock,
   Clock4,
   GraduationCap,
   MapPin,
-  Megaphone,
   School,
-  Sparkles,
   UserCheck,
 } from 'lucide-react';
 import { AnalyticsCard } from '@/components/dashboard/AnalyticsCard';
+import { DashboardNotificationsPanel } from '@/components/roleNotifications/DashboardNotificationsPanel';
 import { RealBarChart, type ChartDatum } from '@/components/dashboard/RealBarChart';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMarkAllRoleNotificationsRead, useMarkRoleNotificationRead, useRoleNotifications } from '@/hooks/roleNotifications/useRoleNotifications';
 import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
-import { useStudentNotifications } from '@/hooks/studentNotifications/useStudentNotifications';
 import { formatUtcDate, formatUtcTime } from '@/lib/dateTime';
 import type { ScheduleAssignment } from '@/schemas/schedule';
-import type { StudentNotification } from '@/api/studentNotifications.api';
 
 const getCourse = (assignment?: ScheduleAssignment | null) => assignment?.exam?.courseOffering?.course;
 
@@ -98,12 +95,6 @@ const formatWeekLabel = (assignment: ScheduleAssignment) => {
   return `Week of ${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 };
 
-const getNotificationIcon = (notification: StudentNotification) => {
-  if (notification.type === 'SCHEDULE_UPDATED' || notification.type === 'ROOM_TIME_CHANGE') return Sparkles;
-  if (notification.type === 'ANNOUNCEMENT') return Megaphone;
-  return Megaphone;
-};
-
 const DashboardSkeleton = () => (
   <div className="space-y-6 p-5 sm:p-6 lg:p-8">
     <div className="space-y-2">
@@ -151,7 +142,9 @@ const NoUpcomingExamState = () => (
 
 export const StudentDashboardPage: React.FC = () => {
   const dashboardQuery = useStudentDashboard();
-  const notificationsQuery = useStudentNotifications({ limit: 5 });
+  const notificationsQuery = useRoleNotifications({ portal: 'student', limit: 5 });
+  const markRead = useMarkRoleNotificationRead('student');
+  const markAllRead = useMarkAllRoleNotificationsRead('student');
   const data = dashboardQuery.data;
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
@@ -191,6 +184,7 @@ export const StudentDashboardPage: React.FC = () => {
   const examsByWeek = groupCount(upcomingAssignments, formatWeekLabel);
   const courseLoad = groupCount(data.courses, (courseOffering) => courseOffering.semester?.name ?? 'Unassigned');
   const notifications = notificationsQuery.data?.notifications ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   const hasPublishedSchedule = publishedAssignments.length > 0;
 
   return (
@@ -295,39 +289,18 @@ export const StudentDashboardPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
-              <CardHeader className="border-b border-zinc-100 pb-3 dark:border-zinc-800/70">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  <Bell className="size-4 text-zinc-400" />
-                  Notifications / Updates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 p-5">
-                {notificationsQuery.isLoading ? (
-                  [0, 1, 2].map((item) => <Skeleton key={item} className="h-20" />)
-                ) : notificationsQuery.isError ? (
-                  <p className="py-8 text-center text-sm text-rose-600 dark:text-rose-300">Unable to load notifications.</p>
-                ) : notifications.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No schedule updates available yet.</p>
-                ) : (
-                  notifications.map((notification) => {
-                    const NotificationIcon = getNotificationIcon(notification);
-                    return (
-                    <div key={notification.id} className="flex gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/45">
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-none bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-                        <NotificationIcon className="size-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{notification.title}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{notification.message}</p>
-                        <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{formatUtcDate(notification.createdAt)}</p>
-                      </div>
-                    </div>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
+            <DashboardNotificationsPanel
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isLoading={notificationsQuery.isLoading}
+              isError={notificationsQuery.isError}
+              emptyLabel="No schedule updates available yet."
+              errorLabel="Unable to load notifications."
+              markReadPending={markRead.isPending}
+              markAllPending={markAllRead.isPending}
+              onMarkRead={(id) => markRead.mutate(id)}
+              onMarkAllRead={() => markAllRead.mutate()}
+            />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-4">

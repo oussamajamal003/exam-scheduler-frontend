@@ -113,6 +113,9 @@ import { EmptyState } from "../../components/shared/EmptyState";
 import { FilterPopover, FilterField } from "../../components/shared/FilterPopover";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useSchedulePdfDownload } from "../../hooks/schedulePdf/useSchedulePdfDownload";
+import { downloadAdminSchedulePdf } from "../../api/schedulePdf.api";
+import { Download } from "lucide-react";
 import { getApiErrorMessage, isAuthExpiredError } from "../../lib/apiError";
 import { cn } from "../../lib/utils";
 
@@ -337,9 +340,18 @@ const ScheduleVersionsTable = ({
   const deleteMutation = useDeleteSchedule();
   const updateMutation = useUpdateSchedule();
   const unpublishMutation = useUnpublishSchedule();
+  const { download: downloadRowPdf, isDownloading: isRowPdfDownloading } = useSchedulePdfDownload();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<Schedule | null>(null);
   const [newName, setNewName] = useState("");
+
+  const handleDownloadRowPdf = (id: string) => {
+    void downloadRowPdf(() => downloadAdminSchedulePdf(id), {
+      startTitle: 'Generating schedule PDF',
+      successTitle: 'Schedule PDF downloaded',
+      errorTitle: 'Failed to generate PDF',
+    });
+  };
 
   const handleDelete = (id: string) => {
     deleteMutation.mutate(id, {
@@ -525,6 +537,21 @@ const ScheduleVersionsTable = ({
                                     <Wrench className="size-4 mr-2 text-zinc-400" />
                                   )}
                                   Return to Draft
+                                </DropdownMenuItem>
+                              )}
+
+                              {s.isFinal && (
+                                <DropdownMenuItem
+                                  disabled={isRowPdfDownloading}
+                                  onClick={() => handleDownloadRowPdf(s.id)}
+                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-700 focus:bg-zinc-50 focus:text-zinc-900"
+                                >
+                                  {isRowPdfDownloading ? (
+                                    <Loader2 className="size-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Download className="size-4 mr-2 text-zinc-400" />
+                                  )}
+                                  Download PDF
                                 </DropdownMenuItem>
                               )}
 
@@ -3644,6 +3671,17 @@ export function SchedulesPage() {
     openPublishDialog(schedule);
   };
 
+  const { download: downloadPdf, isDownloading: isAdminPdfDownloading } = useSchedulePdfDownload();
+
+  const handleDownloadActiveSchedulePdf = () => {
+    if (!schedule?.id || !schedule.isFinal) return;
+    void downloadPdf(() => downloadAdminSchedulePdf(schedule.id), {
+      startTitle: 'Generating schedule PDF',
+      successTitle: 'Schedule PDF downloaded',
+      errorTitle: 'Failed to generate PDF',
+    });
+  };
+
   // -------------------- render --------------------
 
   if (showPageLoading) {
@@ -3772,6 +3810,18 @@ export function SchedulesPage() {
               <Wrench className="size-4" />
             )}
             Return to Draft
+          </Button>
+        )}
+
+        {schedule?.isFinal && (
+          <Button
+            variant="outline"
+            onClick={handleDownloadActiveSchedulePdf}
+            disabled={isAdminPdfDownloading}
+            className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
+          >
+            {isAdminPdfDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            Download Schedule PDF
           </Button>
         )}
 

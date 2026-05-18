@@ -25,7 +25,7 @@ export const LoginForm: React.FC = () => {
 
       <form onSubmit={handleSubmit((data) => login(data))} className="space-y-5" noValidate>
         {error && (
-          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-[13px] font-medium text-destructive">
+          <div className="rounded-xl border border-rose-300/30 bg-rose-500/12 p-3.5 text-[13px] font-medium text-rose-100 backdrop-blur-sm">
             {error.message || 'Invalid email or password. Please try again.'}
           </div>
         )}

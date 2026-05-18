@@ -9,31 +9,22 @@ const AuthBackground: React.FC = () => (
   <>
     {/* Background image layer */}
     <div
-      className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/exam-bg.jpg')" }}
+      className="absolute inset-0 z-0 bg-[url('/exam-bg.jpg')] bg-cover bg-center bg-no-repeat"
       aria-hidden="true"
     />
     {/* Gradient overlay: dark vignette for readability */}
     <div
-      className="absolute inset-0 z-0"
-      style={{
-        background:
-          'linear-gradient(135deg, rgba(9,9,11,0.82) 0%, rgba(9,9,11,0.68) 40%, rgba(9,9,11,0.78) 100%)',
-      }}
+      className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_24%,transparent_42%),linear-gradient(135deg,rgba(9,9,11,0.34)_0%,rgba(9,9,11,0.18)_42%,rgba(9,9,11,0.3)_100%)]"
       aria-hidden="true"
     />
     {/* Subtle top glow accent */}
     <div
-      className="absolute inset-x-0 top-0 z-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
+      className="absolute inset-x-0 top-0 z-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent"
       aria-hidden="true"
     />
     {/* Bottom glow accent */}
     <div
-      className="absolute inset-x-0 bottom-0 z-0 h-32"
-      style={{
-        background:
-          'linear-gradient(to top, rgba(9,9,11,0.9) 0%, transparent 100%)',
-      }}
+      className="absolute inset-x-0 bottom-0 z-0 h-32 bg-[linear-gradient(to_top,rgba(9,9,11,0.36)_0%,transparent_100%)]"
       aria-hidden="true"
     />
   </>

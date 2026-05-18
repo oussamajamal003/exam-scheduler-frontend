@@ -27,7 +27,7 @@ import type { GenerateScheduleDto } from "../../schemas/schedule";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
 import { roleDashboardKeys } from "../roleDashboards/useRoleDashboards";
-import { studentNotificationKeys } from "../studentNotifications/useStudentNotifications";
+import { roleNotificationKeys } from "../roleNotifications/useRoleNotifications";
 
 export const scheduleKeys = {
   all: ["schedules"] as const,
@@ -246,7 +246,7 @@ export const usePublishSchedule = () => {
     onSuccess: (schedule) => {
       queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
       queryClient.invalidateQueries({ queryKey: roleDashboardKeys.all });
-      queryClient.invalidateQueries({ queryKey: studentNotificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: roleNotificationKeys.all });
       addToast({
         type: "success",
         title: "Schedule Published",

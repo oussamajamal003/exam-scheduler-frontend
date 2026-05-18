@@ -35,14 +35,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import {
+  CommandSearch,
+  CommandSearchTrigger,
+  CompactSearchButton,
+  useCommandSearchShortcut,
+  type QuickAction,
+} from '@/components/admin/CommandSearch';
 import type { User } from '@/api/auth.api';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
 import { useLogout } from '@/hooks/auth/useLogout';
-import { useStudentNotifications } from '@/hooks/studentNotifications/useStudentNotifications';
+import { useRoleNotifications } from '@/hooks/roleNotifications/useRoleNotifications';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 
@@ -313,7 +319,9 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const { data } = useCurrentUser();
   const currentUser = data as User | undefined;
   const isStudentPortal = roleName.toLowerCase() === 'student';
-  const notificationQuery = useStudentNotifications({ limit: 1, enabled: isStudentPortal });
+  const portal = isStudentPortal ? 'student' : 'proctor';
+  const notificationHref = `/${portal}/dashboard#notifications`;
+  const notificationQuery = useRoleNotifications({ portal, limit: 1 });
   const unreadNotifications = notificationQuery.data?.unreadCount ?? 0;
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
@@ -330,6 +338,10 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(navSections.map((section) => [section.title, true]))
   );
+  const [isCommandOpen, setIsCommandOpen] = React.useState(false);
+
+  const toggleCommand = React.useCallback(() => setIsCommandOpen((prev) => !prev), []);
+  useCommandSearchShortcut(toggleCommand);
 
   React.useEffect(() => {
     const root = document.documentElement;
@@ -362,6 +374,80 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const toggleSection = (title: string, open: boolean) => {
     setOpenSections((prev) => ({ ...prev, [title]: open }));
   };
+
+  const commandQuickActions = React.useMemo<QuickAction[]>(() => {
+    if (isStudentPortal) {
+      return [
+        {
+          id: 'student-dashboard',
+          label: 'Open Dashboard',
+          description: 'Go to the student overview',
+          icon: Sparkles,
+          href: '/student/dashboard',
+          keywords: ['dashboard', 'overview', 'home'],
+        },
+        {
+          id: 'student-schedule',
+          label: 'Open Exam Schedule',
+          description: 'Review upcoming exam assignments',
+          icon: Search,
+          href: '/student/schedule',
+          keywords: ['exam', 'schedule', 'assignments'],
+        },
+        {
+          id: 'student-courses',
+          label: 'Open Courses',
+          description: 'View registered courses and exam courses',
+          icon: Search,
+          href: '/student/courses',
+          keywords: ['courses', 'registered', 'subjects'],
+        },
+        {
+          id: 'student-notifications',
+          label: 'Open Notifications',
+          description: 'Jump to recent updates on your dashboard overview',
+          icon: Bell,
+          href: notificationHref,
+          keywords: ['notifications', 'alerts', 'updates'],
+        },
+      ];
+    }
+
+    return [
+      {
+        id: 'proctor-dashboard',
+        label: 'Open Dashboard',
+        description: 'Go to the proctor overview',
+        icon: Sparkles,
+        href: '/proctor/dashboard',
+        keywords: ['dashboard', 'overview', 'home'],
+      },
+      {
+        id: 'proctor-schedule',
+        label: 'Open Exam Schedule',
+        description: 'Review assigned duties and published schedule',
+        icon: Search,
+        href: '/proctor/schedule',
+        keywords: ['schedule', 'duties', 'assignments'],
+      },
+      {
+        id: 'proctor-students',
+        label: 'Open Assigned Students',
+        description: 'Inspect exam rosters for assigned duties',
+        icon: Search,
+        href: '/proctor/students',
+        keywords: ['students', 'roster', 'assigned'],
+      },
+      {
+        id: 'proctor-settings',
+        label: 'Open Settings',
+        description: 'Manage security and notification preferences',
+        icon: Search,
+        href: '/proctor/settings',
+        keywords: ['settings', 'profile', 'password'],
+      },
+    ];
+  }, [isStudentPortal]);
 
   const sidebarContent = (
     <>
@@ -543,15 +629,16 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                 <Menu className="size-5" />
               </Button>
 
-              <div className="relative hidden max-w-xl flex-1 md:block">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-                <Input
-                  placeholder={searchPlaceholder}
-                  className="h-11 rounded-full border-zinc-200/80 bg-zinc-50/70 pl-10 pr-4 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:hover:bg-zinc-900 dark:focus-visible:bg-zinc-900 dark:focus-visible:ring-zinc-700"
-                />
+              <div className="hidden max-w-xl flex-1 md:block">
+                <CommandSearchTrigger onOpen={() => setIsCommandOpen(true)} placeholder={searchPlaceholder} />
               </div>
 
               <div className="ml-auto flex items-center gap-2 sm:gap-3">
+                <CompactSearchButton
+                  onOpen={() => setIsCommandOpen(true)}
+                  className="md:hidden"
+                />
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -579,18 +666,14 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                   asChild={isStudentPortal}
                   className="relative rounded-full border border-zinc-200/70 bg-white/80 text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 >
-                  {isStudentPortal ? (
-                    <NavLink to="/student/notifications">
-                      <Bell className="size-4.5" />
-                      {unreadNotifications > 0 && (
-                        <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 px-1 text-[10px] font-bold leading-4 text-white dark:border-zinc-900">
-                          {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                        </span>
-                      )}
-                    </NavLink>
-                  ) : (
+                  <NavLink to={notificationHref}>
                     <Bell className="size-4.5" />
-                  )}
+                    {unreadNotifications > 0 && (
+                      <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 px-1 text-[10px] font-bold leading-4 text-white dark:border-zinc-900">
+                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      </span>
+                    )}
+                  </NavLink>
                 </Button>
 
                 <DropdownMenu>
@@ -670,6 +753,22 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
               },
             });
           }}
+        />
+
+        <CommandSearch
+          open={isCommandOpen}
+          onOpenChange={setIsCommandOpen}
+          quickActions={commandQuickActions}
+          placeholder={searchPlaceholder}
+          initialTitle={isStudentPortal ? 'Search your student workspace' : 'Search your proctor workspace'}
+          initialDescription={isStudentPortal
+            ? 'Find registered courses, exam schedule details, rooms, centers and published schedules.'
+            : 'Find assigned duties, students, rooms, centers and published schedules.'}
+          emptyDescription={isStudentPortal
+            ? 'Try a course code, room name, center name or published schedule.'
+            : 'Try a course code, student name, room name or published schedule.'}
+          footerLabel={isStudentPortal ? 'Student Command Search' : 'Proctor Command Search'}
+          recentStorageKey={isStudentPortal ? 'student-command-search-recent' : 'proctor-command-search-recent'}
         />
 
         <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>

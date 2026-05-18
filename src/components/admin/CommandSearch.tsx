@@ -99,11 +99,18 @@ type FlatItem =
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  quickActions?: QuickAction[];
+  placeholder?: string;
+  initialTitle?: string;
+  initialDescription?: string;
+  emptyDescription?: string;
+  footerLabel?: string;
+  recentStorageKey?: string;
 };
 
-const loadRecent = (): SearchResult[] => {
+const loadRecent = (storageKey: string): SearchResult[] => {
   try {
-    const raw = localStorage.getItem(RECENT_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as SearchResult[]).slice(0, MAX_RECENT) : [];
@@ -112,11 +119,11 @@ const loadRecent = (): SearchResult[] => {
   }
 };
 
-const pushRecent = (result: SearchResult) => {
+const pushRecent = (storageKey: string, result: SearchResult) => {
   try {
-    const existing = loadRecent();
+    const existing = loadRecent(storageKey);
     const dedup = [result, ...existing.filter((r) => r.id !== result.id || r.type !== result.type)];
-    localStorage.setItem(RECENT_KEY, JSON.stringify(dedup.slice(0, MAX_RECENT)));
+    localStorage.setItem(storageKey, JSON.stringify(dedup.slice(0, MAX_RECENT)));
   } catch {
     /* ignore */
   }
@@ -132,11 +139,21 @@ const matchesQuickAction = (action: QuickAction, query: string) => {
   );
 };
 
-export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
+export const CommandSearch: React.FC<Props> = ({
+  open,
+  onOpenChange,
+  quickActions = QUICK_ACTIONS,
+  placeholder = 'Search schedules, exams, students, rooms, proctors...',
+  initialTitle = 'Search the scheduling command center',
+  initialDescription = 'Find exams, courses, students, proctors, rooms, semesters and published schedules.',
+  emptyDescription = 'Try a course code, student ID, room name or schedule name.',
+  footerLabel = 'Enterprise Scheduling Command Search',
+  recentStorageKey = RECENT_KEY,
+}) => {
   const navigate = useNavigate();
   const [query, setQuery] = React.useState('');
   const [activeIndex, setActiveIndex] = React.useState(0);
-  const [recent, setRecent] = React.useState<SearchResult[]>(loadRecent);
+  const [recent, setRecent] = React.useState<SearchResult[]>(() => loadRecent(recentStorageKey));
   const inputRef = React.useRef<HTMLInputElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -147,14 +164,14 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
     if (open) {
       setQuery('');
       setActiveIndex(0);
-      setRecent(loadRecent());
+      setRecent(loadRecent(recentStorageKey));
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [open]);
+  }, [open, recentStorageKey]);
 
   const visibleActions = React.useMemo(
-    () => QUICK_ACTIONS.filter((a) => matchesQuickAction(a, query)),
-    [query]
+    () => quickActions.filter((a) => matchesQuickAction(a, query)),
+    [query, quickActions]
   );
 
   const groups = React.useMemo(() => data?.groups ?? [], [data?.groups]);
@@ -187,11 +204,11 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
 
   const runResult = React.useCallback(
     (result: SearchResult) => {
-      pushRecent(result);
+      pushRecent(recentStorageKey, result);
       onOpenChange(false);
       navigate(result.href);
     },
-    [navigate, onOpenChange]
+    [navigate, onOpenChange, recentStorageKey]
   );
 
   const runAction = React.useCallback(
@@ -257,7 +274,7 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search schedules, exams, students, rooms, proctors..."
+              placeholder={placeholder}
               className="h-9 w-full bg-transparent text-sm font-medium text-zinc-950 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-50"
               aria-label="Search query"
               autoComplete="off"
@@ -351,10 +368,10 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
                   <SearchIcon className="size-5" />
                 </div>
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Search the scheduling command center
+                  {initialTitle}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Find exams, courses, students, proctors, rooms, semesters and published schedules.
+                  {initialDescription}
                 </p>
               </div>
             )}
@@ -368,7 +385,7 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
                   No matches for &ldquo;{query}&rdquo;
                 </p>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Try a course code, student ID, room name or schedule name.
+                  {emptyDescription}
                 </p>
               </div>
             )}
@@ -400,7 +417,7 @@ export const CommandSearch: React.FC<Props> = ({ open, onOpenChange }) => {
             </div>
             <span className="hidden items-center gap-1.5 sm:inline-flex">
               <Sparkles className="size-3.5 text-zinc-400" />
-              Enterprise Scheduling Command Search
+              {footerLabel}
             </span>
           </div>
         </DialogPrimitive.Content>
@@ -499,13 +516,14 @@ const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 type SearchTriggerProps = {
   onOpen: () => void;
   className?: string;
+  placeholder?: string;
 };
 
 /**
  * The "input-looking" trigger button that sits in the navbar and opens the
  * command palette. Visually mimics a premium rounded search bar.
  */
-export const CommandSearchTrigger: React.FC<SearchTriggerProps> = ({ onOpen, className }) => {
+export const CommandSearchTrigger: React.FC<SearchTriggerProps> = ({ onOpen, className, placeholder = 'Search schedules, exams, students, rooms, proctors...' }) => {
   const [shortcut, setShortcut] = React.useState('Ctrl K');
 
   React.useEffect(() => {
@@ -525,7 +543,7 @@ export const CommandSearchTrigger: React.FC<SearchTriggerProps> = ({ onOpen, cla
     >
       <SearchIcon className="size-4 shrink-0" />
       <span className="flex-1 truncate font-medium">
-        Search schedules, exams, students, rooms, proctors...
+        {placeholder}
       </span>
       <kbd className="hidden h-6 select-none items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 text-[10px] font-semibold text-zinc-500 shadow-sm md:inline-flex dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
         {shortcut}
@@ -574,3 +592,5 @@ export const useCommandSearchShortcut = (toggle: () => void) => {
     return () => window.removeEventListener('keydown', handler);
   }, [toggle]);
 };
+
+export type { QuickAction };

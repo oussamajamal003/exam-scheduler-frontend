@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Bell,
   Building2,
   CalendarClock,
   CheckCircle2,
@@ -8,18 +7,19 @@ import {
   ClipboardList,
   Gauge,
   MapPin,
-  Megaphone,
   ShieldCheck,
   Sparkles,
   UserCheck,
 } from 'lucide-react';
 import { AnalyticsCard } from '@/components/dashboard/AnalyticsCard';
+import { DashboardNotificationsPanel } from '@/components/roleNotifications/DashboardNotificationsPanel';
 import { RealBarChart, type ChartDatum } from '@/components/dashboard/RealBarChart';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMarkAllRoleNotificationsRead, useMarkRoleNotificationRead, useRoleNotifications } from '@/hooks/roleNotifications/useRoleNotifications';
 import { useProctorDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
-import { formatTimeSlotLabel, formatUtcDate, formatUtcTime } from '@/lib/dateTime';
+import { formatTimeSlotLabel, formatUtcTime } from '@/lib/dateTime';
 import type { ScheduleAssignment } from '@/schemas/schedule';
 
 const getAssignmentTime = (assignment?: ScheduleAssignment | null) => {
@@ -118,59 +118,6 @@ const getWorkloadBalance = (workloadByDay: ReturnType<typeof buildWorkloadByDay>
   return { label: 'Heavy workload', tone: 'warning' as const, detail: `${busiest?.value ?? 0}/${maxDaily} on busiest day` };
 };
 
-type ProctorUpdate = {
-  id: string;
-  title: string;
-  detail: string;
-  date?: string | null;
-  kind: 'published' | 'changed' | 'assigned';
-};
-
-const buildUpdates = (assignments: ScheduleAssignment[]) => {
-  const updates: ProctorUpdate[] = [];
-  const schedules = new Map<string, NonNullable<ScheduleAssignment['schedule']>>();
-
-  for (const assignment of assignments) {
-    if (assignment.schedule?.id && !schedules.has(assignment.schedule.id)) {
-      schedules.set(assignment.schedule.id, assignment.schedule);
-    }
-  }
-
-  for (const schedule of schedules.values()) {
-    updates.push({
-      id: `published-${schedule.id}`,
-      title: 'Schedule published',
-      detail: `${schedule.name} is published and includes your assigned exam duties.`,
-      date: schedule.updatedAt ?? schedule.createdAt,
-      kind: 'published',
-    });
-
-    if (schedule.updatedAt && schedule.createdAt && schedule.updatedAt !== schedule.createdAt) {
-      updates.push({
-        id: `changed-${schedule.id}`,
-        title: 'Assigned exam changed',
-        detail: `${schedule.name} was updated. Review the latest room and time details.`,
-        date: schedule.updatedAt,
-        kind: 'changed',
-      });
-    }
-  }
-
-  for (const assignment of assignments.slice(0, 3)) {
-    updates.push({
-      id: `assigned-${assignment.id}`,
-      title: 'New duty assigned',
-      detail: `${getDutyLabel(assignment)} • ${assignment.room?.name ?? 'Room TBD'} • ${formatTimeSlotLabel(assignment.timeSlot)}`,
-      date: assignment.schedule?.updatedAt ?? assignment.schedule?.createdAt ?? assignment.timeSlot?.startTime,
-      kind: 'assigned',
-    });
-  }
-
-  return updates
-    .sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime())
-    .slice(0, 5);
-};
-
 const DashboardSkeleton = () => (
   <div className="space-y-6 p-5 sm:p-6 lg:p-8">
     <div className="space-y-2">
@@ -221,6 +168,9 @@ const EmptyPublishedDutyState = () => (
 
 export const ProctorDashboardPage: React.FC = () => {
   const dashboardQuery = useProctorDashboard();
+  const notificationsQuery = useRoleNotifications({ portal: 'proctor', limit: 5 });
+  const markRead = useMarkRoleNotificationRead('proctor');
+  const markAllRead = useMarkAllRoleNotificationsRead('proctor');
   const data = dashboardQuery.data;
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
@@ -264,7 +214,8 @@ export const ProctorDashboardPage: React.FC = () => {
   const nextAssignment = upcomingAssignments[0] ?? data.nextAssignment ?? null;
   const assignmentsByDay = groupCount(assignments, formatDayLabel);
   const workloadTrend = groupCount(upcomingAssignments, formatWeekLabel);
-  const updates = buildUpdates(assignments);
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   const hasPublishedAssignments = assignments.length > 0;
 
   return (
@@ -406,32 +357,18 @@ export const ProctorDashboardPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
-              <CardHeader className="border-b border-zinc-100 pb-3 dark:border-zinc-800/70">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  <Bell className="size-4 text-zinc-400" />
-                  Notifications / Updates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 p-5">
-                {updates.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No proctor updates available yet.</p>
-                ) : (
-                  updates.map((update) => (
-                    <div key={update.id} className="flex gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/45">
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-none bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950">
-                        {update.kind === 'changed' ? <Sparkles className="size-4" /> : update.kind === 'assigned' ? <UserCheck className="size-4" /> : <Megaphone className="size-4" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{update.title}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{update.detail}</p>
-                        <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{update.date ? formatUtcDate(update.date) : 'No date available'}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+            <DashboardNotificationsPanel
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isLoading={notificationsQuery.isLoading}
+              isError={notificationsQuery.isError}
+              emptyLabel="No proctor updates available yet."
+              errorLabel="Unable to load notifications."
+              markReadPending={markRead.isPending}
+              markAllPending={markAllRead.isPending}
+              onMarkRead={(id) => markRead.mutate(id)}
+              onMarkAllRead={() => markAllRead.mutate()}
+            />
           </div>
         </>
       )}

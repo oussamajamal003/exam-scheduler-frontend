@@ -17,7 +17,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           htmlFor={id} 
           className={cn(
             "text-[13px] font-medium transition-colors",
-            error ? "text-destructive" : "text-zinc-700"
+            error ? "text-rose-200" : "text-white/88"
           )}
         >
           {label}
@@ -27,15 +27,15 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           ref={ref} 
           {...props} 
           className={cn(
-            "h-11 border-zinc-200 bg-white/70 text-zinc-950 shadow-none transition-all placeholder:text-zinc-400 hover:bg-white/90 focus-visible:bg-white focus-visible:ring-1",
+            "h-11 border-white/28 bg-white/14 text-white shadow-none transition-all placeholder:text-white/45 hover:bg-white/18 focus-visible:bg-white/20 focus-visible:ring-1",
             error 
-              ? "border-destructive/50 bg-destructive/10 hover:bg-destructive/10 focus-visible:border-destructive focus-visible:ring-destructive/30" 
-              : "focus-visible:border-zinc-400 focus-visible:ring-zinc-200",
+              ? "border-rose-300/45 bg-rose-500/10 hover:bg-rose-500/12 focus-visible:border-rose-200 focus-visible:ring-rose-200/30" 
+              : "focus-visible:border-white/45 focus-visible:ring-white/20",
             className
           )}
         />
         {error && (
-          <p className="text-[13px] font-medium text-destructive animate-in slide-in-from-top-1 fade-in-0 duration-200">
+          <p className="animate-in slide-in-from-top-1 fade-in-0 text-[13px] font-medium text-rose-200 duration-200">
             {error}
           </p>
         )}
