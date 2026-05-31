@@ -1,0 +1,37 @@
+{
+  "brand": "Planificateur d'examens intelligent",
+  "dashboards": {
+    "admin": "Tableau de bord administrateur",
+    "student": "Tableau de bord étudiant",
+    "proctor": "Tableau de bord surveillant"
+  },
+  "breadcrumb": {
+    "admin": "Administrateur",
+    "student": "Étudiant",
+    "proctor": "Surveillant"
+  },
+  "sections": {
+    "overview": "Aperçu",
+    "academic": "Académique",
+    "management": "Gestion",
+    "configuration": "Configuration",
+    "main": "Principal"
+  },
+  "items": {
+    "dashboard": "Tableau de bord",
+    "schedules": "Horaires",
+    "programsDepartments": "Programmes / Départements",
+    "semesters": "Semestres",
+    "courseOfferings": "Offres de cours",
+    "enrollments": "Inscriptions",
+    "students": "Étudiants",
+    "proctors": "Surveillants",
+    "courses": "Cours",
+    "rooms": "Salles",
+    "centers": "Centres",
+    "timeSlots": "Créneaux horaires",
+    "settings": "Paramètres",
+    "examSchedule": "Horaire des examens",
+    "assignedStudents": "Étudiants assignés"
+  }
+}

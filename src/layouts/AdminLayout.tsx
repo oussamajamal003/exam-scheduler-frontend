@@ -1,5 +1,6 @@
 ﻿import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   BookOpen,
   Building,
@@ -56,6 +57,7 @@ import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
 import { useSemesters } from '@/hooks/semesters/useSemesters';
 
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import {
   CommandSearch,
   CommandSearchTrigger,
@@ -75,32 +77,32 @@ type NavSection = {
   items: NavItem[];
 };
 
-const overviewItems: NavItem[] = [{ label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard }];
+const overviewItems: NavItem[] = [{ label: 'items.dashboard', to: '/dashboard', icon: LayoutDashboard }];
 
 const academicItems: NavItem[] = [
-  { label: 'Schedules', to: '/scheduling', icon: CalendarClock },
-  { label: 'Programs / Departments', to: '/departments', icon: GraduationCap },
-  { label: 'Semesters', to: '/semesters', icon: Calendar },
-  { label: 'Course Offerings', to: '/course-offerings', icon: Layers },
-  { label: 'Enrollments', to: '/enrollments', icon: ClipboardList },
+  { label: 'items.schedules', to: '/scheduling', icon: CalendarClock },
+  { label: 'items.programsDepartments', to: '/departments', icon: GraduationCap },
+  { label: 'items.semesters', to: '/semesters', icon: Calendar },
+  { label: 'items.courseOfferings', to: '/course-offerings', icon: Layers },
+  { label: 'items.enrollments', to: '/enrollments', icon: ClipboardList },
 ];
 
 const managementItems: NavItem[] = [
-  { label: 'Students', to: '/students', icon: Users },
-  { label: 'Proctors', to: '/proctors', icon: UserCog },
-  { label: 'Courses', to: '/courses', icon: BookOpen },
-  { label: 'Rooms', to: '/rooms', icon: Building2 },
-  { label: 'Centers', to: '/centers', icon: Building },
-  { label: 'Time Slots', to: '/timeslots', icon: Clock },
+  { label: 'items.students', to: '/students', icon: Users },
+  { label: 'items.proctors', to: '/proctors', icon: UserCog },
+  { label: 'items.courses', to: '/courses', icon: BookOpen },
+  { label: 'items.rooms', to: '/rooms', icon: Building2 },
+  { label: 'items.centers', to: '/centers', icon: Building },
+  { label: 'items.timeSlots', to: '/timeslots', icon: Clock },
 ];
 
-const configurationItems: NavItem[] = [{ label: 'Settings', to: '/settings', icon: Settings }];
+const configurationItems: NavItem[] = [{ label: 'items.settings', to: '/settings', icon: Settings }];
 
 const sidebarSections: NavSection[] = [
-  { title: 'Overview', icon: LayoutDashboard, items: overviewItems },
-  { title: 'Academic', icon: GraduationCap, items: academicItems },
-  { title: 'Management', icon: Users, items: managementItems },
-  { title: 'Configuration', icon: Settings, items: configurationItems },
+  { title: 'sections.overview', icon: LayoutDashboard, items: overviewItems },
+  { title: 'sections.academic', icon: GraduationCap, items: academicItems },
+  { title: 'sections.management', icon: Users, items: managementItems },
+  { title: 'sections.configuration', icon: Settings, items: configurationItems },
 ];
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
@@ -174,6 +176,7 @@ const SectionGroup: React.FC<{
   onItemSelect: () => void;
 }> = ({ section, isOpen, isCollapsed, onOpenChange, onItemSelect }) => {
   const location = useLocation();
+  const { t } = useTranslation('nav');
   const hasActiveChild = section.items.some((item) => matchesNavItem(location.pathname, item.to));
   const SectionIcon = section.icon;
 
@@ -189,7 +192,7 @@ const SectionGroup: React.FC<{
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={`${section.title} navigation`}
+            aria-label={`${t(section.title)} navigation`}
             className={cn(
             'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-600',
               hasActiveChild
@@ -204,13 +207,13 @@ const SectionGroup: React.FC<{
                 </span>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={20} className="font-semibold">
-                {section.title}
+                {t(section.title)}
               </TooltipContent>
             </Tooltip>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl border-zinc-200/80 bg-white/95 p-2 shadow-xl shadow-zinc-950/10 dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/40">
-          <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
+          <DropdownMenuLabel>{t(section.title)}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {section.items.map((item) => {
             const isActive = matchesNavItem(location.pathname, item.to);
@@ -227,7 +230,7 @@ const SectionGroup: React.FC<{
                   )}
                 >
                   <item.icon className="size-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </NavLink>
               </DropdownMenuItem>
             );
@@ -243,10 +246,10 @@ const SectionGroup: React.FC<{
         <button
           type="button"
           className="group mb-1 flex w-full items-center justify-between rounded-md bg-zinc-100 px-2.5 py-1.5 transition-colors duration-150 hover:bg-zinc-200/70 dark:bg-zinc-900/80 dark:hover:bg-zinc-800"
-          aria-label={`${section.title} navigation group`}
+          aria-label={`${t(section.title)} navigation group`}
         >
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 transition-colors duration-150 group-hover:text-zinc-700 dark:text-zinc-500 dark:group-hover:text-zinc-300">
-            {section.title}
+            {t(section.title)}
           </span>
           <ChevronDown
             className={cn('size-3 text-zinc-400 transition-transform duration-200 dark:text-zinc-500', isOpen ? 'rotate-180' : '')}
@@ -275,7 +278,7 @@ const SectionGroup: React.FC<{
                 <>
                   {isActive && <span className="absolute inset-y-2 left-1.5 w-0.5 rounded-full bg-white/60" />}
                   <item.icon className="size-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{t(item.label)}</span>
                 </>
                 );
               }}
@@ -289,6 +292,7 @@ const SectionGroup: React.FC<{
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
+  const { t } = useTranslation(['common', 'nav']);
   const logoutMutation = useLogout();
   const deleteAccountMutation = useDeleteAccount();
   const { data } = useCurrentUser();
@@ -397,8 +401,8 @@ export const AdminLayout: React.FC = () => {
             isCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'
           )}
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
-          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">Admin Dashboard</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{t('nav:brand')}</p>
+          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">{t('nav:dashboards.admin')}</h2>
         </div>
         {!isCollapsed && (
           <Tooltip>
@@ -416,7 +420,7 @@ export const AdminLayout: React.FC = () => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={10} className="font-medium">
-              Collapse sidebar
+              {t('common:sidebar.collapse')}
             </TooltipContent>
           </Tooltip>
         )}
@@ -446,8 +450,8 @@ export const AdminLayout: React.FC = () => {
           <Sparkles className="size-4 text-zinc-50 dark:text-zinc-950" />
         </div>
         <div className="w-full min-w-0 overflow-hidden whitespace-nowrap">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
-          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">Admin Dashboard</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{t('nav:brand')}</p>
+          <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">{t('nav:dashboards.admin')}</h2>
         </div>
         <Button
           type="button"
@@ -523,7 +527,7 @@ export const AdminLayout: React.FC = () => {
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Toggle menu"
+              aria-label={t('common:sidebar.toggleMenu')}
               onClick={() => setIsSidebarOpen((prev) => !prev)}
               className="shrink-0 rounded-full text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 md:hidden"
             >
@@ -550,23 +554,23 @@ export const AdminLayout: React.FC = () => {
                   {activeSemesterName}
                 </span>
               )}
-
+              <LanguageSwitcher />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                    aria-label={theme === 'dark' ? t('common:theme.switchToLight') : t('common:theme.switchToDark')}
                     aria-pressed={theme === 'dark'}
-                    onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                    onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
                     className="rounded-full border border-zinc-200/70 bg-white/80 text-zinc-600 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     {theme === 'dark' ? <Sun className="size-4.5" /> : <Moon className="size-4.5" />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={8} className="font-medium">
-                  {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                  {theme === 'dark' ? t('common:theme.light') : t('common:theme.dark')}
                 </TooltipContent>
               </Tooltip>
 
@@ -595,12 +599,12 @@ export const AdminLayout: React.FC = () => {
                   <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setIsProfileDialogOpen(true)}>
                         <UserRound className="size-4" />
-                        <span>Manage Profile</span>
+                        <span>{t('common:account.manageProfile')}</span>
                       </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
                     <LogOut className="size-4" />
-                    <span>Logout</span>
+                    <span>{t('common:account.logout')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -613,7 +617,7 @@ export const AdminLayout: React.FC = () => {
             aria-label="Breadcrumb"
             className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400"
           >
-            <span>Admin</span>
+            <span>{t('nav:breadcrumb.admin')}</span>
             <ChevronRight className="size-3" />
             <span className="text-zinc-500">{currentPage.title}</span>
           </nav>
@@ -628,11 +632,12 @@ export const AdminLayout: React.FC = () => {
 
       <DeleteConfirmModal
         open={isLogoutModalOpen}
-        title="Confirm Logout"
-        description="Are you sure you want to securely logout from the system?"
-        confirmLabel="Logout"
+        title={t('common:logout.title')}
+        description={t('common:logout.description')}
+        confirmLabel={t('common:logout.confirm')}
+        loadingLabel={t('common:logout.loading')}
         isLoading={logoutMutation.isPending}
-        errorMessage={logoutMutation.isError ? 'Failed to logout. Please try again.' : undefined}
+        errorMessage={logoutMutation.isError ? t('common:logout.error') : undefined}
         onCancel={() => {
           if (!logoutMutation.isPending) {
             setIsLogoutModalOpen(false);
@@ -649,11 +654,11 @@ export const AdminLayout: React.FC = () => {
 
       <DeleteConfirmModal
         open={isDeleteModalOpen}
-        title="Delete Account"
-        description="This permanently removes your account from the system. This action cannot be undone."
-        confirmLabel="Delete Account"
+        title={t('common:deleteAccount.title')}
+        description={t('common:deleteAccount.description')}
+        confirmLabel={t('common:deleteAccount.confirm')}
         isLoading={deleteAccountMutation.isPending}
-        errorMessage={deleteAccountMutation.isError ? 'Failed to delete account. Please try again.' : undefined}
+        errorMessage={deleteAccountMutation.isError ? t('common:deleteAccount.error') : undefined}
         onCancel={() => {
           if (!deleteAccountMutation.isPending) {
             setIsDeleteModalOpen(false);

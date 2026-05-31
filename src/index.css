@@ -368,3 +368,48 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/40;
 }
+
+/* ------------------------------------------------------------------ */
+/* RTL support (Arabic). The dashboard shell uses physical utilities    */
+/* (left-0 / pl-*) that do not flip automatically, so mirror them here. */
+/* Text direction + base alignment are handled by the [dir] attribute.  */
+/* ------------------------------------------------------------------ */
+[dir="rtl"] {
+  text-align: right;
+}
+
+/* Fixed sidebars: anchor to the right edge. */
+[dir="rtl"] aside.fixed.left-0 {
+  left: auto !important;
+  right: 0 !important;
+}
+
+/* Main content offset: pad on the right instead of the left. */
+@media (min-width: 768px) {
+  [dir="rtl"] .md\:pl-24 {
+    padding-left: 0 !important;
+    padding-right: 6rem !important;
+  }
+  [dir="rtl"] .md\:pl-80 {
+    padding-left: 0 !important;
+    padding-right: 20rem !important;
+  }
+}
+
+/* Mobile drawer slides in from the right in RTL. */
+[dir="rtl"] aside.-translate-x-full {
+  --tw-translate-x: 100% !important;
+}
+
+/* Active nav indicator bar moves to the right edge. */
+[dir="rtl"] .left-1\.5 {
+  left: auto !important;
+  right: 0.375rem !important;
+}
+
+/* Notification badge mirrors to the opposite corner. */
+[dir="rtl"] .-right-1 {
+  right: auto !important;
+  left: -0.25rem !important;
+}
+

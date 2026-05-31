@@ -1,0 +1,37 @@
+{
+  "brand": "Smart Exam Scheduler",
+  "dashboards": {
+    "admin": "Admin Dashboard",
+    "student": "Student Dashboard",
+    "proctor": "Proctor Dashboard"
+  },
+  "breadcrumb": {
+    "admin": "Admin",
+    "student": "Student",
+    "proctor": "Proctor"
+  },
+  "sections": {
+    "overview": "Overview",
+    "academic": "Academic",
+    "management": "Management",
+    "configuration": "Configuration",
+    "main": "Main"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "schedules": "Schedules",
+    "programsDepartments": "Programs / Departments",
+    "semesters": "Semesters",
+    "courseOfferings": "Course Offerings",
+    "enrollments": "Enrollments",
+    "students": "Students",
+    "proctors": "Proctors",
+    "courses": "Courses",
+    "rooms": "Rooms",
+    "centers": "Centers",
+    "timeSlots": "Time Slots",
+    "settings": "Settings",
+    "examSchedule": "Exam Schedule",
+    "assignedStudents": "Assigned Students"
+  }
+}

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GraduationCap, CalendarDays, Plus, RefreshCw, Search, TrendingUp } from 'lucide-react';
 import { usePersistentFilters } from '@/hooks/common/usePersistentFilters';

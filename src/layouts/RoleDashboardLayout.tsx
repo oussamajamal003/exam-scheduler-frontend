@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   ChevronDown,
@@ -51,6 +52,7 @@ import { useLogout } from '@/hooks/auth/useLogout';
 import { useRoleNotifications } from '@/hooks/roleNotifications/useRoleNotifications';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 
 export type RoleNavItem = {
   label: string;
@@ -121,6 +123,7 @@ const SectionGroup: React.FC<{
   onItemSelect: () => void;
 }> = ({ section, isOpen, isCollapsed, onOpenChange, onItemSelect }) => {
   const location = useLocation();
+  const { t } = useTranslation('nav');
   const hasActiveChild = section.items.some((item) => location.pathname === item.to);
   const SectionIcon = section.icon;
 
@@ -142,7 +145,7 @@ const SectionGroup: React.FC<{
                 key={item.to}
                 to={item.to}
                 onClick={onItemSelect}
-                aria-label={item.label}
+                aria-label={t(item.label)}
                 className={cn(
                   'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-600',
                   isActive
@@ -157,7 +160,7 @@ const SectionGroup: React.FC<{
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={20} className="z-50 font-semibold">
-                    {item.label}
+                    {t(item.label)}
                   </TooltipContent>
                 </Tooltip>
               </NavLink>
@@ -186,7 +189,7 @@ const SectionGroup: React.FC<{
             >
               {isActive && <span className="absolute inset-y-2 left-1.5 w-0.5 rounded-full bg-white/60 dark:bg-zinc-900/70" />}
               <ItemIcon className="size-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{t(item.label)}</span>
             </NavLink>
           );
         })}
@@ -200,7 +203,7 @@ const SectionGroup: React.FC<{
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={`${section.title} navigation`}
+            aria-label={`${t(section.title)} navigation`}
             className={cn(
               'mx-auto flex size-12 items-center justify-center rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-600',
               hasActiveChild
@@ -215,13 +218,13 @@ const SectionGroup: React.FC<{
                 </span>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={20} className="font-semibold">
-                {section.title}
+                {t(section.title)}
               </TooltipContent>
             </Tooltip>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start" sideOffset={14} className="w-64 rounded-2xl border-zinc-200/80 bg-white/95 p-2 shadow-xl shadow-zinc-950/10 dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-black/40">
-          <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
+          <DropdownMenuLabel>{t(section.title)}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {section.items.map((item) => {
             const isActive = location.pathname === item.to;
@@ -243,7 +246,7 @@ const SectionGroup: React.FC<{
                   )}
                 >
                   <ItemIcon className="size-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </NavLink>
               </DropdownMenuItem>
             );
@@ -259,10 +262,10 @@ const SectionGroup: React.FC<{
         <button
           type="button"
           className="group mb-1 flex w-full items-center justify-between rounded-md bg-zinc-100 px-2.5 py-1.5 transition-colors duration-150 hover:bg-zinc-200/70 dark:bg-zinc-900/80 dark:hover:bg-zinc-800"
-          aria-label={`${section.title} navigation group`}
+          aria-label={`${t(section.title)} navigation group`}
         >
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 transition-colors duration-150 group-hover:text-zinc-700 dark:text-zinc-500 dark:group-hover:text-zinc-300">
-            {section.title}
+            {t(section.title)}
           </span>
           <ChevronDown
             className={cn('size-3 text-zinc-400 transition-transform duration-200 dark:text-zinc-500', isOpen ? 'rotate-180' : '')}
@@ -291,7 +294,7 @@ const SectionGroup: React.FC<{
                   <>
                     {isActive && <span className="absolute inset-y-2 left-1.5 w-0.5 rounded-full bg-white/60 dark:bg-zinc-900/70" />}
                     <ItemIcon className="size-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </>
                 )}
               </NavLink>
@@ -305,21 +308,22 @@ const SectionGroup: React.FC<{
 
 export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   roleName,
-  portalTitle,
-  breadcrumbRoot,
   storageKey,
   navSections,
   fallbackName,
   fallbackInitials,
-  searchPlaceholder,
 }) => {
   const location = useLocation();
+  const { t } = useTranslation(['common', 'nav']);
   const logoutMutation = useLogout();
   const deleteAccountMutation = useDeleteAccount();
   const { data } = useCurrentUser();
   const currentUser = data as User | undefined;
   const isStudentPortal = roleName.toLowerCase() === 'student';
   const portal = isStudentPortal ? 'student' : 'proctor';
+  const portalTitle = t(`nav:dashboards.${portal}`);
+  const breadcrumbRoot = t(`nav:breadcrumb.${portal}`);
+  const searchPlaceholder = t(`common:search.${portal}`);
   const notificationHref = `/${portal}/dashboard#notifications`;
   const notificationQuery = useRoleNotifications({ portal, limit: 1 });
   const unreadNotifications = notificationQuery.data?.unreadCount ?? 0;
@@ -472,7 +476,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Expand sidebar"
+              aria-label={t('common:sidebar.expand')}
               aria-expanded={false}
               onClick={(e) => { e.stopPropagation(); toggleSidebarCollapse(); }}
               className="pointer-events-auto absolute inset-0 z-10 size-11 shrink-0 rounded-[15px] border border-zinc-200/70 bg-white text-zinc-500 opacity-0 shadow-sm transition-all duration-200 hover:bg-zinc-100 hover:text-zinc-950 group-hover/sidebar:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
@@ -487,7 +491,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
             isCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'
           )}
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{t('nav:brand')}</p>
           <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">{portalTitle}</h2>
         </div>
         {!isCollapsed && (
@@ -495,7 +499,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Collapse sidebar"
+            aria-label={t('common:sidebar.collapse')}
             aria-expanded={true}
             onClick={toggleSidebarCollapse}
             className="z-10 ml-auto size-10 shrink-0 rounded-[14px] border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
@@ -537,14 +541,14 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
           <Sparkles className="size-4 text-zinc-50 dark:text-zinc-950" />
         </div>
         <div className="w-full min-w-0 overflow-hidden whitespace-nowrap">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">Smart Exam Scheduler</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{t('nav:brand')}</p>
           <h2 className="mt-0.5 truncate text-sm font-bold leading-none text-zinc-950 dark:text-zinc-50">{portalTitle}</h2>
         </div>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Close sidebar"
+          aria-label={t('common:sidebar.closeSidebar')}
           onClick={closeSidebar}
           className="ml-auto size-8 shrink-0 rounded-xl border border-zinc-200/70 bg-white text-zinc-500 shadow-sm transition-all hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-700/80 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
         >
@@ -622,7 +626,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Toggle menu"
+                aria-label={t('common:sidebar.toggleMenu')}
                 onClick={() => setIsSidebarOpen((prev) => !prev)}
                 className="shrink-0 rounded-full text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 md:hidden dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
               >
@@ -639,13 +643,15 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                   className="md:hidden"
                 />
 
+                <LanguageSwitcher />
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                      aria-label={theme === 'dark' ? t('common:theme.switchToLight') : t('common:theme.switchToDark')}
                       aria-pressed={theme === 'dark'}
                       onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))}
                       className="rounded-full border border-zinc-200/70 bg-white/80 text-zinc-600 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -654,7 +660,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={8} className="font-medium">
-                    {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                    {theme === 'dark' ? t('common:theme.light') : t('common:theme.dark')}
                   </TooltipContent>
                 </Tooltip>
 
@@ -662,7 +668,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label="Notifications"
+                  aria-label={t('common:account.notifications')}
                   asChild={isStudentPortal}
                   className="relative rounded-full border border-zinc-200/70 bg-white/80 text-zinc-500 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 >
@@ -702,12 +708,12 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setIsProfileDialogOpen(true)}>
                       <UserRound className="size-4" />
-                      <span>Manage Profile</span>
+                      <span>{t('common:account.manageProfile')}</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
                       <LogOut className="size-4" />
-                      <span>Logout</span>
+                      <span>{t('common:account.logout')}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -722,7 +728,7 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
             >
               <span>{breadcrumbRoot}</span>
               <ChevronRight className="size-3" />
-              <span className="text-zinc-500 dark:text-zinc-400">{currentPage.label}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">{t(`nav:${currentPage.label}`)}</span>
             </nav>
           </section>
 
@@ -735,11 +741,11 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
 
         <DeleteConfirmModal
           open={isDeleteModalOpen}
-          title="Delete Account"
-          description="This permanently removes your account from the system. This action cannot be undone."
-          confirmLabel="Delete Account"
+          title={t('common:deleteAccount.title')}
+          description={t('common:deleteAccount.description')}
+          confirmLabel={t('common:deleteAccount.confirm')}
           isLoading={deleteAccountMutation.isPending}
-          errorMessage={deleteAccountMutation.isError ? 'Failed to delete account. Please try again.' : undefined}
+          errorMessage={deleteAccountMutation.isError ? t('common:deleteAccount.error') : undefined}
           onCancel={() => {
             if (!deleteAccountMutation.isPending) {
               setIsDeleteModalOpen(false);
@@ -861,11 +867,12 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
 
         <DeleteConfirmModal
           open={isLogoutModalOpen}
-          title="Confirm Logout"
-          description="Are you sure you want to securely logout from the system?"
-          confirmLabel="Logout"
+          title={t('common:logout.title')}
+          description={t('common:logout.description')}
+          confirmLabel={t('common:logout.confirm')}
+          loadingLabel={t('common:logout.loading')}
           isLoading={logoutMutation.isPending}
-          errorMessage={logoutMutation.isError ? 'Failed to logout. Please try again.' : undefined}
+          errorMessage={logoutMutation.isError ? t('common:logout.error') : undefined}
           onCancel={() => {
             if (!logoutMutation.isPending) {
               setIsLogoutModalOpen(false);

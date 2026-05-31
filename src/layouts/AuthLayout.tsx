@@ -2,6 +2,8 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { SplashScreen } from '@/components/shared/SplashScreen';
 import { PageSpinner } from '@/components/shared/PageSpinner';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Place a university exam room photo at /public/exam-bg.jpg to activate.
 // Falls back to a premium dark gradient if the image is unavailable.
@@ -113,6 +115,11 @@ export const AuthLayout: React.FC = () => {
   return (
     <div className="relative grid min-h-screen place-items-center bg-zinc-950 p-4 selection:bg-zinc-700">
       <AuthBackground />
+      <div className="absolute right-4 top-4 z-20">
+        <TooltipProvider delayDuration={200}>
+          <LanguageSwitcher />
+        </TooltipProvider>
+      </div>
       <div className="relative z-10 w-full max-w-105 animate-in zoom-in-95 fade-in duration-500">
         <Outlet />
       </div>

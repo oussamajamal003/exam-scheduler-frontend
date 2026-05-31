@@ -1,4 +1,4 @@
-﻿import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+﻿import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useHighlightRow } from "../../hooks/common/useHighlightRow";
@@ -401,7 +401,7 @@ const LockedActionTooltip = ({
 
 // -------------------- Schedule Versions Table --------------------
 
-const ScheduleVersionsTable = ({
+const ScheduleVersionsTable = memo(({
   schedules,
   activeId,
   countOverrides,
@@ -818,7 +818,7 @@ const ScheduleVersionsTable = ({
                 placeholder="e.g. Fall 2025 Draft"
               />
             </div>
-            <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <DialogFooter className="mt-2 gap-2 sm:justify-end sm:space-x-0">
               <Button
                 type="button"
                 variant="outline"
@@ -852,7 +852,7 @@ const ScheduleVersionsTable = ({
       />
     </>
   );
-};
+});
 
 const examStatusToneMap: Record<string, string> = {
   DRAFT: "border-amber-200 bg-amber-50 text-amber-700",

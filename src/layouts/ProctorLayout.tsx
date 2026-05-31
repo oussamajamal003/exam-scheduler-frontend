@@ -3,19 +3,19 @@ import { RoleDashboardLayout, type RoleNavSection } from './RoleDashboardLayout'
 
 const proctorNavSections: RoleNavSection[] = [
   {
-    title: 'Main',
+    title: 'sections.main',
     icon: LayoutDashboard,
     flat: true,
     items: [
-      { label: 'Dashboard', to: '/proctor/dashboard', icon: LayoutDashboard },
-      { label: 'Exam Schedule', to: '/proctor/schedule', icon: CalendarClock },
-      { label: 'Assigned Students', to: '/proctor/students', icon: ClipboardList },
+      { label: 'items.dashboard', to: '/proctor/dashboard', icon: LayoutDashboard },
+      { label: 'items.examSchedule', to: '/proctor/schedule', icon: CalendarClock },
+      { label: 'items.assignedStudents', to: '/proctor/students', icon: ClipboardList },
     ],
   },
   {
-    title: 'Configuration',
+    title: 'sections.configuration',
     icon: Settings,
-    items: [{ label: 'Settings', to: '/proctor/settings', icon: Settings }],
+    items: [{ label: 'items.settings', to: '/proctor/settings', icon: Settings }],
   },
 ];
 

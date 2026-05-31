@@ -1,0 +1,37 @@
+{
+  "brand": "مُجدوِل الامتحانات الذكي",
+  "dashboards": {
+    "admin": "لوحة تحكم المسؤول",
+    "student": "لوحة تحكم الطالب",
+    "proctor": "لوحة تحكم المراقب"
+  },
+  "breadcrumb": {
+    "admin": "المسؤول",
+    "student": "الطالب",
+    "proctor": "المراقب"
+  },
+  "sections": {
+    "overview": "نظرة عامة",
+    "academic": "أكاديمي",
+    "management": "الإدارة",
+    "configuration": "الإعدادات",
+    "main": "الرئيسية"
+  },
+  "items": {
+    "dashboard": "لوحة التحكم",
+    "schedules": "الجداول",
+    "programsDepartments": "البرامج / الأقسام",
+    "semesters": "الفصول الدراسية",
+    "courseOfferings": "عروض المقررات",
+    "enrollments": "التسجيلات",
+    "students": "الطلاب",
+    "proctors": "المراقبون",
+    "courses": "المقررات",
+    "rooms": "القاعات",
+    "centers": "المراكز",
+    "timeSlots": "الفترات الزمنية",
+    "settings": "الإعدادات",
+    "examSchedule": "جدول الامتحانات",
+    "assignedStudents": "الطلاب المعيّنون"
+  }
+}

@@ -7,6 +7,7 @@ interface DeleteConfirmModalProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  loadingLabel?: string;
   isLoading?: boolean;
   errorMessage?: string;
   onCancel: () => void;
@@ -19,6 +20,7 @@ export function DeleteConfirmModal({
   description,
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
+  loadingLabel = "Deleting...",
   isLoading = false,
   errorMessage,
   onCancel,
@@ -43,7 +45,7 @@ export function DeleteConfirmModal({
             {cancelLabel}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm} disabled={isLoading}>
-            {isLoading ? "Deleting..." : confirmLabel}
+            {isLoading ? loadingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

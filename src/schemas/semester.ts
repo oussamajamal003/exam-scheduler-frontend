@@ -18,7 +18,7 @@ export const semesterFormSchema = z
     name: z.string().trim().min(1, "Name is required"),
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().min(1, "End date is required"),
-    isActive: z.boolean().optional().default(false),
+    isActive: z.boolean(),
   })
   .refine(
     (data) => {

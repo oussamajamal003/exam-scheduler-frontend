@@ -1,0 +1,48 @@
+{
+  "language": "Language",
+  "selectLanguage": "Select language",
+  "theme": {
+    "light": "Light theme",
+    "dark": "Dark theme",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "deleting": "Deleting...",
+    "close": "Close",
+    "search": "Search"
+  },
+  "sidebar": {
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "toggleMenu": "Toggle menu",
+    "closeSidebar": "Close sidebar"
+  },
+  "account": {
+    "manageProfile": "Manage Profile",
+    "logout": "Logout",
+    "notifications": "Notifications"
+  },
+  "logout": {
+    "title": "Confirm Logout",
+    "description": "Are you sure you want to securely logout from the system?",
+    "confirm": "Logout",
+    "loading": "Logging out...",
+    "error": "Failed to logout. Please try again."
+  },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "description": "This permanently removes your account from the system. This action cannot be undone.",
+    "confirm": "Delete Account",
+    "error": "Failed to delete account. Please try again."
+  },
+  "search": {
+    "admin": "Search across the workspace...",
+    "student": "Search schedules, courses, exams...",
+    "proctor": "Search schedules, students, assignments..."
+  }
+}

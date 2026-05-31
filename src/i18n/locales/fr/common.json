@@ -1,0 +1,48 @@
+{
+  "language": "Langue",
+  "selectLanguage": "Choisir la langue",
+  "theme": {
+    "light": "Thème clair",
+    "dark": "Thème sombre",
+    "switchToLight": "Passer au thème clair",
+    "switchToDark": "Passer au thème sombre"
+  },
+  "actions": {
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "deleting": "Suppression...",
+    "close": "Fermer",
+    "search": "Rechercher"
+  },
+  "sidebar": {
+    "collapse": "Réduire la barre latérale",
+    "expand": "Développer la barre latérale",
+    "toggleMenu": "Basculer le menu",
+    "closeSidebar": "Fermer la barre latérale"
+  },
+  "account": {
+    "manageProfile": "Gérer le profil",
+    "logout": "Déconnexion",
+    "notifications": "Notifications"
+  },
+  "logout": {
+    "title": "Confirmer la déconnexion",
+    "description": "Voulez-vous vraiment vous déconnecter du système en toute sécurité ?",
+    "confirm": "Déconnexion",
+    "loading": "Déconnexion...",
+    "error": "Échec de la déconnexion. Veuillez réessayer."
+  },
+  "deleteAccount": {
+    "title": "Supprimer le compte",
+    "description": "Cela supprime définitivement votre compte du système. Cette action est irréversible.",
+    "confirm": "Supprimer le compte",
+    "error": "Échec de la suppression du compte. Veuillez réessayer."
+  },
+  "search": {
+    "admin": "Rechercher dans l'espace de travail...",
+    "student": "Rechercher des horaires, des cours, des examens...",
+    "proctor": "Rechercher des horaires, des étudiants, des affectations..."
+  }
+}
