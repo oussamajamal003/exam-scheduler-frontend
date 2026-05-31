@@ -1,4 +1,6 @@
-﻿import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+﻿import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "../../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Card, CardContent } from "../../components/ui/card";
 import { useCenter } from "../../hooks/centers/useCenters";
 import { Center } from "../../schemas/center";
@@ -6,6 +8,7 @@ import { Building2, DoorOpen, MapPin, Users } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { getApiErrorMessage } from "../../lib/apiError";
+import { useDetailListPagination } from "../../hooks/common/useDetailListPagination";
 
 interface CenterDetailDialogProps {
   center: Center | null;
@@ -21,6 +24,11 @@ const STATUS_STYLES: Record<string, string> = {
 export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialogProps) {
   const { data: detail, isLoading, isError, error } = useCenter(open ? center?.id : undefined);
   const view = detail ?? center;
+  const roomsPagination = useDetailListPagination(view?.rooms ?? [], { pageSize: 12, threshold: 12 });
+  const supervisorsPagination = useDetailListPagination(view?.supervisors ?? [], {
+    pageSize: 12,
+    threshold: 12,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -76,8 +84,9 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                 <span className="text-xs text-zinc-500">{view.rooms?.length ?? view.roomsCount ?? 0} total</span>
               </div>
               {view.rooms && view.rooms.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {view.rooms.map((room) => (
+                <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {roomsPagination.visibleItems.map((room) => (
                     <Card key={room.id} className="rounded-none border border-zinc-200/70 bg-white hover:shadow-md transition-shadow">
                       <CardContent className="p-4 space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -101,6 +110,37 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                     </Card>
                   ))}
                 </div>
+                {roomsPagination.shouldPaginate && (
+                  <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                    <p>
+                      Showing <span className="font-semibold text-zinc-900">{roomsPagination.start}</span>-<span className="font-semibold text-zinc-900">{roomsPagination.end}</span> of <span className="font-semibold text-zinc-900">{roomsPagination.total}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={roomsPagination.page <= 1}
+                        onClick={() => roomsPagination.setPage(roomsPagination.page - 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="font-semibold text-zinc-900">
+                        Page {roomsPagination.page} of {roomsPagination.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={roomsPagination.page >= roomsPagination.totalPages}
+                        onClick={() => roomsPagination.setPage(roomsPagination.page + 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               ) : (
                 <div className="rounded-none border border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-6 text-center text-xs text-zinc-500">
                   No rooms assigned to this center yet.
@@ -117,8 +157,9 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                 <span className="text-xs text-zinc-500">{view.supervisors?.length ?? view.supervisorsCount ?? 0} total</span>
               </div>
               {view.supervisors && view.supervisors.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {view.supervisors.map((supervisor) => (
+                <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {supervisorsPagination.visibleItems.map((supervisor) => (
                     <Card key={supervisor} className="rounded-none border border-zinc-200/70 bg-white hover:shadow-md transition-shadow">
                       <CardContent className="p-4 flex items-center gap-3">
                         <div className="rounded-none bg-emerald-50 p-2">
@@ -132,6 +173,37 @@ export function CenterDetailDialog({ center, open, onClose }: CenterDetailDialog
                     </Card>
                   ))}
                 </div>
+                {supervisorsPagination.shouldPaginate && (
+                  <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                    <p>
+                      Showing <span className="font-semibold text-zinc-900">{supervisorsPagination.start}</span>-<span className="font-semibold text-zinc-900">{supervisorsPagination.end}</span> of <span className="font-semibold text-zinc-900">{supervisorsPagination.total}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={supervisorsPagination.page <= 1}
+                        onClick={() => supervisorsPagination.setPage(supervisorsPagination.page - 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="font-semibold text-zinc-900">
+                        Page {supervisorsPagination.page} of {supervisorsPagination.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={supervisorsPagination.page >= supervisorsPagination.totalPages}
+                        onClick={() => supervisorsPagination.setPage(supervisorsPagination.page + 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               ) : (
                 <div className="rounded-none border border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-6 text-center text-xs text-zinc-500">
                   No supervisors linked to this center yet.

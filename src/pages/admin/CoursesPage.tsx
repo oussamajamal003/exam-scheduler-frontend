@@ -1,13 +1,19 @@
-import { useDeferredValue, useState, useMemo } from "react";
+import { useDeferredValue, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { ActiveFilterBadges } from "../../components/shared/ActiveFilterBadges";
+import { SearchSelectFilter, type SearchSelectFilterOption } from "../../components/shared/SearchSelectFilter";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
-import { BookOpen, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
+import { BookOpen, Plus, RefreshCw, TrendingUp, Search, SlidersHorizontal, X } from "lucide-react";
 
 import { CourseList } from "../../features/courses/CourseList";
 import { CourseForm } from "../../forms/courses/CourseForm";
@@ -15,23 +21,42 @@ import { CourseDetailDialog } from "../../features/courses/CourseDetailDialog";
 import { Course } from "../../schemas/course";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "../../hooks/courses/useCourses";
 import { usePrograms } from "../../hooks/programs/usePrograms";
+import { useDepartments } from "../../hooks/departments/useDepartments";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
+
+const normalizeFilterSearch = (value: string) => value.trim().toLowerCase();
+const formatDepartmentLabel = (department: { name?: string; code?: string | null }) =>
+  [department.name, department.code ? `(${department.code})` : null].filter(Boolean).join(" ");
 
 export function CoursesPage() {
-  const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses();
+  const { filters, setFilter, setFilters } = usePersistentFilters('courses', {
+    search: '',
+    departmentId: '',
+  });
+  const search = filters.search;
+  const setSearch = (value: string) => setFilter('search', value);
+  const selectedDepartmentId = filters.departmentId;
+  const deferredSearch = useDeferredValue(search.trim());
+  const departmentsQuery = useDepartments();
+  const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
+  const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses({ departmentId: selectedDepartmentId || undefined });
   const programsQuery = usePrograms();
   const semestersQuery = useSemesters();
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search.trim());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [detailCourse, setDetailCourse] = useState<Course | null>(null);
   const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
-  
+  const [searchParams] = useSearchParams();
+  const highlightedCourseId = searchParams.get("courseId") ?? searchParams.get("id");
+
+  useHighlightRow("data-course-id", highlightedCourseId, courses.length);
+
   const createMutation = useCreateCourse();
   const updateMutation = useUpdateCourse();
   const deleteMutation = useDeleteCourse();
+  const bulkDelete = useBulkDelete({ entityName: "course", entityNamePlural: "courses", deleteItem: (id) => deleteMutation.mutateAsync(id) });
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const programs = programsQuery.data ?? [];
@@ -45,6 +70,17 @@ export function CoursesPage() {
   const submitValidationMessages = isSubmitError 
     ? getApiValidationErrors(submitError) 
     : undefined;
+
+  const selectedDepartment = useMemo(
+    () => departments.find((department) => department.id === selectedDepartmentId) ?? null,
+    [departments, selectedDepartmentId]
+  );
+
+  const setFilterParam = (key: 'departmentId', value: string) => setFilter(key, value);
+
+  const clearAdvancedFilters = () => {
+    setFilters({ search: '', departmentId: '' });
+  };
 
   const openCreateModal = () => {
     setEditingCourse(null);
@@ -104,10 +140,36 @@ export function CoursesPage() {
     );
   }, [deferredSearch, courses]);
 
+  const activeFilterBadges = [
+    ...(deferredSearch ? [{ key: "search", label: "Search", value: deferredSearch, onRemove: () => setSearch("") }] : []),
+    ...(selectedDepartmentId ? [{ key: "department", label: "Department", value: selectedDepartment?.name ?? selectedDepartmentId, onRemove: () => setFilterParam("departmentId", "") }] : []),
+  ];
+  const activeFilterCount = activeFilterBadges.length;
+  const departmentOptions = useMemo<SearchSelectFilterOption[]>(
+    () => departments.flatMap((department) => {
+      if (!department.id) return [];
+      const label = formatDepartmentLabel(department);
+      return [{
+        value: department.id,
+        label,
+        description: department.code ?? undefined,
+        searchText: normalizeFilterSearch(`${label} ${department.code ?? ""}`),
+      }];
+    }),
+    [departments]
+  );
+
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || isFetching || departmentsQuery.isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
-  const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const showPageLoading = useDelayedLoading(departmentsQuery.isLoading || (isLoading && !courses.length), 1000);
+
+  useEffect(() => {
+    if (departmentsQuery.isLoading) return;
+    if (!selectedDepartmentId) return;
+    if (selectedDepartment) return;
+    setFilter('departmentId', '');
+  }, [departmentsQuery.isLoading, selectedDepartment, selectedDepartmentId]);
 
   if (showPageLoading) {
     return (
@@ -117,11 +179,11 @@ export function CoursesPage() {
     );
   }
 
-  if (isError) {
+  if (isError || departmentsQuery.isError) {
     return (
       <div className="p-6">
         <Card className="p-6 space-y-3">
-          <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load courses.")}</p>
+          <p className="text-sm text-red-600">{getApiErrorMessage(departmentsQuery.error ?? error, "Failed to load courses.")}</p>
           <Button onClick={() => refetch()}>Retry</Button>
         </Card>
       </div>
@@ -166,10 +228,49 @@ export function CoursesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by title, code or dept."
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
+
+      <div className="mb-4 space-y-4 rounded-none border border-zinc-200/70 bg-linear-to-r from-white via-zinc-50/70 to-zinc-100/60 px-4 py-4 shadow-sm sm:px-5 dark:border-zinc-800/80 dark:from-zinc-950 dark:via-zinc-950/90 dark:to-zinc-900/80 dark:shadow-black/20">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+              <SlidersHorizontal className="size-3.5" />
+              Table Filter
+            </div>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Showing courses for {selectedDepartment?.name ?? "all departments"}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Choose a department to narrow the table, or keep all departments to show every course.</p>
+          </div>
+          {activeFilterCount > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearAdvancedFilters}
+              className="h-10 rounded-none border-zinc-200 bg-white font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+            >
+              <X className="mr-2 size-4" />
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+          <SearchSelectFilter
+            label="Department"
+            value={selectedDepartmentId}
+            placeholder="All departments"
+            searchPlaceholder="Search departments"
+            options={departmentOptions}
+            isLoading={departmentsQuery.isLoading}
+            onChange={(value) => setFilterParam("departmentId", value)}
+          />
+        </div>
+
+        <ActiveFilterBadges badges={activeFilterBadges} onClearAll={clearAdvancedFilters} />
+      </div>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -240,16 +341,23 @@ export function CoursesPage() {
         </div>
       )}
 
-      <CourseList
-        courses={filteredCourses}
-        isLoading={showTableLoading}
-        isDeleting={deleteMutation.isPending}
-        search={search}
-        onAdd={openCreateModal}
-        onEditCourse={openEditModal}
-        onDeleteCourse={setDeletingCourse}
-        onViewDetails={setDetailCourse}
-      />
+      <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={filteredCourses.length} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
+        <CourseList
+          courses={filteredCourses}
+          isLoading={showTableLoading}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
+          search={search}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(filteredCourses, checked)}
+          onAdd={openCreateModal}
+          onEditCourse={openEditModal}
+          onDeleteCourse={setDeletingCourse}
+          onViewDetails={setDetailCourse}
+          highlightedCourseId={highlightedCourseId}
+        />
+      </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -291,6 +399,16 @@ export function CoursesPage() {
         description={`Are you sure you want to delete ${deletingCourse?.code}? Exams and enrollments associated with this may be affected.`}
         isLoading={deleteMutation.isPending}
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete course.") : undefined}
+      />
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
+        title="Delete Selected Courses"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected course${bulkDelete.selectedCount === 1 ? "" : "s"}. Related exams and enrollments may be affected.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
       />
 
       <CourseDetailDialog course={detailCourse} open={!!detailCourse} onClose={() => setDetailCourse(null)} />

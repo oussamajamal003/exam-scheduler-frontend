@@ -58,6 +58,47 @@ export const fetchCenters = async (search = ""): Promise<Center[]> => {
   return (response.data?.data?.data ?? []).map(mapBackendCenter);
 };
 
+export type CenterPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedCenters = { data: Center[]; meta: CenterPageMeta };
+
+const readCenterMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): CenterPageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const fetchCentersPage = async ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+} = {}): Promise<PagedCenters> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendCenter>>>("/centers", {
+    params: {
+      page,
+      limit: pageSize,
+      search: search.trim() || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapBackendCenter),
+    meta: readCenterMeta(payload?.meta, page, pageSize),
+  };
+};
+
 export const fetchCenter = async (id: string): Promise<Center> => {
   const response = await axiosClient.get<ApiEnvelope<BackendCenter>>(`/centers/${id}`);
   if (!response.data?.data) throw new Error("Center not found in API response");

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import {
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
+import { AsyncSearchSelect } from "../../components/ui/async-search-select";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,8 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { cn } from "../../lib/utils";
+import { getApiErrorMessage } from "../../lib/apiError";
+import { useCoursesForOfferingsPage } from "../../hooks/courseOfferings/useCourseOfferings";
 import type {
   CourseOffering,
   CreateCourseOfferingDto,
@@ -47,12 +50,16 @@ const offeringFormSchema = z.object({
   instructor: z.string().min(1, { message: "Instructor name is required" }),
   days: z.array(z.string()).min(1, { message: "Please select at least one day" }),
   time: z.string().min(1, { message: "Class time is required" }),
+  endTime: z.string().optional().nullable(),
   capacity: z
     .string()
     .min(1, { message: "Capacity is required" })
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0, {
       message: "Capacity must be a positive number",
     }),
+  credits: z.string().optional().refine((v) => !v || (!isNaN(Number(v)) && Number(v) >= 0), {
+    message: "Credits must be a non-negative number",
+  }),
   status: z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]).optional(),
 });
 
@@ -87,11 +94,8 @@ type OfferingFormValues = z.infer<typeof offeringFormSchema>;
 
 export interface CourseOfferingFormProps {
   initialData?: CourseOffering;
-  courses: OfferingCourse[];
   semesters: Semester[];
-  isCoursesLoading?: boolean;
   isSemestersLoading?: boolean;
-  coursesErrorMessage?: string;
   semestersErrorMessage?: string;
   submitErrorMessage?: string;
   submitValidationMessages?: Record<string, string[]>;
@@ -101,17 +105,22 @@ export interface CourseOfferingFormProps {
 
 export function CourseOfferingForm({
   initialData,
-  courses,
   semesters,
-  isCoursesLoading,
   isSemestersLoading,
-  coursesErrorMessage,
   semestersErrorMessage,
   submitErrorMessage,
   submitValidationMessages,
   isLoading,
   onSubmit,
 }: CourseOfferingFormProps) {
+  const [courseSearch, setCourseSearch] = useState("");
+  const [selectedCourseOption, setSelectedCourseOption] = useState<OfferingCourse | null>(
+    initialData?.course ?? null
+  );
+  const deferredCourseSearch = useDeferredValue(courseSearch.trim());
+  const coursesQuery = useCoursesForOfferingsPage({ search: deferredCourseSearch });
+  const courses = useMemo(() => coursesQuery.data ?? [], [coursesQuery.data]);
+
   const form = useForm<OfferingFormValues>({
     resolver: zodResolver(offeringFormSchema),
     defaultValues: {
@@ -121,9 +130,14 @@ export function CourseOfferingForm({
       instructor: initialData?.instructor ?? "",
       days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
+      endTime: initialData?.endTime ?? "",
       capacity:
         initialData?.capacity !== undefined && initialData?.capacity !== null
           ? String(initialData.capacity)
+          : "",
+      credits:
+        initialData?.credits !== undefined && initialData?.credits !== null
+          ? String(initialData.credits)
           : "",
       status: initialData?.status ?? "ACTIVE",
     },
@@ -138,9 +152,14 @@ export function CourseOfferingForm({
       instructor: initialData?.instructor ?? "",
       days: parseDays(initialData?.day),
       time: initialData?.time ?? "",
+      endTime: initialData?.endTime ?? "",
       capacity:
         initialData?.capacity !== undefined && initialData?.capacity !== null
           ? String(initialData.capacity)
+          : "",
+      credits:
+        initialData?.credits !== undefined && initialData?.credits !== null
+          ? String(initialData.credits)
           : "",
       status: initialData?.status ?? "ACTIVE",
     });
@@ -174,16 +193,22 @@ export function CourseOfferingForm({
       : [...current, day];
     // Preserve canonical week order
     const ordered = DAYS.filter((d) => next.includes(d));
-    form.setValue("days", ordered, { shouldDirty: true, shouldTouch: true });
+    form.setValue("days", ordered, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
   };
   const selectedStatus = useWatch({
     control: form.control,
     name: "status",
   });
+  const courseOptions = useMemo(() => {
+    if (!selectedCourseOption?.id || courses.some((course) => course.id === selectedCourseOption.id)) {
+      return courses;
+    }
+    return [selectedCourseOption, ...courses];
+  }, [courses, selectedCourseOption]);
   const groupedCourses = useMemo(() => {
     const groups = new Map<string, CourseGroup>();
 
-    courses.forEach((course) => {
+    courseOptions.forEach((course) => {
       const key = getCourseGroupKey(course);
       const label = `${course.name ?? course.title} (${course.code})`;
       const existing = groups.get(key);
@@ -200,7 +225,7 @@ export function CourseOfferingForm({
     });
 
     return Array.from(groups.values());
-  }, [courses]);
+  }, [courseOptions]);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? null,
@@ -288,6 +313,7 @@ export function CourseOfferingForm({
       instructor: values.instructor?.trim() || undefined,
       day: values.days && values.days.length > 0 ? values.days.join(", ") : undefined,
       time: values.time?.trim() || undefined,
+      endTime: values.endTime?.trim() || undefined,
       status: values.status,
     };
 
@@ -298,18 +324,30 @@ export function CourseOfferingForm({
       }
     }
 
+    if (values.credits && values.credits.trim()) {
+      const creditsNumber = Number(values.credits);
+      if (!Number.isNaN(creditsNumber) && creditsNumber >= 0) {
+        payload.credits = creditsNumber;
+      }
+    }
+
     return onSubmit(payload);
   };
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const coursesErrorMessage = coursesQuery.isError
+    ? getApiErrorMessage(coursesQuery.error, "Failed to load courses for the offering form.")
+    : undefined;
+  // Only block submit on errors after the first submit attempt; before that, let react-hook-form
+  // run full validation on submit so errors reveal naturally rather than prematurely.
   const isSubmitDisabled =
     Boolean(isLoading) ||
-    hasErrors ||
-    Boolean(isCoursesLoading) ||
+    (form.formState.isSubmitted && hasErrors) ||
+    Boolean(coursesQuery.isLoading) ||
     Boolean(isSemestersLoading) ||
     Boolean(coursesErrorMessage) ||
     Boolean(semestersErrorMessage) ||
-    courses.length === 0 ||
+    groupedCourses.length === 0 ||
     semesters.length === 0;
 
   return (
@@ -329,7 +367,7 @@ export function CourseOfferingForm({
         </div>
       )}
 
-      {!isCoursesLoading && !coursesErrorMessage && courses.length === 0 && (
+      {!coursesQuery.isLoading && !coursesErrorMessage && groupedCourses.length === 0 && (
         <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
           No courses are available yet. Create a course first, then add an offering.
         </div>
@@ -353,15 +391,21 @@ export function CourseOfferingForm({
         <Label htmlFor="offering-course" className="text-sm font-semibold text-zinc-950">
           Course
         </Label>
-        <Select
+        <AsyncSearchSelect
           value={selectedCourseGroupKey || undefined}
-          onValueChange={(value) => {
-            const group = groupedCourses.find((g) => g.key === value);
+          selectedLabel={selectedCourseGroup?.label}
+          placeholder={coursesQuery.isLoading ? "Loading courses..." : "Select a course"}
+          searchPlaceholder="Search courses by code or title"
+          options={groupedCourses}
+          searchValue={courseSearch}
+          onSearchChange={setCourseSearch}
+          onValueChange={(_value, group) => {
             const currentSemesterId = form.getValues("semesterId");
             const courseForSemester = group?.courses.find(
               (course) => getCourseSemesterId(course) === currentSemesterId
             );
             const nextCourse = courseForSemester ?? group?.courses[0];
+            setSelectedCourseOption(nextCourse ?? null);
 
             form.setValue("courseId", nextCourse?.id ?? "", {
               shouldDirty: true,
@@ -377,27 +421,13 @@ export function CourseOfferingForm({
               });
             }
           }}
-          disabled={isLoading || isCoursesLoading}
-        >
-          <SelectTrigger
-            id="offering-course"
-            className={cn(
-              "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.courseId || submitValidationMessages?.courseId
-                ? "border-destructive/60 bg-destructive/5"
-                : "hover:border-zinc-300 focus-visible:border-zinc-400"
-            )}
-          >
-            <SelectValue placeholder={isCoursesLoading ? "Loading courses..." : "Select a course"} />
-          </SelectTrigger>
-          <SelectContent>
-            {groupedCourses.map((group) => (
-              <SelectItem key={group.key} value={group.key}>
-                {group.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          getOptionValue={(group) => group.key}
+          getOptionLabel={(group) => group.label}
+          disabled={isLoading || coursesQuery.isLoading}
+          isLoading={coursesQuery.isFetching}
+          errorMessage={form.formState.errors.courseId?.message ?? submitValidationMessages?.courseId?.[0]}
+          emptyMessage="No courses are available yet."
+        />
         {(form.formState.errors.courseId || submitValidationMessages?.courseId) && (
           <p className="text-xs font-medium text-destructive">
             {form.formState.errors.courseId?.message ?? submitValidationMessages?.courseId?.[0]}
@@ -565,57 +595,58 @@ export function CourseOfferingForm({
       </div>
 
       {/* Day & Time */}
+      <div className="space-y-2.5">
+        <Label htmlFor="offering-day" className="text-sm font-semibold text-zinc-950">
+          Days <span className="text-destructive">*</span>
+        </Label>
+        <div
+          id="offering-day"
+          role="group"
+          aria-label="Days"
+          className="flex flex-wrap gap-1.5"
+        >
+          {DAYS.map((day) => {
+            const active = selectedDays.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleDay(day)}
+                disabled={isLoading}
+                aria-label={`${active ? "Unselect" : "Select"} ${day}`}
+                data-state={active ? "on" : "off"}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/50",
+                  active
+                    ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
+                  isLoading && "opacity-60 cursor-not-allowed"
+                )}
+              >
+                {active && <CheckCircle2 className="size-3.5" />}
+                {day.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+        {selectedDays.length > 0 ? (
+          <p className="text-[11px] text-zinc-500">
+            {selectedDays.length}{" "}
+            {selectedDays.length === 1 ? "day" : "days"} selected
+          </p>
+        ) : form.formState.errors.days ? (
+          <p className="text-xs font-medium text-destructive">
+            {form.formState.errors.days.message}
+          </p>
+        ) : null}
+      </div>
+
+      {/* Time & End Time */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2.5">
-          <Label htmlFor="offering-day" className="text-sm font-semibold text-zinc-950">
-            Days <span className="text-destructive">*</span>
-          </Label>
-          <div
-            id="offering-day"
-            role="group"
-            aria-label="Days"
-            className="flex flex-wrap gap-1.5"
-          >
-            {DAYS.map((day) => {
-              const active = selectedDays.includes(day);
-              return (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => toggleDay(day)}
-                  disabled={isLoading}
-                  aria-label={`${active ? "Unselect" : "Select"} ${day}`}
-                  data-state={active ? "on" : "off"}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-none border px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/50",
-                    active
-                      ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50",
-                    isLoading && "opacity-60 cursor-not-allowed"
-                  )}
-                >
-                  {active && <CheckCircle2 className="size-3.5" />}
-                  {day.slice(0, 3)}
-                </button>
-              );
-            })}
-          </div>
-          {selectedDays.length > 0 ? (
-            <p className="text-[11px] text-zinc-500">
-              {selectedDays.length}{" "}
-              {selectedDays.length === 1 ? "day" : "days"} selected
-            </p>
-          ) : form.formState.errors.days ? (
-            <p className="text-xs font-medium text-destructive">
-              {form.formState.errors.days.message}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="space-y-2.5">
           <Label htmlFor="offering-time" className="text-sm font-semibold text-zinc-950">
-            Time <span className="text-destructive">*</span>
+            Start Time <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
             <Clock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
@@ -638,9 +669,35 @@ export function CourseOfferingForm({
             </p>
           )}
         </div>
+
+        <div className="space-y-2.5">
+          <Label htmlFor="offering-end-time" className="text-sm font-semibold text-zinc-950">
+            End Time
+          </Label>
+          <div className="relative">
+            <Clock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              id="offering-end-time"
+              type="time"
+              {...form.register("endTime")}
+              disabled={isLoading}
+              className={cn(
+                "h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm",
+                form.formState.errors.endTime
+                  ? "border-destructive/60 bg-destructive/5"
+                  : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              )}
+            />
+          </div>
+          {form.formState.errors.endTime && (
+            <p className="text-xs font-medium text-destructive">
+              {form.formState.errors.endTime.message}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Capacity & Status */}
+      {/* Capacity & Credits */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2.5">
           <Label htmlFor="offering-capacity" className="text-sm font-semibold text-zinc-950">
@@ -671,32 +728,61 @@ export function CourseOfferingForm({
         </div>
 
         <div className="space-y-2.5">
-          <Label htmlFor="offering-status" className="text-sm font-semibold text-zinc-950">
-            Status
+          <Label htmlFor="offering-credits" className="text-sm font-semibold text-zinc-950">
+            Credits
           </Label>
-          <Select
-            value={selectedStatus || "ACTIVE"}
-            onValueChange={(value) =>
-              form.setValue("status", value as OfferingFormValues["status"], {
-                shouldDirty: true,
-                shouldTouch: true,
-              })
-            }
-            disabled={isLoading}
-          >
-            <SelectTrigger
-              id="offering-status"
-              className="h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm hover:border-zinc-300 focus-visible:border-zinc-400"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="INACTIVE">Inactive</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="relative">
+            <Hash className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              id="offering-credits"
+              type="number"
+              min={0}
+              {...form.register("credits")}
+              disabled={isLoading}
+              placeholder="e.g., 3"
+              className={cn(
+                "h-10 rounded-none border-zinc-200 bg-white/50 pl-9 text-sm",
+                form.formState.errors.credits
+                  ? "border-destructive/60 bg-destructive/5"
+                  : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
+              )}
+            />
+          </div>
+          {form.formState.errors.credits && (
+            <p className="text-xs font-medium text-destructive">
+              {form.formState.errors.credits.message}
+            </p>
+          )}
         </div>
+      </div>
+
+      {/* Status */}
+      <div className="space-y-2.5">
+        <Label htmlFor="offering-status" className="text-sm font-semibold text-zinc-950">
+          Status
+        </Label>
+        <Select
+          value={selectedStatus || "ACTIVE"}
+          onValueChange={(value) =>
+            form.setValue("status", value as OfferingFormValues["status"], {
+              shouldDirty: true,
+              shouldTouch: true,
+            })
+          }
+          disabled={isLoading}
+        >
+          <SelectTrigger
+            id="offering-status"
+            className="h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm hover:border-zinc-300 focus-visible:border-zinc-400"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ACTIVE">Active</SelectItem>
+            <SelectItem value="INACTIVE">Inactive</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Selected course summary */}
@@ -715,7 +801,7 @@ export function CourseOfferingForm({
         </div>
       )}
 
-      {hasErrors && (
+      {form.formState.isSubmitted && hasErrors && (
         <div className="flex items-center gap-2 rounded-none border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           <AlertCircle className="size-3.5" />
           <span>Please correct the highlighted fields before saving.</span>

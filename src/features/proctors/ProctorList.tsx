@@ -1,4 +1,5 @@
-﻿import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+﻿import { useEffect, useMemo } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -7,6 +8,8 @@ import { Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 const formatTimeSlotLabel = (slot: NonNullable<Proctor["availableTimeSlots"]>[number]) => {
   const date = slot.date || slot.startTime;
@@ -32,14 +35,36 @@ interface ProctorListProps {
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  highlightedProctorId?: string | null;
+  pagination?: {
+    page: number;
+    pageCount: number;
+    pageSize: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onAdd?: () => void;
   onEditProctor: (proctor: Proctor) => void;
   onViewWorkload: (proctor: Proctor) => void;
   onDeleteProctor: (proctor: Proctor) => void;
 }
 
-export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, onEditProctor, onViewWorkload, onDeleteProctor }: ProctorListProps) {
+export function ProctorList({ proctors, isLoading, isDeleting, search, highlightedProctorId, pagination, selectedIds, onToggleSelected, onToggleAll, onAdd, onEditProctor, onViewWorkload, onDeleteProctor }: ProctorListProps) {
   const proctorRows = Array.isArray(proctors) ? proctors : [];
+  const selectedCount = proctorRows.filter((proctor) => proctor.id && selectedIds?.has(proctor.id)).length;
+  const isAllSelected = proctorRows.length > 0 && selectedCount === proctorRows.length;
+  const totalCount = pagination?.totalCount ?? proctorRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(proctorRows, { estimateRowHeight: 96 });
+  const targetProctorIndex = useMemo(
+    () => proctorRows.findIndex((p) => p.id === highlightedProctorId),
+    [proctorRows, highlightedProctorId]
+  );
+  useEffect(() => {
+    if (targetProctorIndex >= 0) scrollToIndex(targetProctorIndex);
+  }, [targetProctorIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -49,23 +74,34 @@ export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, on
             Directory
           </div>
           <CardTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Proctors</CardTitle>
-          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Manage examinee proctors, track workloads, and map specific centers efficiently.</p>
+          <p className="text-sm leading-6 text-zinc-500 max-w-2xl">Manage examinee proctors, track workloads, and manage availability efficiently.</p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Staff</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{proctorRows.length}</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{totalCount}</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox
+                      label="Select all proctors"
+                      checked={isAllSelected}
+                      indeterminate={selectedCount > 0 && !isAllSelected}
+                      disabled={isDeleting || proctorRows.length === 0}
+                      onChange={onToggleAll}
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Email</TableHead>
-                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 inline-flex sm:table-cell">Department / Center</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 inline-flex sm:table-cell">Department</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Availability</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Workload</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Actions</TableHead>
@@ -74,13 +110,13 @@ export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, on
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={proctorRows.length > 0 ? proctorRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 7 : 6} rows={proctorRows.length > 0 ? proctorRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : proctorRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={ShieldAlert}
@@ -98,14 +134,32 @@ export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, on
                   </TableCell>
                 </TableRow>
               ) : (
-                proctorRows.map((sup, idx) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: sup, index: idx }) => (
                   <TableRow
                     key={sup.id}
+                    data-proctor-id={sup.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
+                      // gold animation applied via useHighlightRow hook
                       idx === proctorRows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox
+                          label={`Select ${sup.user?.name ?? sup.name}`}
+                          checked={sup.id ? selectedIds?.has(sup.id) ?? false : false}
+                          disabled={isDeleting}
+                          onChange={(checked) => sup.id && onToggleSelected(sup.id, checked)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950 text-sm">{sup.user?.name ?? sup.name}</div>
                       <p className="text-xs text-zinc-500 mt-0.5">Active</p>
@@ -113,7 +167,6 @@ export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, on
                     <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-600">{sup.user?.email ?? sup.email}</TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-medium text-zinc-900 text-sm">{sup.department}</div>
-                      <p className="text-xs text-zinc-500 mt-0.5">{sup.centerRef?.name ?? sup.center}</p>
                     </TableCell>
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="space-y-2">
@@ -169,11 +222,46 @@ export function ProctorList({ proctors, isLoading, isDeleting, search, onAdd, on
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {pagination && pagination.pageCount > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 px-4 py-3 text-sm sm:px-6">
+            <span className="text-xs font-medium text-zinc-500">
+              Page {pagination.page} of {pagination.pageCount} • {pagination.totalCount} proctors
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none"
+                disabled={isLoading || pagination.page <= 1}
+                onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none"
+                disabled={isLoading || pagination.page >= pagination.pageCount}
+                onClick={() => pagination.onPageChange(Math.min(pagination.pageCount, pagination.page + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

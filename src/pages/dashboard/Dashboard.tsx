@@ -28,6 +28,7 @@ import { WeakAreasPanel } from '@/components/dashboard/WeakAreasPanel';
 import { ScheduleOverview } from '@/components/dashboard/ScheduleOverview';
 import { OptimizationSummary } from '@/components/dashboard/OptimizationSummary';
 import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
+import { getScheduleAssignmentCount } from '@/lib/scheduleCounts';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
@@ -276,34 +277,34 @@ export const Dashboard: React.FC = () => {
       {/* Selected schedule score summaries */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AnalyticsCard
-          title="Draft Score"
+          title="Before Optimization"
           value={qualityScores.draftScore != null ? `${qualityScores.draftScore}%` : '—'}
           icon={ShieldCheck}
           accent="zinc"
           loading={analytics.isLoading}
-          subtitle="Before optimization"
+          subtitle="Draft score"
         />
         <AnalyticsCard
-          title="Optimized Score"
+          title="After Optimization"
           value={
             qualityScores.optimizedScore != null ? `${qualityScores.optimizedScore}%` : '—'
           }
           icon={Gauge}
           accent="emerald"
           loading={analytics.isLoading}
-          subtitle="After optimization"
+          subtitle="Optimized score"
         />
         <AnalyticsCard
-          title="Optimization Improvement"
+          title="Improvement"
           value={
             qualityScores.improvementScore != null
-              ? `${qualityScores.improvementScore}%`
+              ? `${qualityScores.improvementScore >= 0 ? '+' : ''}${qualityScores.improvementScore}%`
               : '—'
           }
           icon={TrendingUp}
           accent="sky"
           loading={analytics.isLoading}
-          subtitle="Score delta"
+          subtitle="After - before"
         />
         <AnalyticsCard
           title="Detected Conflicts"
@@ -357,7 +358,7 @@ export const Dashboard: React.FC = () => {
             { label: 'Published', value: counts.activeExamPeriods },
             {
               label: 'Assignments',
-              value: selectedSchedule?._count?.assignments ?? assignments.length ?? 0,
+              value: getScheduleAssignmentCount(selectedSchedule) || assignments.length || 0,
             },
             {
               label: 'Quality',

@@ -5,7 +5,8 @@ import { semesterFormSchema, SemesterFormValues } from "../../schemas/semester";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { AlertCircle, CalendarDays, CheckCircle2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { AlertCircle, CalendarDays, CheckCircle2, Zap } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface SemesterFormProps {
@@ -36,6 +37,7 @@ export function SemesterForm({
       name: initialData?.name ?? "",
       startDate: toDateInputValue(initialData?.startDate),
       endDate: toDateInputValue(initialData?.endDate),
+      isActive: initialData?.isActive ?? false,
     },
     mode: "onChange",
   });
@@ -45,9 +47,10 @@ export function SemesterForm({
       name: initialData?.name ?? "",
       startDate: toDateInputValue(initialData?.startDate),
       endDate: toDateInputValue(initialData?.endDate),
+      isActive: initialData?.isActive ?? false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.name, initialData?.startDate, initialData?.endDate]);
+  }, [initialData?.name, initialData?.startDate, initialData?.endDate, initialData?.isActive]);
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const nameValue = form.watch("name");
@@ -98,9 +101,38 @@ export function SemesterForm({
         )}
       </div>
 
+      {/* Status */}
+      <div className="space-y-2.5">
+        <Label htmlFor="status" className="text-sm font-semibold text-zinc-950">
+          Status
+        </Label>
+        <Select
+          value={form.watch("isActive") ? "active" : "upcoming"}
+          onValueChange={(val) => form.setValue("isActive", val === "active", { shouldDirty: true })}
+          disabled={isLoading}
+        >
+          <SelectTrigger id="status" className="h-10 rounded-none border-zinc-200 bg-white/50 text-sm">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent className="rounded-none">
+            <SelectItem value="active">
+              <span className="flex items-center gap-2">
+                <Zap className="size-3.5 text-emerald-600" />
+                Active
+              </span>
+            </SelectItem>
+            <SelectItem value="upcoming">Upcoming</SelectItem>
+          </SelectContent>
+        </Select>
+        {form.watch("isActive") && (
+          <p className="text-[11px] text-amber-600 leading-snug">
+            Setting this semester as active will deactivate the currently active semester.
+          </p>
+        )}
+      </div>
+
       {/* Dates */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">        <div className="space-y-2.5">
           <Label htmlFor="startDate" className="text-sm font-semibold text-zinc-950">
             Start Date
           </Label>

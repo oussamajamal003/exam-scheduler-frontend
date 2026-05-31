@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -6,19 +7,43 @@ import { Edit2, Trash2, MapPin } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface RoomListProps {
   rooms: Room[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  pagination?: {
+    page: number;
+    pageCount: number;
+    pageSize: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onAdd?: () => void;
   onEditRoom: (room: Room) => void;
   onDeleteRoom: (room: Room) => void;
+  highlightedRoomId?: string | null;
 }
 
-export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRoom, onDeleteRoom }: RoomListProps) {
+export function RoomList({ rooms, isLoading, isDeleting, search, pagination, selectedIds, onToggleSelected, onToggleAll, onAdd, onEditRoom, onDeleteRoom, highlightedRoomId }: RoomListProps) {
   const roomRows = Array.isArray(rooms) ? rooms : [];
+  const selectedCount = roomRows.filter((room) => room.id && selectedIds?.has(room.id)).length;
+  const isAllSelected = roomRows.length > 0 && selectedCount === roomRows.length;
+  const totalCount = pagination?.totalCount ?? roomRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(roomRows, { estimateRowHeight: 68 });
+  const targetRoomIndex = useMemo(
+    () => roomRows.findIndex((r) => r.id === highlightedRoomId),
+    [roomRows, highlightedRoomId]
+  );
+  useEffect(() => {
+    if (targetRoomIndex >= 0) scrollToIndex(targetRoomIndex);
+  }, [targetRoomIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -33,15 +58,20 @@ export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRo
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Rooms</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{roomRows.length}</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{totalCount}</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all rooms" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || roomRows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Room Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Center</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Capacity</TableHead>
@@ -52,13 +82,13 @@ export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRo
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={roomRows.length > 0 ? roomRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 6 : 5} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 6 : 5} rows={roomRows.length > 0 ? roomRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : roomRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 6 : 5} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={MapPin}
@@ -76,14 +106,26 @@ export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRo
                   </TableCell>
                 </TableRow>
               ) : (
-                roomRows.map((room, idx) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 6 : 5} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: room, index: idx }) => (
                   <TableRow
                     key={room.id}
+                    data-room-id={room.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
                       idx === roomRows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${room.name}`} checked={room.id ? selectedIds?.has(room.id) ?? false : false} disabled={isDeleting} onChange={(checked) => room.id && onToggleSelected(room.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <span className="font-bold text-zinc-950 text-sm">{room.name}</span>
                     </TableCell>
@@ -123,11 +165,46 @@ export function RoomList({ rooms, isLoading, isDeleting, search, onAdd, onEditRo
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 6 : 5} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {pagination && pagination.pageCount > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 px-4 py-3 text-sm sm:px-6">
+            <span className="text-xs font-medium text-zinc-500">
+              Page {pagination.page} of {pagination.pageCount} • {pagination.totalCount} rooms
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none"
+                disabled={isLoading || pagination.page <= 1}
+                onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-none"
+                disabled={isLoading || pagination.page >= pagination.pageCount}
+                onClick={() => pagination.onPageChange(Math.min(pagination.pageCount, pagination.page + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

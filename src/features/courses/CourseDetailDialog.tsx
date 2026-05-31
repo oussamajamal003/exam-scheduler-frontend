@@ -1,10 +1,12 @@
-import { BookOpen, ClipboardList, GraduationCap, Hash, Layers, Users } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, Hash, Layers, Users } from "lucide-react";
+import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { getApiErrorMessage } from "../../lib/apiError";
 import { useCourseDetail } from "../../hooks/courses/useCourses";
+import { useDetailListPagination } from "../../hooks/common/useDetailListPagination";
 import type { Course } from "../../schemas/course";
 
 interface CourseDetailDialogProps {
@@ -16,6 +18,10 @@ interface CourseDetailDialogProps {
 export function CourseDetailDialog({ course, open, onClose }: CourseDetailDialogProps) {
   const { data: detail, isLoading, isError, error } = useCourseDetail(open ? course?.id : undefined);
   const view = detail ?? (course ? { ...course, offerings: [], description: null, credits: null } : null);
+  const offeringsPagination = useDetailListPagination(detail?.offerings ?? [], {
+    pageSize: 10,
+    threshold: 10,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -105,8 +111,9 @@ export function CourseDetailDialog({ course, open, onClose }: CourseDetailDialog
                   description="This course has not been assigned to any semester offering."
                 />
               ) : (
+                <>
                 <div className="space-y-2">
-                  {detail.offerings.map((offering) => (
+                  {offeringsPagination.visibleItems.map((offering) => (
                     <div
                       key={offering.id}
                       className="flex items-center justify-between gap-4 rounded-none border border-zinc-200/60 bg-white px-4 py-3 hover:bg-zinc-50/60 transition-colors"
@@ -129,6 +136,37 @@ export function CourseDetailDialog({ course, open, onClose }: CourseDetailDialog
                     </div>
                   ))}
                 </div>
+                {offeringsPagination.shouldPaginate && (
+                  <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                    <p>
+                      Showing <span className="font-semibold text-zinc-900">{offeringsPagination.start}</span>-<span className="font-semibold text-zinc-900">{offeringsPagination.end}</span> of <span className="font-semibold text-zinc-900">{offeringsPagination.total}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={offeringsPagination.page <= 1}
+                        onClick={() => offeringsPagination.setPage(offeringsPagination.page - 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="font-semibold text-zinc-900">
+                        Page {offeringsPagination.page} of {offeringsPagination.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={offeringsPagination.page >= offeringsPagination.totalPages}
+                        onClick={() => offeringsPagination.setPage(offeringsPagination.page + 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
             </section>
           </div>

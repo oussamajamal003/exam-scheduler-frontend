@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { AlertCircle, Building2, CheckCircle2, MapPin } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useCenters } from "../../hooks/centers/useCenters";
 
 interface CenterFormProps {
   initialData?: Partial<Center> & { id?: string };
@@ -16,6 +17,7 @@ interface CenterFormProps {
   isLoading?: boolean;
   submitErrorMessage?: string;
   submitValidationMessages?: Record<string, string[]>;
+  onClearSubmitError?: () => void;
 }
 
 export function CenterForm({
@@ -25,7 +27,9 @@ export function CenterForm({
   isLoading,
   submitErrorMessage,
   submitValidationMessages,
+  onClearSubmitError,
 }: CenterFormProps) {
+  const { data: centers = [] } = useCenters();
   const initialSupervisors = useMemo(
     () => initialData?.supervisors ?? center?.supervisors ?? [],
     [center?.supervisors, initialData?.supervisors]
@@ -51,6 +55,19 @@ export function CenterForm({
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const nameValue = form.watch("name");
+  const currentCenterId = initialData?.id ?? center?.id ?? "";
+  const duplicateCenter = centers.find(
+    (item) =>
+      item.id !== currentCenterId &&
+      (item.name ?? "").trim().toLowerCase() === (nameValue ?? "").trim().toLowerCase()
+  );
+  const duplicateNameMessage = nameValue?.trim() && duplicateCenter ? "Center name already exists." : null;
+  const hasSubmitErrors = Boolean(submitErrorMessage) || Object.keys(submitValidationMessages ?? {}).length > 0;
+  const clearSubmitErrors = () => {
+    if (!isLoading && hasSubmitErrors) {
+      onClearSubmitError?.();
+    }
+  };
   const locationValue = form.watch("location");
   const supervisorsTextValue = form.watch("supervisorsText");
 
@@ -69,25 +86,25 @@ export function CenterForm({
           <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none" />
           <Input
             id="name"
-            {...form.register("name")}
+            {...form.register("name", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 pl-9 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.name || submitValidationMessages?.name
+              form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., Main Campus Center"
           />
-          {!form.formState.errors.name && !submitValidationMessages?.name && !!nameValue && (
+          {!form.formState.errors.name && !submitValidationMessages?.name && !duplicateNameMessage && !!nameValue && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {(form.formState.errors.name || submitValidationMessages?.name) && (
+        {(form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.name?.message || submitValidationMessages?.name?.join(", ")}
+              {form.formState.errors.name?.message || submitValidationMessages?.name?.join(", ") || duplicateNameMessage}
             </p>
           </div>
         )}
@@ -99,7 +116,7 @@ export function CenterForm({
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none" />
           <Input
             id="location"
-            {...form.register("location")}
+            {...form.register("location", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 pl-9 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
               form.formState.errors.location || submitValidationMessages?.location
@@ -128,7 +145,7 @@ export function CenterForm({
         <div className="relative">
           <Input
             id="supervisorsText"
-            {...form.register("supervisorsText")}
+            {...form.register("supervisorsText", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
               form.formState.errors.supervisorsText || submitValidationMessages?.supervisors
@@ -154,7 +171,7 @@ export function CenterForm({
 
       <Button
         type="submit"
-        disabled={isLoading || hasErrors}
+        disabled={isLoading || hasErrors || Boolean(duplicateNameMessage)}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

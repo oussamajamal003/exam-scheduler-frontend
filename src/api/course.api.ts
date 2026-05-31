@@ -7,6 +7,17 @@ type ApiEnvelope<T> = {
   data?: T;
 };
 
+type PaginatedResponse<T> = {
+  data: T[];
+  meta?: unknown;
+};
+
+type PageMeta = {
+  totalPages: number;
+};
+
+const COURSE_LIST_PAGE_SIZE = 200;
+
 export type CourseDetailOffering = {
   id: string;
   semesterId: string;
@@ -89,11 +100,33 @@ const mapBackendCourse = (course: BackendCourse): Course => {
   };
 };
 
-export const fetchCourses = async (): Promise<Course[]> => {
-  const response = await axiosClient.get<ApiEnvelope<{ data: BackendCourse[], meta?: unknown }>>("/courses", {
-    params: { limit: 5000 },
-  });
-  return (response.data?.data?.data || []).map(mapBackendCourse);
+const readPageMeta = (meta: unknown): PageMeta => {
+  const raw = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const totalPages = Number(raw.totalPages ?? 1) || 1;
+  return { totalPages };
+};
+
+export const fetchCourses = async ({ departmentId }: { departmentId?: string } = {}): Promise<Course[]> => {
+  const courses: Course[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendCourse>>>("/courses", {
+      params: {
+        page,
+        pageSize: COURSE_LIST_PAGE_SIZE,
+        departmentId: departmentId || undefined,
+      },
+    });
+
+    const payload = response.data?.data;
+    courses.push(...(payload?.data ?? []).map(mapBackendCourse));
+    totalPages = readPageMeta(payload?.meta).totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return courses;
 };
 
 export const fetchCourse = async (id: string): Promise<Course> => {

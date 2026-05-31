@@ -1,10 +1,13 @@
+import { useEffect, useMemo } from 'react';
 import { BookOpen, Edit2, Eye, Layers, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TableSkeletonRows } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { RowSelectCheckbox } from '@/components/shared/BulkTableActions';
 import { cn } from '@/lib/utils';
+import { useVirtualRows } from '@/hooks/common/useVirtualRows';
 import type { Program } from '@/schemas/program';
 
 interface DepartmentListProps {
@@ -12,10 +15,14 @@ interface DepartmentListProps {
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onEditProgram: (program: Program) => void;
   onDeleteProgram: (program: Program) => void;
   onViewProgram: (program: Program) => void;
   onCreateProgram: () => void;
+  highlightedProgramId?: string | null;
 }
 
 const formatDate = (value?: string) => {
@@ -34,12 +41,26 @@ export function DepartmentList({
   isLoading,
   isDeleting,
   search,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onEditProgram,
   onDeleteProgram,
   onViewProgram,
   onCreateProgram,
+  highlightedProgramId,
 }: DepartmentListProps) {
   const programRows = Array.isArray(programs) ? programs : [];
+  const selectedCount = programRows.filter((program) => program.id && selectedIds?.has(program.id)).length;
+  const isAllSelected = programRows.length > 0 && selectedCount === programRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(programRows, { estimateRowHeight: 76 });
+  const targetProgramIndex = useMemo(
+    () => programRows.findIndex((p) => p.id === highlightedProgramId),
+    [programRows, highlightedProgramId]
+  );
+  useEffect(() => {
+    if (targetProgramIndex >= 0) scrollToIndex(targetProgramIndex);
+  }, [targetProgramIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -63,10 +84,15 @@ export function DepartmentList({
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all programs" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || programRows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Program Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Code</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Department Name</TableHead>
@@ -79,13 +105,13 @@ export function DepartmentList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={programRows.length > 0 ? programRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 7 : 6} rows={programRows.length > 0 ? programRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : programRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Layers}
@@ -106,14 +132,26 @@ export function DepartmentList({
                   </TableCell>
                 </TableRow>
               ) : (
-                programRows.map((program, index) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: program, index }) => (
                   <TableRow
                     key={program.id}
+                    data-program-id={program.id}
                     className={cn(
                       'border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60',
                       index === programRows.length - 1 && 'border-b-0'
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${program.name}`} checked={program.id ? selectedIds?.has(program.id) ?? false : false} disabled={isDeleting} onChange={(checked) => program.id && onToggleSelected(program.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div>
                         <div className="font-semibold text-zinc-950 text-sm">{program.name}</div>
@@ -166,7 +204,13 @@ export function DepartmentList({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>

@@ -6,6 +6,7 @@ export const semesterSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   academicYear: z.string().optional(),
+  isActive: z.boolean().optional().default(false),
   courseOfferings: z.array(z.unknown()).optional(),
   courseOfferingsCount: z.number().optional().default(0),
 });
@@ -17,6 +18,7 @@ export const semesterFormSchema = z
     name: z.string().trim().min(1, "Name is required"),
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().min(1, "End date is required"),
+    isActive: z.boolean().optional().default(false),
   })
   .refine(
     (data) => {
@@ -35,6 +37,7 @@ export type CreateSemesterDto = {
   name: string;
   startDate: string;
   endDate: string;
+  isActive?: boolean;
 };
 
 export type UpdateSemesterDto = Partial<CreateSemesterDto>;

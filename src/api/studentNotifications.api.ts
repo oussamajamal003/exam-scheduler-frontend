@@ -2,6 +2,8 @@ import { axiosClient } from './axiosclient';
 
 export type StudentNotificationType =
   | 'SCHEDULE_PUBLISHED'
+  | 'SCHEDULE_REPUBLISHED'
+  | 'SCHEDULE_UNPUBLISHED'
   | 'SCHEDULE_UPDATED'
   | 'ROOM_TIME_CHANGE'
   | 'ANNOUNCEMENT'

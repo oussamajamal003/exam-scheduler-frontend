@@ -52,12 +52,16 @@ export const useStudentDashboard = () =>
   useQuery({
     queryKey: roleDashboardKeys.student(),
     queryFn: fetchStudentDashboard,
+    staleTime: 5 * 60 * 1000,  // 5 minutes — most expensive query in the app
+    gcTime: 10 * 60 * 1000,
   });
 
 export const useProctorDashboard = () =>
   useQuery({
     queryKey: roleDashboardKeys.proctor(),
     queryFn: fetchProctorDashboard,
+    staleTime: 5 * 60 * 1000,  // 5 minutes
+    gcTime: 10 * 60 * 1000,
   });
 
 export const usePublishedSchedulesForRole = () => {
@@ -67,5 +71,7 @@ export const usePublishedSchedulesForRole = () => {
     queryKey: roleDashboardKeys.publishedSchedules(portal),
     queryFn: () => fetchPublishedSchedulesForRole(portal as RolePortal),
     enabled: Boolean(portal),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 };

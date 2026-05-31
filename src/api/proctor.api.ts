@@ -8,6 +8,13 @@ type ApiEnvelope<T> = {
   data?: T;
 };
 
+type PaginatedProctorsPayload = {
+  data: BackendProctor[];
+  meta?: unknown;
+};
+
+const PROCTORS_PAGE_SIZE = 200;
+
 type BackendTimeSlotRef = {
   timeSlotId?: string;
   timeSlot?: TimeSlot | null;
@@ -22,10 +29,6 @@ type BackendProctor = {
     name?: string;
     email?: string;
   };
-  center?: {
-    id?: string;
-    name?: string;
-  } | string;
   availableTimeSlots?: BackendTimeSlotRef[];
   assignments?: unknown[];
   _count?: {
@@ -68,8 +71,6 @@ const serializeProctor = (proctor: CreateProctorDto | UpdateProctorDto) => ({
   name: proctor.name,
   email: proctor.email,
   department: proctor.department,
-  centerId: proctor.centerId,
-  center: proctor.center,
   timeSlotIds: proctor.timeSlotIds ?? [],
 });
 
@@ -78,10 +79,7 @@ const mapBackendProctor = (proctor: BackendProctor): Proctor => ({
   name: proctor.user?.name || proctor.name || "Unknown",
   email: proctor.user?.email || proctor.email || "Unknown",
   department: proctor.department || "—",
-  centerId: typeof proctor.center === "string" ? "" : proctor.center?.id || "",
   user: proctor.user ?? null,
-  center: typeof proctor.center === "string" ? proctor.center : proctor.center?.name || "Unknown",
-  centerRef: typeof proctor.center === "string" ? null : proctor.center ?? null,
   availableTimeSlots: mapAvailableTimeSlots(proctor),
   timeSlotIds: (proctor.availableTimeSlots ?? [])
     .map((entry) => entry.timeSlotId ?? entry.timeSlot?.id)
@@ -90,8 +88,65 @@ const mapBackendProctor = (proctor: BackendProctor): Proctor => ({
 });
 
 export const fetchProctors = async (): Promise<Proctor[]> => {
-  const response = await axiosClient.get<ApiEnvelope<{ data: BackendProctor[]; meta?: unknown }>>("/proctors", { params: { limit: 5000 } });
-  return (response.data?.data?.data || []).map(mapBackendProctor);
+  const proctors: BackendProctor[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedProctorsPayload>>("/proctors", {
+      params: { page, pageSize: PROCTORS_PAGE_SIZE },
+    });
+    const payload = response.data?.data;
+    proctors.push(...(payload?.data ?? []));
+    totalPages = readProctorMeta(payload?.meta, page, PROCTORS_PAGE_SIZE).totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return proctors.map(mapBackendProctor);
+};
+
+export type ProctorPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedProctors = { data: Proctor[]; meta: ProctorPageMeta };
+
+const readProctorMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): ProctorPageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const fetchProctorsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  centerId,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  centerId?: string;
+} = {}): Promise<PagedProctors> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedProctorsPayload>>("/proctors", {
+    params: {
+      page,
+      limit: pageSize,
+      search: search?.trim() ? search.trim() : undefined,
+      centerId: centerId || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapBackendProctor),
+    meta: readProctorMeta(payload?.meta, page, pageSize),
+  };
 };
 
 export const fetchProctor = async (id: string): Promise<Proctor> => {

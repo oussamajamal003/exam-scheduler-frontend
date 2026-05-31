@@ -1,13 +1,32 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FullPublishedScheduleSection, RoleScheduleView } from '@/components/roleSchedule/PublishedScheduleViews';
 import { DownloadPdfButton } from '@/components/roleSchedule/DownloadPdfButton';
 import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
 import { useSchedulePdfDownload } from '@/hooks/schedulePdf/useSchedulePdfDownload';
 import { downloadStudentSchedulePdf } from '@/api/schedulePdf.api';
+import { useHighlightRow } from '@/hooks/common/useHighlightRow';
 
 export const StudentSchedulePage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const dashboardQuery = useStudentDashboard();
   const assignments = dashboardQuery.data?.assignments ?? [];
+
+  const resolvedHighlightId = React.useMemo(() => {
+    const assignmentId = searchParams.get('assignmentId');
+    if (assignmentId) return assignmentId;
+    const examId = searchParams.get('examId');
+    if (examId) return assignments.find((a) => a.examId === examId)?.id ?? null;
+    const scheduleId = searchParams.get('scheduleId');
+    if (scheduleId) return assignments.find((a) => a.schedule?.id === scheduleId)?.id ?? null;
+    const roomId = searchParams.get('roomId');
+    if (roomId) return assignments.find((a) => a.room?.id === roomId)?.id ?? null;
+    const centerId = searchParams.get('centerId');
+    if (centerId) return assignments.find((a) => a.room?.center?.id === centerId)?.id ?? null;
+    return null;
+  }, [assignments, searchParams]);
+  useHighlightRow('data-assignment-id', resolvedHighlightId, assignments.length);
+
   const { download, isDownloading } = useSchedulePdfDownload();
 
   const handleDownload = () =>
@@ -46,6 +65,9 @@ export const StudentSchedulePage: React.FC = () => {
         error={dashboardQuery.isError}
         emptyLabel="No published exam schedule available yet."
         errorLabel="Unable to load your published exam schedule."
+        showFilters
+        filterResultLabel={(visible, total) => `Showing ${visible} of ${total} exam${total === 1 ? '' : 's'}`}
+        filterEmptyLabel="No published exams match the current filters."
         headerActions={(
           <DownloadPdfButton
             onClick={handleDownload}
@@ -56,7 +78,7 @@ export const StudentSchedulePage: React.FC = () => {
         )}
       />
 
-      <FullPublishedScheduleSection portal="student" />
+      <FullPublishedScheduleSection portal="student" showAdvancedFilters />
     </div>
   );
 };

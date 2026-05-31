@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, CheckCheck, Clock3, Megaphone, Sparkles, UserCheck } from 'lucide-react';
+import { Bell, BellOff, CheckCheck, Clock3, Megaphone, RefreshCcw, Sparkles, UserCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { formatUtcDate } from '@/lib/dateTime';
 import type { RoleNotification } from '@/api/roleNotifications.api';
 
 const getNotificationIcon = (type: string) => {
+  if (type === 'SCHEDULE_REPUBLISHED') return RefreshCcw;
+  if (type === 'SCHEDULE_UNPUBLISHED') return BellOff;
   if (type === 'SCHEDULE_UPDATED' || type === 'ROOM_TIME_CHANGE') return Sparkles;
   if (type === 'NEW_DUTY_ASSIGNED') return UserCheck;
   if (type === 'ANNOUNCEMENT') return Megaphone;
@@ -16,6 +18,8 @@ const getNotificationIcon = (type: string) => {
 
 const getNotificationLabel = (type: string) => {
   if (type === 'SCHEDULE_PUBLISHED') return 'Schedule published';
+  if (type === 'SCHEDULE_REPUBLISHED') return 'Schedule republished';
+  if (type === 'SCHEDULE_UNPUBLISHED') return 'Schedule unpublished';
   if (type === 'SCHEDULE_UPDATED') return 'Schedule updated';
   if (type === 'ROOM_TIME_CHANGE') return 'Room / time change';
   if (type === 'NEW_DUTY_ASSIGNED') return 'New duty assigned';

@@ -1,19 +1,77 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   bulkImportEnrollments,
   createEnrollment,
   deleteEnrollment,
+  fetchEnrollmentFilterOptions,
   fetchEnrollments,
+  fetchEnrollmentsPage,
 } from "../../api/enrollment.api";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
 import type { CreateEnrollmentDto } from "../../schemas/enrollment";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
-export const useEnrollments = (search = "") =>
-  useQuery({
-    queryKey: ["enrollments", search],
-    queryFn: () => fetchEnrollments(search),
+export const useEnrollments = (
+  options: { search?: string; semesterId?: string; courseOfferingId?: string; studentId?: string; departmentId?: string; enabled?: boolean } | string = ""
+) => {
+  const { search = "", semesterId, courseOfferingId, studentId, departmentId, enabled = true } =
+    typeof options === "string" ? { search: options } : options;
+  return useQuery({
+    queryKey: ["enrollments", semesterId ?? null, search, courseOfferingId ?? null, studentId ?? null, departmentId ?? null],
+    queryFn: () => fetchEnrollments({ search, semesterId, courseOfferingId, studentId, departmentId }),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
+};
+
+export const useEnrollmentsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+  semesterId,
+  courseOfferingId,
+  studentId,
+  departmentId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  semesterId?: string;
+  courseOfferingId?: string;
+  studentId?: string;
+  departmentId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["enrollments", "page", { page, pageSize, search, semesterId: semesterId ?? null, courseOfferingId: courseOfferingId ?? null, studentId: studentId ?? null, departmentId: departmentId ?? null }],
+    queryFn: () => fetchEnrollmentsPage({ page, pageSize, search, semesterId, courseOfferingId, studentId, departmentId }),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useEnrollmentFilterOptions = ({
+  semesterId,
+  enabled = true,
+}: {
+  semesterId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["enrollments", "filters", semesterId ?? null],
+    queryFn: () => fetchEnrollmentFilterOptions({ semesterId }),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
 
 export const useCreateEnrollment = () => {
   const queryClient = useQueryClient();
@@ -21,9 +79,12 @@ export const useCreateEnrollment = () => {
 
   return useMutation({
     mutationFn: (data: CreateEnrollmentDto) => createEnrollment(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       addToast({
         type: "success",
         title: "Enrollment Added",
@@ -48,9 +109,12 @@ export const useDeleteEnrollment = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteEnrollment(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async () => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       addToast({
         type: "success",
         title: "Enrollment Removed",
@@ -73,9 +137,12 @@ export const useBulkImportEnrollments = () => {
 
   return useMutation({
     mutationFn: (enrollments: CreateEnrollmentDto[]) => bulkImportEnrollments(enrollments),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["enrollments"] });
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       addToast({
         type: "success",
         title: "Bulk Import Complete",

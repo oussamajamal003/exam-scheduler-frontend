@@ -32,6 +32,24 @@ type PaginatedResponse<T> = {
   meta?: unknown;
 };
 
+type PageMeta = {
+  totalPages: number;
+};
+
+const PROGRAM_LIST_PAGE_SIZE = 200;
+
+export type ProgramPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedPrograms = {
+  data: Program[];
+  meta: ProgramPageMeta;
+};
+
 const mapBackendProgram = (program: ProgramRecord): Program => ({
   id: program.id,
   name: program.name,
@@ -51,12 +69,62 @@ const mapBackendProgram = (program: ProgramRecord): Program => ({
   isActive: program.isActive ?? true,
 });
 
-export const fetchPrograms = async (search = ''): Promise<Program[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<ProgramRecord>>>('/programs', {
-    params: { limit: 5000, search: search || undefined },
-  });
+const readPageMeta = (meta: unknown): PageMeta => {
+  const raw = (meta && typeof meta === 'object' ? meta : {}) as Record<string, unknown>;
+  const totalPages = Number(raw.totalPages ?? 1) || 1;
+  return { totalPages };
+};
 
-  return (response.data?.data?.data ?? []).map(mapBackendProgram);
+export const fetchPrograms = async (search = ''): Promise<Program[]> => {
+  const programs: Program[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<ProgramRecord>>>('/programs', {
+      params: {
+        page,
+        pageSize: PROGRAM_LIST_PAGE_SIZE,
+        search: search || undefined,
+      },
+    });
+
+    const payload = response.data?.data;
+    programs.push(...(payload?.data ?? []).map(mapBackendProgram));
+    totalPages = readPageMeta(payload?.meta).totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return programs;
+};
+
+export const fetchProgramsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search = '',
+  departmentId,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  departmentId?: string;
+} = {}): Promise<PagedPrograms> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<ProgramRecord>>>('/programs', {
+    params: {
+      page,
+      pageSize,
+      search: search || undefined,
+      departmentId: departmentId || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  const meta = readPageMeta(payload?.meta);
+  const raw = (payload?.meta && typeof payload.meta === 'object' ? payload.meta : {}) as Record<string, unknown>;
+  const total = Number(raw.total ?? 0) || 0;
+  return {
+    data: (payload?.data ?? []).map(mapBackendProgram),
+    meta: { total, page: Number(raw.page ?? page) || page, pageSize: Number(raw.limit ?? raw.pageSize ?? pageSize) || pageSize, totalPages: meta.totalPages },
+  };
 };
 
 export const createProgram = async (program: CreateProgramDto): Promise<Program> => {

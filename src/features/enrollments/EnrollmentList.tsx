@@ -1,4 +1,5 @@
-import { ClipboardList, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, ClipboardList, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,7 +17,9 @@ import {
 } from "../../components/ui/table";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
 import { cn } from "../../lib/utils";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 import type { Enrollment } from "../../schemas/enrollment";
 
 interface EnrollmentListProps {
@@ -24,8 +27,20 @@ interface EnrollmentListProps {
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onCreate: () => void;
   onDelete: (enrollment: Enrollment) => void;
+  highlightedEnrollmentId?: string | null;
+  /** Optional server-driven pagination. When provided, internal client paging is bypassed. */
+  pagination?: {
+    page: number; // 1-based
+    pageCount: number;
+    pageSize: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 const statusBadge = (status?: string | null) => {
@@ -49,10 +64,48 @@ export function EnrollmentList({
   isLoading,
   isDeleting,
   search,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onCreate,
   onDelete,
+  highlightedEnrollmentId,
+  pagination,
 }: EnrollmentListProps) {
-  const rows = Array.isArray(enrollments) ? enrollments : [];
+  const rows = useMemo(
+    () => (Array.isArray(enrollments) ? enrollments : []),
+    [enrollments]
+  );
+  const selectedCount = rows.filter((enrollment) => selectedIds?.has(enrollment.id)).length;
+  const isAllSelected = rows.length > 0 && selectedCount === rows.length;
+
+  const isServerPaged = Boolean(pagination);
+  // Client pagination fallback (only used when no server pagination provided)
+  const CLIENT_PAGE_SIZE = 50;
+  const [clientPage, setClientPage] = useState(0);
+  const clientPageCount = Math.max(1, Math.ceil(rows.length / CLIENT_PAGE_SIZE));
+  const safeClientPage = Math.min(clientPage, clientPageCount - 1);
+  const clientPagedRows = useMemo(
+    () => rows.slice(safeClientPage * CLIENT_PAGE_SIZE, safeClientPage * CLIENT_PAGE_SIZE + CLIENT_PAGE_SIZE),
+    [rows, safeClientPage]
+  );
+
+  const pagedRows = isServerPaged ? rows : clientPagedRows;
+  const totalCount = pagination?.totalCount ?? rows.length;
+  const pageSize = pagination?.pageSize ?? CLIENT_PAGE_SIZE;
+  const pageCount = pagination?.pageCount ?? clientPageCount;
+  const currentPage = pagination ? pagination.page : safeClientPage + 1; // 1-based for display
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(totalCount, currentPage * pageSize);
+  const showPagination = isServerPaged ? pageCount > 1 : rows.length > CLIENT_PAGE_SIZE;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(pagedRows, { estimateRowHeight: 84 });
+  const targetEnrollmentIndex = useMemo(
+    () => pagedRows.findIndex((e) => e.id === highlightedEnrollmentId),
+    [pagedRows, highlightedEnrollmentId]
+  );
+  useEffect(() => {
+    if (targetEnrollmentIndex >= 0) scrollToIndex(targetEnrollmentIndex);
+  }, [targetEnrollmentIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -75,17 +128,22 @@ export function EnrollmentList({
               Total Enrollments
             </p>
             <p className="mt-1 text-3xl font-bold tracking-tight text-zinc-950">
-              {rows.length}
+              {totalCount}
             </p>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 bg-zinc-50/40 hover:bg-transparent">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all enrollments" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || rows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 text-xs font-bold uppercase tracking-[0.12em] text-zinc-600 sm:px-6">
                   Student
                 </TableHead>
@@ -112,13 +170,13 @@ export function EnrollmentList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-0">
-                    <TableSkeletonRows columns={7} rows={rows.length > 0 ? rows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 8 : 7} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 8 : 7} rows={rows.length > 0 ? rows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 8 : 7} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={ClipboardList}
@@ -136,14 +194,26 @@ export function EnrollmentList({
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((enrollment, index) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 8 : 7} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: enrollment, index }) => (
                   <TableRow
                     key={enrollment.id}
+                    data-enrollment-id={enrollment.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                      index === rows.length - 1 && "border-b-0"
+                      index === pagedRows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${enrollment.student?.fullName ?? enrollment.student?.user?.name ?? "enrollment"}`} checked={selectedIds?.has(enrollment.id) ?? false} disabled={isDeleting} onChange={(checked) => onToggleSelected(enrollment.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="flex items-center gap-3">
                         <div className="flex size-9 items-center justify-center rounded-none bg-zinc-100 text-xs font-bold text-zinc-700">
@@ -212,11 +282,55 @@ export function EnrollmentList({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 8 : 7} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {showPagination && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 bg-zinc-50/40 px-4 py-3 text-xs text-zinc-600 sm:px-6">
+            <p>
+              Showing <span className="font-semibold text-zinc-900">{rangeStart}</span>–
+              <span className="font-semibold text-zinc-900">{rangeEnd}</span> of
+              <span className="font-semibold text-zinc-900"> {totalCount}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => {
+                  if (pagination) pagination.onPageChange(Math.max(1, currentPage - 1));
+                  else setClientPage((p) => Math.max(0, p - 1));
+                }}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="font-semibold text-zinc-900">
+                Page {currentPage} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= pageCount}
+                onClick={() => {
+                  if (pagination) pagination.onPageChange(Math.min(pageCount, currentPage + 1));
+                  else setClientPage((p) => Math.min(clientPageCount - 1, p + 1));
+                }}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

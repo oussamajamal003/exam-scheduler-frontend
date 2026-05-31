@@ -1,10 +1,14 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { GraduationCap, CalendarDays, Plus, RefreshCw, Search, TrendingUp } from 'lucide-react';
+import { usePersistentFilters } from '@/hooks/common/usePersistentFilters';
+import { useHighlightRow } from '@/hooks/common/useHighlightRow';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
+import { BulkDeleteToolbar } from '@/components/shared/BulkTableActions';
 import { StickyActionBar } from '@/components/common/StickyActionBar';
 import { DepartmentList } from '@/features/departments/DepartmentList';
 import { ProgramForm, type ProgramFormSubmitValues } from '@/forms/programs/ProgramForm';
@@ -12,6 +16,7 @@ import { getApiErrorMessage, getApiValidationErrors } from '@/lib/apiError';
 import { useCreateDepartment, useDepartments, useUpdateDepartment } from '@/hooks/departments/useDepartments';
 import { useCreateProgram, useDeleteProgram, usePrograms, useUpdateProgram } from '@/hooks/programs/usePrograms';
 import { useDelayedLoading } from '@/hooks/common/useDelayedLoading';
+import { useBulkDelete } from '@/hooks/common/useBulkDelete';
 import type { Program } from '@/schemas/program';
 
 const formatDateTime = (value?: string) => {
@@ -27,8 +32,12 @@ const formatDateTime = (value?: string) => {
 };
 
 export function DepartmentsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const { filters, setFilter } = usePersistentFilters('departments', { search: '' });
+  const searchTerm = filters.search;
+  const setSearchTerm = (value: string) => setFilter('search', value);
   const deferredSearchTerm = useDeferredValue(searchTerm.trim());
+  const [searchParams] = useSearchParams();
+  const highlightedProgramId = searchParams.get("programId") ?? searchParams.get("id");
 
   const {
     data: allDepartments = [],
@@ -56,12 +65,16 @@ export function DepartmentsPage() {
   const createProgramMutation = useCreateProgram();
   const updateProgramMutation = useUpdateProgram();
   const deleteProgramMutation = useDeleteProgram();
+  const bulkDelete = useBulkDelete({ entityName: 'program', entityNamePlural: 'programs', deleteItem: (id) => deleteProgramMutation.mutateAsync(id) });
 
   const totalPrograms = useMemo(
     () => allDepartments.reduce((sum, department) => sum + (department.programs?.length ?? department.programsCount ?? 0), 0),
     [allDepartments]
   );
   const totalDepartments = useMemo(() => allDepartments.length, [allDepartments]);
+
+  useHighlightRow('data-program-id', highlightedProgramId, programs.length);
+
   const totalCourses = useMemo(
     () => allDepartments.reduce((sum, department) => sum + (department.courses?.length ?? department.totalCourses ?? 0), 0),
     [allDepartments]
@@ -101,7 +114,7 @@ export function DepartmentsPage() {
 
   const isFetching = isFetchingDepartments || isFetchingPrograms;
   const isSearching = searchTerm.trim() !== deferredSearchTerm;
-  const isTableLoading = isSearching || isFetching || createProgramMutation.isPending || updateProgramMutation.isPending || deleteProgramMutation.isPending;
+  const isTableLoading = isSearching || isFetching || createProgramMutation.isPending || updateProgramMutation.isPending || deleteProgramMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
 
   const submitErrorMessage = 
@@ -245,7 +258,7 @@ export function DepartmentsPage() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Filter by program name"
-              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/50"
+              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/70 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:bg-zinc-950 dark:focus-visible:ring-zinc-700 dark:group-data-[stuck=true]:bg-zinc-950/70"
             />
           </div>
         </div>
@@ -297,15 +310,20 @@ export function DepartmentsPage() {
       </div>
 
       <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={programs.length} isDeleting={bulkDelete.isDeleting || deleteProgramMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
         <DepartmentList
           programs={programs}
           isLoading={showTableLoading}
-          isDeleting={deleteProgramMutation.isPending}
+          isDeleting={deleteProgramMutation.isPending || bulkDelete.isDeleting}
           search={searchTerm}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(programs, checked)}
           onCreateProgram={openCreateProgramModal}
           onEditProgram={openEditProgramModal}
           onDeleteProgram={setDeletingProgram}
           onViewProgram={setSelectedProgram}
+          highlightedProgramId={highlightedProgramId}
         />
       </div>
 
@@ -322,6 +340,16 @@ export function DepartmentsPage() {
         errorMessage={deleteProgramMutation.isError ? getApiErrorMessage(deleteProgramMutation.error, 'Failed to delete program.') : undefined}
         onCancel={closeDeleteModal}
         onConfirm={confirmDeleteProgram}
+      />
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Selected Programs"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected program${bulkDelete.selectedCount === 1 ? '' : 's'} from their departments.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
       />
 
       <Dialog open={isProgramModalOpen} onOpenChange={(open) => (open ? setIsProgramModalOpen(true) : closeProgramModal())}>

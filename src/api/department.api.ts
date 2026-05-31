@@ -23,7 +23,27 @@ type DepartmentRecord = {
 
 type PaginatedResponse<T> = {
   data: T[];
-  meta?: unknown;
+  meta?: {
+    total?: number;
+    page?: number;
+    limit?: number;
+    pageSize?: number;
+    totalPages?: number;
+  };
+};
+
+const DEPARTMENTS_PAGE_SIZE = 200;
+
+export type DepartmentPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedDepartments = {
+  data: Department[];
+  meta: DepartmentPageMeta;
 };
 
 const mapBackendDepartment = (department: DepartmentRecord): Department => ({
@@ -38,11 +58,53 @@ const mapBackendDepartment = (department: DepartmentRecord): Department => ({
 });
 
 export const fetchDepartments = async (search = ''): Promise<Department[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<DepartmentRecord>>>('/departments', {
-    params: { limit: 5000, search: search || undefined },
-  });
+  const departments: DepartmentRecord[] = [];
+  let page = 1;
+  let totalPages = 1;
 
-  return (response.data?.data?.data ?? []).map(mapBackendDepartment);
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<DepartmentRecord>>>('/departments', {
+      params: {
+        page,
+        pageSize: DEPARTMENTS_PAGE_SIZE,
+        search: search || undefined,
+      },
+    });
+
+    const payload = response.data?.data;
+    const pageItems = payload?.data ?? [];
+    departments.push(...pageItems);
+    totalPages = Math.max(payload?.meta?.totalPages ?? 1, 1);
+    page += 1;
+  } while (page <= totalPages);
+
+  return departments.map(mapBackendDepartment);
+};
+
+export const fetchDepartmentsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search = '',
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+} = {}): Promise<PagedDepartments> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<DepartmentRecord>>>('/departments', {
+    params: {
+      page,
+      pageSize,
+      search: search || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  const meta = payload?.meta ?? {};
+  const total = Number(meta.total ?? 0) || 0;
+  const totalPages = Number(meta.totalPages ?? Math.ceil(total / Math.max(pageSize, 1))) || 1;
+  return {
+    data: (payload?.data ?? []).map(mapBackendDepartment),
+    meta: { total, page: Number(meta.page ?? page) || page, pageSize: Number(meta.limit ?? meta.pageSize ?? pageSize) || pageSize, totalPages },
+  };
 };
 
 export const createDepartment = async (department: CreateDepartmentDto): Promise<Department> => {

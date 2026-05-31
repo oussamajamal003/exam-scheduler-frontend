@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useGlobalSearch } from '@/hooks/search/useGlobalSearch';
+import { useValidateRecentItems } from '@/hooks/search/useValidateRecentItems';
 import type {
   SearchGroup,
   SearchResult,
@@ -34,12 +35,15 @@ const RECENT_KEY = 'admin-command-search-recent';
 const MAX_RECENT = 6;
 
 const iconForType: Record<SearchResultType, React.ComponentType<{ className?: string }>> = {
+  'admin-dashboard': ShieldCheck,
   semester: Calendar,
   course: GraduationCap,
   'course-offering': Layers,
   exam: ClipboardCheck,
   student: Users,
+  'student-dashboard': ShieldCheck,
   proctor: UserCog,
+  'proctor-dashboard': ShieldCheck,
   admin: ShieldCheck,
   program: GraduationCap,
   department: Building,
@@ -63,7 +67,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     label: 'Generate Schedule',
     description: 'Launch the scheduling wizard',
     icon: Sparkles,
-    href: '/scheduling',
+    href: '/scheduling?openGenerate=true',
     keywords: ['generate', 'schedule', 'run', 'create schedule'],
   },
   {
@@ -139,6 +143,83 @@ const matchesQuickAction = (action: QuickAction, query: string) => {
   );
 };
 
+const buildTargetWithParams = (pathname: string, params?: Record<string, string | null | undefined>) => {
+  if (!params) return pathname;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const next = search.toString();
+  return next ? `${pathname}?${next}` : pathname;
+};
+
+const resolveSearchTarget = (result: SearchResult) => {
+  switch (result.type) {
+    case 'admin-dashboard':
+      return '/dashboard';
+    case 'student-dashboard':
+      return '/student/dashboard';
+    case 'proctor-dashboard':
+      return '/proctor/dashboard';
+    case 'course-offering':
+      return buildTargetWithParams(`/course-offerings/${result.id}`, {
+        semesterId: typeof result.metadata?.semesterId === 'string' ? result.metadata.semesterId : undefined,
+      });
+    case 'student':
+      return result.href.startsWith('/proctor/')
+        ? buildTargetWithParams('/proctor/students', { studentId: result.id, _hl: result.title })
+        : buildTargetWithParams('/students', { studentId: result.id, _hl: result.title });
+    case 'proctor':
+      return buildTargetWithParams('/proctors', { proctorId: result.id, _hl: result.title });
+    case 'schedule':
+      if (result.href.startsWith('/student/')) {
+        return buildTargetWithParams('/student/schedule', { scheduleId: result.id });
+      }
+      if (result.href.startsWith('/proctor/')) {
+        return buildTargetWithParams('/proctor/schedule', { scheduleId: result.id });
+      }
+      return buildTargetWithParams('/scheduling', { scheduleId: result.id, view: 'table' });
+    case 'course':
+      if (result.href.startsWith('/student/')) {
+        return buildTargetWithParams('/student/courses', { courseId: result.id });
+      }
+      if (result.href.startsWith('/proctor/')) {
+        return buildTargetWithParams('/proctor/schedule', { courseId: result.id });
+      }
+      return buildTargetWithParams('/courses', { courseId: result.id, _hl: result.title });
+    case 'exam':
+      if (result.href.startsWith('/student/')) {
+        return buildTargetWithParams('/student/schedule', { examId: result.id });
+      }
+      if (result.href.startsWith('/proctor/')) {
+        return buildTargetWithParams('/proctor/schedule', { assignmentId: result.id });
+      }
+      return buildTargetWithParams('/scheduling', { examId: result.id, view: 'table' });
+    case 'room':
+      if (result.href.startsWith('/student/')) {
+        return buildTargetWithParams('/student/schedule', { roomId: result.id });
+      }
+      if (result.href.startsWith('/proctor/')) {
+        return buildTargetWithParams('/proctor/schedule', { roomId: result.id });
+      }
+      return buildTargetWithParams('/rooms', { roomId: result.id, _hl: result.title });
+    case 'center':
+      if (result.href.startsWith('/student/')) {
+        return buildTargetWithParams('/student/schedule', { centerId: result.id });
+      }
+      if (result.href.startsWith('/proctor/')) {
+        return buildTargetWithParams('/proctor/schedule', { centerId: result.id });
+      }
+      return buildTargetWithParams('/centers', { centerId: result.id, _hl: result.title });
+    case 'semester':
+      return buildTargetWithParams('/semesters', { semesterId: result.id, _hl: result.title });
+    case 'department':
+      return buildTargetWithParams('/departments', { programId: result.id, _hl: result.title });
+    default:
+      return result.href;
+  }
+};
+
 export const CommandSearch: React.FC<Props> = ({
   open,
   onOpenChange,
@@ -158,6 +239,7 @@ export const CommandSearch: React.FC<Props> = ({
   const listRef = React.useRef<HTMLDivElement>(null);
 
   const { data, isFetching, isError, isDebouncing, enabled } = useGlobalSearch(query);
+  const { isValid: isRecentItemValid } = useValidateRecentItems(recent);
 
   // Reset state every time the palette opens, refocus input.
   React.useEffect(() => {
@@ -204,17 +286,22 @@ export const CommandSearch: React.FC<Props> = ({
 
   const runResult = React.useCallback(
     (result: SearchResult) => {
+      // Don't navigate if the item is no longer valid
+      if (!isRecentItemValid(result)) return;
+      
       pushRecent(recentStorageKey, result);
       onOpenChange(false);
-      navigate(result.href);
+      const target = resolveSearchTarget(result);
+      setTimeout(() => navigate(target), 0);
     },
-    [navigate, onOpenChange, recentStorageKey]
+    [navigate, onOpenChange, recentStorageKey, isRecentItemValid]
   );
 
   const runAction = React.useCallback(
     (action: QuickAction) => {
       onOpenChange(false);
-      navigate(action.href);
+      const href = action.href;
+      setTimeout(() => navigate(href), 0);
     },
     [navigate, onOpenChange]
   );
@@ -256,11 +343,12 @@ export const CommandSearch: React.FC<Props> = ({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-60 bg-zinc-950/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-60 bg-zinc-950/40 backdrop-blur-sm dark:bg-black/65 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-label="Command search"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="fixed left-1/2 top-[12vh] z-61 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl shadow-zinc-950/20 ring-1 ring-zinc-900/5 backdrop-blur-xl outline-none dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:ring-white/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className="fixed left-1/2 top-[12vh] z-61 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl shadow-zinc-950/20 ring-1 ring-zinc-900/5 backdrop-blur-xl outline-none dark:border-zinc-800/80 dark:bg-zinc-950/95! dark:ring-white/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">
@@ -344,6 +432,7 @@ export const CommandSearch: React.FC<Props> = ({
               <Section title="Recent">
                 {recent.map((result) => {
                   const Icon = iconForType[result.type] ?? Bookmark;
+                  const isValid = isRecentItemValid(result);
                   return (
                     <Row
                       key={`recent-${result.type}-${result.id}`}
@@ -356,6 +445,8 @@ export const CommandSearch: React.FC<Props> = ({
                       subtitle={result.subtitle}
                       badge={result.badge ?? result.type}
                       muted
+                      disabled={!isValid}
+                      disabledReason={!isValid ? "This item has been deleted" : undefined}
                     />
                   );
                 })}
@@ -364,7 +455,7 @@ export const CommandSearch: React.FC<Props> = ({
 
             {showInitial && (
               <div className="px-6 py-10 text-center">
-                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-300">
                   <SearchIcon className="size-5" />
                 </div>
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -378,7 +469,7 @@ export const CommandSearch: React.FC<Props> = ({
 
             {showEmpty && (
               <div className="px-6 py-10 text-center">
-                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-300">
                   <X className="size-5" />
                 </div>
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -428,7 +519,7 @@ export const CommandSearch: React.FC<Props> = ({
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="px-1 py-1.5">
-    <div className="px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+    <div className="px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
       {title}
     </div>
     <div className="space-y-0.5">{children}</div>
@@ -446,29 +537,34 @@ const Row: React.FC<{
   badge?: string;
   tone?: 'default' | 'accent';
   muted?: boolean;
-}> = ({ index, active, onSelect, onHover, icon: Icon, title, subtitle, badge, tone = 'default', muted }) => (
+  disabled?: boolean;
+  disabledReason?: string;
+}> = ({ index, active, onSelect, onHover, icon: Icon, title, subtitle, badge, tone = 'default', muted, disabled, disabledReason }) => (
   <button
     type="button"
     data-active={active || undefined}
     data-row-index={index >= 0 ? index : undefined}
     onMouseEnter={onHover}
     onClick={onSelect}
+    disabled={disabled}
+    title={disabledReason}
     className={cn(
-      'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
-      active
+      'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors cursor-pointer',
+      disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent dark:hover:bg-transparent',
+      active && !disabled
         ? 'bg-zinc-950 text-white dark:bg-zinc-800 dark:text-zinc-50'
-        : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
-      muted && !active && 'opacity-90'
+        : !disabled && 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80',
+      muted && !active && !disabled && 'opacity-90'
     )}
   >
     <span
       className={cn(
         'flex size-9 shrink-0 items-center justify-center rounded-xl border transition-colors',
-        active
+        active && !disabled
           ? 'border-transparent bg-white/15 text-white dark:bg-zinc-700/80 dark:text-zinc-50'
           : tone === 'accent'
             ? 'border-zinc-200/80 bg-linear-to-br from-zinc-100 to-zinc-50 text-zinc-700 dark:border-zinc-700/80 dark:from-zinc-800 dark:to-zinc-900 dark:text-zinc-200'
-            : 'border-zinc-200/70 bg-white text-zinc-600 group-hover:border-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-900 dark:text-zinc-300'
+            : 'border-zinc-200/70 bg-white text-zinc-600 group-hover:border-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-950 dark:text-zinc-300 dark:group-hover:border-zinc-600 dark:group-hover:bg-zinc-900'
       )}
     >
       <Icon className="size-4" />
@@ -479,10 +575,15 @@ const Row: React.FC<{
         <span
           className={cn(
             'mt-0.5 block truncate text-xs font-medium',
-            active ? 'text-white/70 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-400'
+            active && !disabled ? 'text-white/70 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-400'
           )}
         >
           {subtitle}
+        </span>
+      )}
+      {disabled && disabledReason && (
+        <span className="mt-0.5 block truncate text-xs font-medium text-rose-600 dark:text-rose-400">
+          {disabledReason}
         </span>
       )}
     </span>
@@ -490,9 +591,9 @@ const Row: React.FC<{
       <span
         className={cn(
           'hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider sm:inline-flex',
-          active
+          active && !disabled
             ? 'border-white/20 bg-white/10 text-white dark:border-zinc-700 dark:bg-zinc-700/70 dark:text-zinc-100'
-            : 'border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400'
+            : 'border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300'
         )}
       >
         {badge}
@@ -501,7 +602,7 @@ const Row: React.FC<{
     <ArrowRight
       className={cn(
         'size-4 shrink-0 opacity-0 transition-opacity',
-        active && 'opacity-100'
+        active && !disabled && 'opacity-100'
       )}
     />
   </button>
@@ -536,7 +637,7 @@ export const CommandSearchTrigger: React.FC<SearchTriggerProps> = ({ onOpen, cla
       type="button"
       onClick={onOpen}
       className={cn(
-        'group relative flex h-11 w-full items-center gap-3 rounded-full border border-zinc-200/80 bg-zinc-50/70 px-4 text-left text-sm text-zinc-500 shadow-sm shadow-zinc-200/40 transition-all hover:border-zinc-300 hover:bg-white hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-900/50 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200',
+        'group relative flex h-11 w-full items-center gap-3 rounded-full border border-zinc-200/80 bg-zinc-50/70 px-4 text-left text-sm text-zinc-500 shadow-sm shadow-zinc-200/40 transition-all hover:border-zinc-300 hover:bg-white hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 dark:border-zinc-700/70 dark:bg-zinc-950/80 dark:text-zinc-300 dark:shadow-black/20 dark:hover:border-zinc-600 dark:hover:bg-zinc-900 dark:hover:text-zinc-100 dark:focus-visible:ring-zinc-700',
         className
       )}
       aria-label="Open command search"
@@ -545,7 +646,7 @@ export const CommandSearchTrigger: React.FC<SearchTriggerProps> = ({ onOpen, cla
       <span className="flex-1 truncate font-medium">
         {placeholder}
       </span>
-      <kbd className="hidden h-6 select-none items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 text-[10px] font-semibold text-zinc-500 shadow-sm md:inline-flex dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
+      <kbd className="hidden h-6 select-none items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 text-[10px] font-semibold text-zinc-500 shadow-sm md:inline-flex dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:shadow-black/20">
         {shortcut}
       </kbd>
     </button>
@@ -566,7 +667,7 @@ export const CompactSearchButton: React.FC<CompactSearchButtonProps> = ({ onOpen
     onClick={onOpen}
     aria-label="Open command search"
     className={cn(
-      'rounded-full border border-zinc-200/70 bg-white/80 text-zinc-600 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:bg-zinc-800',
+      'rounded-full border border-zinc-200/70 bg-white/80 text-zinc-600 shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-950/80 dark:text-zinc-200 dark:shadow-black/20 dark:hover:border-zinc-600 dark:hover:bg-zinc-900 dark:hover:text-zinc-50',
       className
     )}
   >

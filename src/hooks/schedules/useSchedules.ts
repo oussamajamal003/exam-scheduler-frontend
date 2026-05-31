@@ -26,15 +26,19 @@ import {
 import type { GenerateScheduleDto } from "../../schemas/schedule";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
-import { roleDashboardKeys } from "../roleDashboards/useRoleDashboards";
-import { roleNotificationKeys } from "../roleNotifications/useRoleNotifications";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
 export const scheduleKeys = {
   all: ["schedules"] as const,
+  lists: ["schedules", "list"] as const,
+  details: ["schedules", "detail"] as const,
+  analyses: ["schedules", "analysis"] as const,
+  assignmentLists: ["schedules", "assignments"] as const,
   list: (params: FetchSchedulesParams = {}) => ["schedules", "list", params] as const,
   detail: (id?: string) => ["schedules", "detail", id] as const,
   analysis: (id?: string) => ["schedules", "analysis", id] as const,
   assignments: (id?: string) => ["schedules", "assignments", id] as const,
+  assignmentsPage: (id?: string) => ["schedules", "assignments", id, "page"] as const,
 };
 
 // -------------------- Queries --------------------
@@ -67,8 +71,12 @@ export const useCreateSchedule = () => {
 
   return useMutation({
     mutationFn: (data: CreateScheduleDto) => createSchedule(data),
-    onSuccess: (schedule) => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+    onSuccess: async (schedule) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeAssignments: false,
+        includeNotifications: false,
+      });
+      queryClient.setQueryData(scheduleKeys.detail(schedule.id), schedule);
       addToast({
         type: "success",
         title: "Schedule Created",
@@ -95,8 +103,12 @@ export const useUpdateSchedule = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateScheduleDto }) =>
       updateSchedule({ id, data }),
-    onSuccess: (schedule) => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+    onSuccess: async (schedule) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeAssignments: false,
+        includeNotifications: false,
+      });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(schedule.id) });
       addToast({
         type: "success",
         title: "Schedule Updated",
@@ -122,8 +134,14 @@ export const useDeleteSchedule = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteSchedule(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+    onSuccess: async (_data, id) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeAssignments: true,
+        includeNotifications: false,
+      });
+      queryClient.removeQueries({ queryKey: scheduleKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: scheduleKeys.analysis(id) });
+      queryClient.removeQueries({ queryKey: scheduleKeys.assignments(id) });
       addToast({
         type: "success",
         title: "Schedule Deleted",
@@ -184,17 +202,6 @@ export const useOptimizeScheduling = () => {
   const { addToast } = useToast();
   return useMutation<ValidateSchedulingResult, unknown, OptimizeSchedulingDto | undefined>({
     mutationFn: (payload: OptimizeSchedulingDto = {}) => optimizeScheduling(payload),
-    onSuccess: (result) => {
-      addToast({
-        type: result.isValid ? "success" : "warning",
-        title: result.isValid ? "Optimization Confirmed" : "Optimization Blocked",
-        description:
-          result.optimization?.message ??
-          (result.isValid
-            ? "The hybrid engine found a complete valid draft."
-            : "Hard-constraint requirements remain unsatisfied after optimization."),
-      });
-    },
     onError: (error: unknown) => {
       addToast({
         type: "error",
@@ -210,17 +217,19 @@ export const useOptimizeScheduling = () => {
 
 
 export const useGenerateSchedule = () => {
-  const queryClient = useQueryClient();
   const { addToast } = useToast();
 
   return useMutation({
     mutationFn: (payload: GenerateScheduleDto) => generateSchedule(payload),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+      // Do NOT invalidate the schedule list here. The GenerateScheduleDialog
+      // calls onGenerated() → handleGenerated() which immediately calls
+      // schedulesQuery.refetch() on dialog close, so the new row appears as
+      // soon as the close animation completes.
       addToast({
         type: "success",
         title: "Schedule Generated",
-        description: result?.message ?? "Schedule generated successfully with all hard constraints satisfied.",
+        description: result?.message ?? "Draft schedule generated successfully with all internal hard constraints satisfied.",
       });
     },
     onError: (error: unknown) => {
@@ -243,14 +252,15 @@ export const usePublishSchedule = () => {
   return useMutation({
     mutationFn: ({ id, examPeriod }: { id: string; examPeriod: string }) =>
       publishSchedule(id, { examPeriod }),
-    onSuccess: (schedule) => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
-      queryClient.invalidateQueries({ queryKey: roleDashboardKeys.all });
-      queryClient.invalidateQueries({ queryKey: roleNotificationKeys.all });
+    onSuccess: async (result) => {
+      await invalidateScheduleQuerySync(queryClient);
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(result.schedule.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.analysis(result.schedule.id) });
+      const isRepublish = result?.eventType === "SCHEDULE_REPUBLISHED";
       addToast({
         type: "success",
-        title: "Schedule Published",
-        description: `${schedule.name} is now final.`,
+        title: isRepublish ? "Schedule Republished" : "Schedule Published",
+        description: `${result.schedule.name} is now final.`,
       });
     },
     onError: (error: unknown) => {
@@ -272,12 +282,14 @@ export const useUnpublishSchedule = () => {
 
   return useMutation({
     mutationFn: (id: string) => unpublishSchedule(id),
-    onSuccess: (schedule) => {
-      queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
+    onSuccess: async (schedule) => {
+      await invalidateScheduleQuerySync(queryClient);
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(schedule.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.analysis(schedule.id) });
       addToast({
         type: "success",
-        title: "Returned to Draft",
-        description: `${schedule.name} is now editable.`,
+        title: "Schedule Unpublished",
+        description: `${schedule.name} has been returned to draft.`,
       });
     },
     onError: (error: unknown) => {

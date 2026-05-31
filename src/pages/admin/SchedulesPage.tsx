@@ -1,11 +1,15 @@
-﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+﻿import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import {
   AlertTriangle,
   BookOpen,
   CalendarDays,
   CalendarRange,
+  Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -22,7 +26,6 @@ import {
   MoreHorizontal,
   Pencil,
   RefreshCw,
-  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -41,6 +44,7 @@ import {
   usePublishSchedule,
   useUnpublishSchedule,
   useSchedule,
+  scheduleKeys,
   useSchedules,
   useUpdateSchedule,
   useValidateSchedulingInput,
@@ -50,7 +54,8 @@ import { useRooms } from "../../hooks/rooms/useRooms";
 import { useProctors } from "../../hooks/proctors/useProctors";
 import { useTimeSlots } from "../../hooks/timeSlots/useTimeSlots";
 import {
-  useScheduleAssignments,
+  scheduleAssignmentKeys,
+  useAssignmentsPage,
   useDeleteAssignment,
   useUpdateAssignment,
 } from "../../hooks/assignments/useAssignments";
@@ -58,10 +63,14 @@ import type {
   Schedule,
   ScheduleAssignment,
 } from "../../schemas/schedule";
+import { fetchSchedules } from "../../api/schedulesApi";
 import type { ValidateSchedulingResult } from "../../api/schedulingApi";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { AsyncSearchSelect } from "../../components/ui/async-search-select";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -110,32 +119,41 @@ import {
 } from "../../components/ui/sheet";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { EmptyState } from "../../components/shared/EmptyState";
-import { FilterPopover, FilterField } from "../../components/shared/FilterPopover";
+import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar, RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
+import { ScheduleFilterToolbar } from "../../components/shared/ScheduleFilterToolbar";
+import { ActiveFilterBadges } from "../../components/shared/ActiveFilterBadges";
+import { ALL, useAssignmentScheduleFilters } from "../../hooks/assignments/useAssignmentScheduleFilters";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useDetailListPagination } from "../../hooks/common/useDetailListPagination";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 import { useSchedulePdfDownload } from "../../hooks/schedulePdf/useSchedulePdfDownload";
 import { downloadAdminSchedulePdf } from "../../api/schedulePdf.api";
 import { Download } from "lucide-react";
 import { getApiErrorMessage, isAuthExpiredError } from "../../lib/apiError";
+import { formatTimeSlotLabel } from "../../lib/dateTime";
+import { getScheduleAssignmentCount } from "../../lib/scheduleCounts";
 import { cn } from "../../lib/utils";
+import { buildSearchIndex } from "../../lib/smartSearch";
 
 // -------------------- helpers --------------------
 
-const ALL = "__all__";
 const SELECTED_SCHEDULE_STORAGE_KEY = "selected_schedule_id";
 
 const formatTime = (iso?: string | null) => {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 };
 
 const formatDate = (iso?: string | null) => {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 };
 
 const dateKey = (iso?: string | null) => {
@@ -152,6 +170,68 @@ const inferExamPeriod = (schedule?: Schedule | null) => {
   if (name.includes("midterm") || name.includes("mid-term")) return "Midterm";
   if (name.includes("final")) return "Final";
   return "";
+};
+
+const getScheduleSyncMetadata = (schedule?: Schedule | null) => {
+  const scheduleSync = schedule?.algorithmMetadata && typeof schedule.algorithmMetadata === "object"
+    ? (schedule.algorithmMetadata as Record<string, unknown>).scheduleSync
+    : null;
+
+  return scheduleSync && typeof scheduleSync === "object"
+    ? scheduleSync as Record<string, unknown>
+    : null;
+};
+
+const getScheduleSyncIssues = (schedule?: Schedule | null) => {
+  const scheduleSync = getScheduleSyncMetadata(schedule);
+  const issues = scheduleSync?.issues;
+  return issues && typeof issues === "object"
+    ? issues as Record<string, unknown>
+    : null;
+};
+
+const getIssueCount = (issues: Record<string, unknown> | null, key: string) => {
+  const value = issues?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+};
+
+const isAutoUnpublishedSchedule = (schedule?: Schedule | null) => {
+  const scheduleSync = getScheduleSyncMetadata(schedule);
+  return Boolean(
+    schedule &&
+    !schedule.isFinal &&
+    scheduleSync?.autoUnpublished === true
+  );
+};
+
+const getAutoUnpublishReasonLines = (schedule?: Schedule | null) => {
+  const issues = getScheduleSyncIssues(schedule);
+  if (!issues) return [] as string[];
+
+  const reasons = [
+    { key: "missingExamAssignments", label: "missing exam assignments" },
+    { key: "invalidRoomAssignments", label: "invalid room allocations" },
+    { key: "invalidProctorAvailability", label: "proctor availability conflicts" },
+    { key: "invalidSlotWindowAssignments", label: "invalid time slots" },
+    { key: "requiredProctorShortage", label: "missing required proctors" },
+    { key: "derivedConflicts", label: "schedule conflicts" },
+    { key: "multiSemesterAssignments", label: "cross-semester assignments" },
+    { key: "emptySchedule", label: "no remaining assignments" },
+  ]
+    .map(({ key, label }) => ({ count: getIssueCount(issues, key), label }))
+    .filter((item) => item.count > 0)
+    .slice(0, 3)
+    .map((item) => `${item.count} ${item.label}`);
+
+  return reasons;
+};
+
+const getAutoUnpublishSummary = (schedule?: Schedule | null) => {
+  const reasons = getAutoUnpublishReasonLines(schedule);
+  if (reasons.length === 0) {
+    return "Upstream changes invalidated this published schedule.";
+  }
+  return `Upstream changes invalidated this published schedule: ${reasons.join(", ")}.`;
 };
 
 const PRESET_EXAM_PERIODS = ["Midterm", "Final"];
@@ -186,18 +266,18 @@ const PublishScheduleDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !isPublishing && onOpenChange(next)}>
-      <DialogContent className="overflow-hidden rounded-none border border-zinc-200/80 bg-white p-0 shadow-xl sm:max-w-lg">
+      <DialogContent className="overflow-hidden rounded-none border border-zinc-200/80 bg-white p-0 shadow-xl shadow-zinc-950/15 dark:border-zinc-800/80 dark:bg-zinc-950 dark:shadow-black/50 sm:max-w-lg">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.96)_45%,rgba(228,228,231,0.88))] px-6 py-5 text-left">
+          <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.96)_45%,rgba(228,228,231,0.88))] px-6 py-5 text-left dark:border-zinc-800/80 dark:bg-[radial-gradient(circle_at_top_left,rgba(39,39,42,0.96),rgba(24,24,27,0.98)_44%,rgba(9,9,11,0.98))]">
             <div className="flex items-start gap-3">
-              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-950 shadow-sm">
+              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
                 <CalendarRange className="size-5" />
               </span>
               <div className="min-w-0">
-                <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950">
+                <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                   Publish Schedule
                 </DialogTitle>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                   Choose the exam period for this published schedule. Each semester can publish up to two schedules across different periods.
                 </p>
               </div>
@@ -205,17 +285,17 @@ const PublishScheduleDialog = ({
           </DialogHeader>
 
           <div className="space-y-5 px-6 py-5">
-            <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
                 Schedule
               </p>
-              <p className="mt-1 truncate text-sm font-semibold text-zinc-950">
+              <p className="mt-1 truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
                 {schedule?.name ?? "Selected schedule"}
               </p>
             </div>
 
             <div className="space-y-2.5">
-              <Label htmlFor="publish-exam-period" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <Label htmlFor="publish-exam-period" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
                 Exam Period
               </Label>
               <div className="flex flex-wrap gap-2">
@@ -228,10 +308,10 @@ const PublishScheduleDialog = ({
                       variant="outline"
                       onClick={() => setExamPeriod(period)}
                       className={cn(
-                        "h-9 rounded-none border-zinc-200 px-3 text-sm font-semibold shadow-sm",
+                        "h-9 rounded-none border-zinc-200 px-3 text-sm font-semibold shadow-sm dark:border-zinc-700",
                         isActive
-                          ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white"
-                          : "bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
+                          ? "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                          : "bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                       )}
                     >
                       {period}
@@ -245,28 +325,28 @@ const PublishScheduleDialog = ({
                 onChange={(event) => setExamPeriod(event.target.value)}
                 placeholder="e.g. Midterm or Final"
                 autoFocus
-                className="h-11 rounded-none border-zinc-200 bg-white shadow-sm focus-visible:ring-zinc-300/60"
+                className="h-11 rounded-none border-zinc-200 bg-white shadow-sm focus-visible:ring-zinc-300/60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:ring-zinc-700"
               />
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 Use a clear label like Midterm or Final. Publishing blocks duplicate periods within the same semester.
               </p>
             </div>
           </div>
 
-          <DialogFooter className="border-t border-zinc-200/70 bg-zinc-50/70 px-6 py-4 sm:justify-between">
+          <DialogFooter className="border-t border-zinc-200/70 bg-zinc-50/70 px-6 py-4 dark:border-zinc-800/80 dark:bg-zinc-900/70 sm:justify-between">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPublishing}
-              className="h-10 rounded-none border-zinc-200 bg-white text-zinc-700"
+              className="h-10 rounded-none border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={!trimmedExamPeriod || isPublishing}
-              className="h-10 rounded-none border-0 bg-zinc-950 text-white hover:bg-zinc-900"
+              className="h-10 rounded-none border-0 bg-zinc-950 text-white hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
             >
               {isPublishing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <CheckCircle2 className="mr-2 size-4" />}
               Publish Schedule
@@ -278,11 +358,16 @@ const PublishScheduleDialog = ({
   );
 };
 
-const StatusBadge = ({ isFinal }: { isFinal: boolean }) =>
-  isFinal ? (
+const StatusBadge = ({ schedule }: { schedule: Schedule }) =>
+  schedule.isFinal ? (
     <span className="inline-flex items-center gap-1 rounded-none border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
       <CheckCircle2 className="size-3.5" />
       Published
+    </span>
+  ) : isAutoUnpublishedSchedule(schedule) ? (
+    <span className="inline-flex items-center gap-1 rounded-none border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+      <AlertTriangle className="size-3.5" />
+      Auto-unpublished
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 rounded-none border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
@@ -326,6 +411,7 @@ const ScheduleVersionsTable = ({
   isLoading,
   isPublishing,
   onRefetch,
+  activeSemesterId,
 }: {
   schedules: Schedule[];
   activeId?: string | null;
@@ -336,6 +422,7 @@ const ScheduleVersionsTable = ({
   isLoading: boolean;
   isPublishing: boolean;
   onRefetch?: () => void;
+  activeSemesterId?: string;
 }) => {
   const deleteMutation = useDeleteSchedule();
   const updateMutation = useUpdateSchedule();
@@ -344,6 +431,15 @@ const ScheduleVersionsTable = ({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<Schedule | null>(null);
   const [newName, setNewName] = useState("");
+
+  const bulkDelete = useBulkDelete({
+    entityName: "schedule version",
+    entityNamePlural: "schedule versions",
+    deleteItem: async (id) => {
+      await deleteMutation.mutateAsync(id);
+      onDeleted(id);
+    },
+  });
 
   const handleDownloadRowPdf = (id: string) => {
     void downloadRowPdf(() => downloadAdminSchedulePdf(id), {
@@ -393,11 +489,34 @@ const ScheduleVersionsTable = ({
         </div>
       </div>
 
+      <BulkDeleteToolbar
+        selectedCount={bulkDelete.selectedCount}
+        totalCount={schedules.filter((s) => !s.isFinal).length}
+        isDeleting={bulkDelete.isDeleting}
+        onClear={bulkDelete.clearSelection}
+        onDelete={() => bulkDelete.setIsConfirmOpen(true)}
+        className="mb-4"
+      />
+
       <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm mb-6 overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="border-b border-zinc-200/70 bg-zinc-50/60 hover:bg-zinc-50/60">
+                <TableHead className="h-9 w-10 pl-3">
+                  <RowSelectCheckbox
+                    checked={
+                      schedules.filter((s) => !s.isFinal).length > 0 &&
+                      schedules.filter((s) => !s.isFinal).every((s) => bulkDelete.selectedIds.has(s.id))
+                    }
+                    indeterminate={
+                      bulkDelete.selectedCount > 0 &&
+                      !schedules.filter((s) => !s.isFinal).every((s) => bulkDelete.selectedIds.has(s.id))
+                    }
+                    label="Select all draft schedule versions"
+                    onChange={(checked) => bulkDelete.toggleAll(schedules.filter((s) => !s.isFinal), checked)}
+                  />
+                </TableHead>
                 <TableHead className="h-9 pl-5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                   Name
                 </TableHead>
@@ -419,7 +538,7 @@ const ScheduleVersionsTable = ({
               {isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-b border-zinc-100">
-                    {Array.from({ length: 5 }).map((__, j) => (
+                    {Array.from({ length: 6 }).map((__, j) => (
                       <TableCell key={j} className="py-3 pl-5">
                         <Skeleton className="h-4 w-full max-w-28" />
                       </TableCell>
@@ -429,7 +548,7 @@ const ScheduleVersionsTable = ({
               ) : schedules.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="py-10 text-center text-sm text-zinc-500"
                   >
                     <List className="mx-auto mb-2 size-6 text-zinc-300" />
@@ -442,17 +561,25 @@ const ScheduleVersionsTable = ({
                   const override = countOverrides?.[s.id];
                   const assignmentsCount =
                     override?.assignments ??
-                    (s.assignments ? getLogicalAssignmentCount(s.assignments) : undefined) ??
-                    s._count?.assignments ??
-                    0;
+                    getScheduleAssignmentCount(s);
                   return (
                     <TableRow
                       key={s.id}
+                      data-schedule-id={s.id}
+                      onClick={() => onSelect(s.id)}
                       className={cn(
                         "border-b border-zinc-200/40 transition-all duration-200 cursor-pointer hover:bg-zinc-50/60",
                         isActive && "bg-zinc-50"
                       )}
                     >
+                      <TableCell className="w-10 pl-3" onClick={(e) => e.stopPropagation()}>
+                        <RowSelectCheckbox
+                          checked={bulkDelete.selectedIds.has(s.id)}
+                          disabled={!!s.isFinal}
+                          label={`Select ${s.name}`}
+                          onChange={(checked) => bulkDelete.toggleSelected(s.id, checked)}
+                        />
+                      </TableCell>
                       <TableCell className="pl-5 py-3">
                         <div className="flex items-center gap-2">
                           {isActive && (
@@ -472,14 +599,21 @@ const ScheduleVersionsTable = ({
                         {formatDate(s.createdAt)}
                       </TableCell>
                       <TableCell className="py-3">
-                        <StatusBadge isFinal={s.isFinal} />
+                        <div className="space-y-1">
+                          <StatusBadge schedule={s} />
+                          {isAutoUnpublishedSchedule(s) && (
+                            <p className="max-w-48 text-[11px] leading-4 text-rose-700/80">
+                              {getAutoUnpublishSummary(s)}
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 text-center">
                         <span className="inline-flex items-center justify-center min-w-8 rounded-none border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-semibold text-zinc-700 tabular-nums">
                           {assignmentsCount}
                         </span>
                       </TableCell>
-                      <TableCell className="py-3 pr-4 text-right">
+                      <TableCell className="py-3 pr-4 text-right" onClick={(event) => event.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {!isActive ? (
                             <Button
@@ -510,19 +644,37 @@ const ScheduleVersionsTable = ({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="rounded-none w-48">
+                              <TooltipProvider delayDuration={150}>
                               <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold px-3 py-1.5">
                                 Actions
                               </DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               {!s.isFinal ? (
-                                <DropdownMenuItem
-                                  disabled={isPublishing}
-                                  onClick={() => onRequestPublish(s)}
-                                  className="cursor-pointer px-3 py-2 text-sm font-medium text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700"
-                                >
-                                  <CheckCircle2 className="size-4 mr-2" />
-                                  Publish
-                                </DropdownMenuItem>
+                                (() => {
+                                  const sSemesterId = s.assignments?.[0]?.exam?.courseOffering?.semester?.id;
+                                  const sSemesterInactive = !!activeSemesterId && !!sSemesterId && sSemesterId !== activeSemesterId;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="block">
+                                          <DropdownMenuItem
+                                            disabled={isPublishing || sSemesterInactive}
+                                            onClick={() => onRequestPublish(s)}
+                                            className="cursor-pointer px-3 py-2 text-sm font-medium text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700"
+                                          >
+                                            <CheckCircle2 className="size-4 mr-2" />
+                                            Publish
+                                          </DropdownMenuItem>
+                                        </span>
+                                      </TooltipTrigger>
+                                      {sSemesterInactive && (
+                                        <TooltipContent side="left" className="text-xs bg-zinc-950 text-white rounded-none border-0">
+                                          Semester inactive
+                                        </TooltipContent>
+                                      )}
+                                    </Tooltip>
+                                  );
+                                })()
                               ) : (
                                 <DropdownMenuItem
                                   onClick={() => unpublishMutation.mutate(s.id, {
@@ -585,6 +737,7 @@ const ScheduleVersionsTable = ({
                                   Delete Version
                                 </DropdownMenuItem>
                               </LockedActionTooltip>
+                            </TooltipProvider>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -677,7 +830,7 @@ const ScheduleVersionsTable = ({
               <Button
                 type="submit"
                 disabled={!newName.trim() || updateMutation.isPending}
-                className="rounded-none h-10 bg-zinc-950 text-white hover:bg-zinc-900 border-0"
+                className="rounded-none h-10 bg-zinc-950 text-white hover:bg-zinc-900 border-0 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="size-4 animate-spin mr-1.5" />
@@ -688,6 +841,15 @@ const ScheduleVersionsTable = ({
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Schedule Versions?"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected schedule version${bulkDelete.selectedCount === 1 ? "" : "s"} and all their assignments. This action cannot be undone.`}
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
+      />
     </>
   );
 };
@@ -702,11 +864,28 @@ const examStatusToneMap: Record<string, string> = {
   CANCELLED: "border-zinc-200 bg-zinc-50 text-zinc-600",
 };
 
+const DRAFT_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All statuses" },
+] as const;
+
+const PUBLISHED_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "SCHEDULED", label: "Scheduled" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "CANCELLED", label: "Cancelled" },
+] as const;
+
+// Single source of truth: assignments mirror the schedule-version status
+// (draft schedule → DRAFT; published schedule → SCHEDULED unless the exam
+// itself moved to COMPLETED or CANCELLED).
 const getAssignmentDisplayStatus = ({
+  status,
   isFinal,
 }: {
+  status?: string | null;
   isFinal?: boolean;
 }) => {
+  if (isFinal && (status === "COMPLETED" || status === "CANCELLED")) return status;
   return isFinal ? "SCHEDULED" : "DRAFT";
 };
 
@@ -795,13 +974,13 @@ type PipelineStep = {
 const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "description">> = [
   {
     key: "prepare",
-    label: "Prepare",
+    label: "Loading Resources",
     description: "Loading scheduling resources...",
   },
   {
     key: "validate",
-    label: "Validate",
-    description: "Validating hard constraints...",
+    label: "Candidate Selection",
+    description: "Checking resource candidates...",
   },
   {
     key: "build-draft",
@@ -810,12 +989,12 @@ const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "descriptio
   },
   {
     key: "evaluate",
-    label: "Evaluate",
-    description: "Evaluating schedule quality...",
+    label: "Constraint Evaluation",
+    description: "Evaluating schedule constraints...",
   },
   {
     key: "optimize",
-    label: "Optimize",
+    label: "Optimization",
     description: "Optimizing soft constraints...",
   },
   {
@@ -830,19 +1009,21 @@ const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "descriptio
   },
   {
     key: "generate",
-    label: "Generate",
+    label: "Saving Schedule",
     description: "Saving final conflict-free schedule...",
   },
 ];
 
-const MIN_BUILD_DRAFT_STAGE_DELAY_MS = 2200;
-const EVALUATE_STAGE_DELAY_MS = 320;
-const OPTIMIZE_STAGE_DELAY_MS = 420;
-const RE_EVALUATE_STAGE_DELAY_MS = 350;
-const CONFIRM_STAGE_DELAY_MS = 300;
+const PREPARE_STAGE_DELAY_MS = 3000;
+const VALIDATE_STAGE_DELAY_MS = 3000;
+const EVALUATE_STAGE_DELAY_MS = 6000;
+const OPTIMIZE_STAGE_DELAY_MS = 6000;
+const RE_EVALUATE_STAGE_DELAY_MS = 6000;
+const CONFIRM_STAGE_DELAY_MS = 6000;
+const DIALOG_CLOSE_SETTLE_DELAY_MS = 360;
 
 const GENERATION_BLOCKED_MESSAGE = "Schedule generation is currently blocked.";
-const GENERATION_BLOCKED_DETAIL_FALLBACK = "No valid schedule can be generated with the current data and available resources. Review rooms, proctors, time slots, and semester dates, then try again.";
+const GENERATION_BLOCKED_DETAIL_FALLBACK = "No valid draft schedule can be generated with the current data and available resources. Review rooms, proctors, time slots, and semester dates, then try again.";
 
 const getMetricNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 const formatScore = (value: unknown) => `${Math.round(getMetricNumber(value))}%`;
@@ -861,6 +1042,9 @@ const getOptimizationAfterScore = (optimizationResult: ValidateSchedulingResult 
       ?? optimizationResult?.quality?.optimizedScore
       ?? optimizationResult?.metrics?.qualityScore,
   );
+const getDisplayedImprovementScore = (beforeScore: number, afterScore: number) => {
+  return Math.round(afterScore) - Math.round(beforeScore);
+};
 const getQualityMetric = (
   evaluationResult: ValidateSchedulingResult | undefined,
   optimizationResult: ValidateSchedulingResult | undefined,
@@ -868,6 +1052,14 @@ const getQualityMetric = (
 ) => getMetricNumber(
   optimizationResult?.optimization?.qualityMetrics?.[key]
     ?? optimizationResult?.quality?.qualityMetrics?.[key]
+    ?? evaluationResult?.quality?.qualityMetrics?.[key],
+);
+const getBeforeQualityMetric = (
+  evaluationResult: ValidateSchedulingResult | undefined,
+  optimizationResult: ValidateSchedulingResult | undefined,
+  key: string,
+) => getMetricNumber(
+  optimizationResult?.optimization?.beforeQualityMetrics?.[key]
     ?? evaluationResult?.quality?.qualityMetrics?.[key],
 );
 const PRIMARY_QUALITY_AREAS = [
@@ -998,7 +1190,7 @@ const normalizeBlockingMessage = (message: string | null | undefined) => {
   }
 
   return message
-    .replace(/conflict-free/gi, "valid")
+    .replace(/conflict-free/gi, "draft")
     .replace(/conflicts still exist/gi, "hard-constraint issues are still present")
     .replace(/conflicts remain/gi, "hard-constraint issues remain");
 };
@@ -1041,11 +1233,12 @@ const ResourceStatCard = ({
   </div>
 );
 
-const QualityMetricCard = ({ label, value }: { label: string; value: number }) => (
+const QualityMetricCard = ({ label, value, beforeValue }: { label: string; value: number; beforeValue?: number }) => (
   (() => {
     const tone = getQualityTone(value);
     const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
     const descriptor = getQualityDescriptor(value);
+    const delta = beforeValue !== undefined ? Math.round(value) - Math.round(beforeValue) : null;
 
     return (
       <div className={cn("rounded-none border px-4 py-4", tone.shell, tone.glow)}>
@@ -1054,7 +1247,24 @@ const QualityMetricCard = ({ label, value }: { label: string; value: number }) =
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">{label}</p>
             <p className={cn("mt-2 text-3xl font-bold tabular-nums", tone.score)}>{formatScore(value)}</p>
           </div>
+          {delta !== null && (
+            <span className={cn(
+              "mt-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+              delta > 0
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                : delta < 0
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                  : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+            )}>
+              {delta > 0 ? `+${delta}` : delta === 0 ? "±0" : String(delta)}
+            </span>
+          )}
         </div>
+        {delta !== null && beforeValue !== undefined && (
+          <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+            Before: {Math.round(beforeValue)}%
+          </p>
+        )}
         <div className="mt-4 space-y-2">
           <div className={cn("h-2.5 overflow-hidden rounded-full", tone.track)}>
             <div className={cn("h-full rounded-full", tone.fill, widthClassForPct(normalizedValue))} />
@@ -1262,6 +1472,7 @@ const GenerateScheduleDialog = ({
   semestersLoading,
   onGenerated,
   existingNames = [],
+  onValidateScheduleName,
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
@@ -1269,15 +1480,20 @@ const GenerateScheduleDialog = ({
   semestersLoading: boolean;
   onGenerated: (result: { scheduleId?: string; schedule?: { id?: string } }) => void;
   existingNames?: string[];
+  onValidateScheduleName?: (name: string) => Promise<boolean>;
 }) => {
   const [name, setName] = useState("");
   const [semesterId, setSemesterId] = useState<string>("");
+  const [pendingGeneratedName, setPendingGeneratedName] = useState<string | null>(null);
+  const [liveDuplicateName, setLiveDuplicateName] = useState<string | null>(null);
+  const [isCheckingName, setIsCheckingName] = useState(false);
   const [phase, setPhase] = useState<PipelinePhase>("idle");
   const [zeroAssignments, setZeroAssignments] = useState(false);
   const [missingDates, setMissingDates] = useState(false);
   const [generateErrorMessage, setGenerateErrorMessage] = useState<string | null>(null);
   const pipelineTimerIdsRef = useRef<number[]>([]);
-  const buildDraftStartedAtRef = useRef<number | null>(null);
+  const phaseStartedAtRef = useRef<number | null>(null);
+  const generationRequestRef = useRef(false);
 
   const prepareMutation = usePrepareScheduling();
   const validateMutation = useValidateSchedulingInput();
@@ -1298,35 +1514,59 @@ const GenerateScheduleDialog = ({
     pipelineTimerIdsRef.current = [];
   };
 
-  const queuePipelinePhase = (nextPhase: PipelinePhase, delayMs: number) => {
+  const setPipelinePhase = (nextPhase: PipelinePhase) => {
+    phaseStartedAtRef.current = Date.now();
+    setPhase(nextPhase);
+  };
+
+  const queuePipelineTask = (callback: () => void, delayMs: number) => {
     const timerId = window.setTimeout(() => {
-      setPhase(nextPhase);
+      callback();
       pipelineTimerIdsRef.current = pipelineTimerIdsRef.current.filter((id) => id !== timerId);
     }, delayMs);
     pipelineTimerIdsRef.current.push(timerId);
   };
 
-  const resetPipelineClock = () => {
-    buildDraftStartedAtRef.current = null;
+  const queuePipelinePhase = (nextPhase: PipelinePhase, delayMs: number) => {
+    queuePipelineTask(() => {
+      setPipelinePhase(nextPhase);
+    }, delayMs);
   };
+
+  const waitForMinimumStageTime = (minimumMs: number, callback: () => void) => {
+    const startedAt = phaseStartedAtRef.current ?? Date.now();
+    const elapsedMs = Date.now() - startedAt;
+    queuePipelineTask(callback, Math.max(0, minimumMs - elapsedMs));
+  };
+
+  const resetPipelineClock = () => {};
 
   // Reset pipeline state whenever the dialog closes
   useEffect(() => {
     if (!open) {
-      const t = setTimeout(() => {
-        clearPipelineTimers();
-        resetPipelineClock();
-        setName("");
-        setSemesterId("");
-        setPhase("idle");
-        setZeroAssignments(false);
-        setMissingDates(false);
-        setGenerateErrorMessage(null);
-        prepareMutation.reset();
-        validateMutation.reset();
-        optimizeMutation.reset();
-        generateMutation.reset();
-      }, 300);
+      const t = window.setTimeout(() => {
+        window.requestAnimationFrame(() => {
+          startTransition(() => {
+            clearPipelineTimers();
+            resetPipelineClock();
+            setName("");
+            setSemesterId("");
+            setPendingGeneratedName(null);
+            setLiveDuplicateName(null);
+            setIsCheckingName(false);
+            phaseStartedAtRef.current = null;
+            setPhase("idle");
+            setZeroAssignments(false);
+            setMissingDates(false);
+            setGenerateErrorMessage(null);
+            generationRequestRef.current = false;
+            prepareMutation.reset();
+            validateMutation.reset();
+            optimizeMutation.reset();
+            generateMutation.reset();
+          });
+        });
+      }, DIALOG_CLOSE_SETTLE_DELAY_MS);
       return () => clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1336,18 +1576,45 @@ const GenerateScheduleDialog = ({
     clearPipelineTimers();
     resetPipelineClock();
     setSemesterId(next);
+    setPendingGeneratedName(null);
+    setLiveDuplicateName(null);
+    phaseStartedAtRef.current = null;
     setPhase("idle");
     setZeroAssignments(false);
     setMissingDates(false);
     setGenerateErrorMessage(null);
+    generationRequestRef.current = false;
     prepareMutation.reset();
     validateMutation.reset();
     optimizeMutation.reset();
     generateMutation.reset();
   };
 
-  const runSmartSchedulingFlow = () => {
+  const validateNameBeforePipeline = async () => {
+    const trimmedName = name.trim();
+    if (trimmedName.length < 3 || isDuplicateName) return false;
+    if (!onValidateScheduleName) return true;
+
+    setIsCheckingName(true);
+    try {
+      const available = await onValidateScheduleName(trimmedName);
+      setLiveDuplicateName(available ? null : trimmedName.toLowerCase());
+      return available;
+    } catch (error) {
+      setGenerateErrorMessage(getApiErrorMessage(error, "Unable to validate the schedule name. Please try again."));
+      setPhase("failed");
+      return false;
+    } finally {
+      setIsCheckingName(false);
+    }
+  };
+
+  const runSmartSchedulingFlow = async () => {
+    if (name.trim().length < 3 || isDuplicateName) return;
     if (!effectiveSemesterId) return;
+    const nameAvailable = await validateNameBeforePipeline();
+    if (!nameAvailable) return;
+
     const sem = semesters.find((s) => s.id === effectiveSemesterId);
     const startDate = sem?.startDate ?? undefined;
     const endDate = sem?.endDate ?? undefined;
@@ -1357,7 +1624,9 @@ const GenerateScheduleDialog = ({
       return;
     }
     setMissingDates(false);
-    setPhase("preparing");
+    setPendingGeneratedName(null);
+    setLiveDuplicateName(null);
+    setPipelinePhase("preparing");
     setZeroAssignments(false);
     setGenerateErrorMessage(null);
     clearPipelineTimers();
@@ -1370,56 +1639,54 @@ const GenerateScheduleDialog = ({
       { semesterId: effectiveSemesterId, startDate, endDate },
       {
         onSuccess: () => {
-          setPhase("validating");
-          validateMutation.mutate(
-            { semesterId: effectiveSemesterId },
-            {
-              onSuccess: (result) => {
-                if (!result.isValid) {
-                  setPhase("failed");
-                  return;
-                }
-
-                setPhase("building-draft");
-                buildDraftStartedAtRef.current = Date.now();
-                optimizeMutation.mutate(
-                  { semesterId: effectiveSemesterId },
-                  {
-                    onSuccess: (optimizedResult) => {
-                      clearPipelineTimers();
-                      if (!optimizedResult.isValid) {
-                        resetPipelineClock();
-                        setPhase("failed");
-                        return;
-                      }
-
-                      const elapsedBuildDraftMs = buildDraftStartedAtRef.current
-                        ? Date.now() - buildDraftStartedAtRef.current
-                        : 0;
-                      const remainingBuildDraftMs = Math.max(0, MIN_BUILD_DRAFT_STAGE_DELAY_MS - elapsedBuildDraftMs);
-
-                      queuePipelinePhase("evaluating", remainingBuildDraftMs);
-                      queuePipelinePhase("optimizing", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS);
-                      queuePipelinePhase("re-evaluating", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS);
-                      queuePipelinePhase("confirming", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS);
-                      queuePipelinePhase("ready", remainingBuildDraftMs + EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS + CONFIRM_STAGE_DELAY_MS);
-                      resetPipelineClock();
-                    },
-                    onError: () => {
-                      clearPipelineTimers();
-                      resetPipelineClock();
-                      setPhase("failed");
-                    },
+          waitForMinimumStageTime(PREPARE_STAGE_DELAY_MS, () => {
+            setPipelinePhase("validating");
+            validateMutation.mutate(
+              { semesterId: effectiveSemesterId },
+              {
+                onSuccess: (result) => {
+                  if (!result.isValid) {
+                    setPhase("failed");
+                    return;
                   }
-                );
-              },
-              onError: () => {
-                clearPipelineTimers();
-                resetPipelineClock();
-                setPhase("failed");
-              },
-            }
-          );
+
+                  waitForMinimumStageTime(VALIDATE_STAGE_DELAY_MS, () => {
+                    setPipelinePhase("building-draft");
+                    optimizeMutation.mutate(
+                      { semesterId: effectiveSemesterId },
+                      {
+                        onSuccess: (optimizedResult) => {
+                          clearPipelineTimers();
+                          if (!optimizedResult.isValid) {
+                            resetPipelineClock();
+                            setPhase("failed");
+                            return;
+                          }
+
+                          queuePipelinePhase("evaluating", 0);
+                          queuePipelinePhase("optimizing", EVALUATE_STAGE_DELAY_MS);
+                          queuePipelinePhase("re-evaluating", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS);
+                          queuePipelinePhase("confirming", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS);
+                          queuePipelinePhase("ready", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS + CONFIRM_STAGE_DELAY_MS);
+                          resetPipelineClock();
+                        },
+                        onError: () => {
+                          clearPipelineTimers();
+                          resetPipelineClock();
+                          setPhase("failed");
+                        },
+                      }
+                    );
+                  });
+                },
+                onError: () => {
+                  clearPipelineTimers();
+                  resetPipelineClock();
+                  setPhase("failed");
+                },
+              }
+            );
+          });
         },
         onError: () => {
           clearPipelineTimers();
@@ -1432,10 +1699,13 @@ const GenerateScheduleDialog = ({
 
   /** Step 3: generate */
   const handleGenerate = () => {
-    if (phase !== "ready" || !effectiveSemesterId || name.trim().length < 3 || isDuplicateName) return;
+    if (generationRequestRef.current || phase !== "ready" || !effectiveSemesterId || name.trim().length < 3 || isDuplicateName) return;
+    generationRequestRef.current = true;
     clearPipelineTimers();
     resetPipelineClock();
-    setPhase("generating");
+    const normalizedSubmittedName = name.trim().toLowerCase();
+    setPendingGeneratedName(normalizedSubmittedName);
+    setPipelinePhase("generating");
     setZeroAssignments(false);
     setGenerateErrorMessage(null);
     generateMutation.mutate(
@@ -1446,12 +1716,20 @@ const GenerateScheduleDialog = ({
             (result as { assignmentsCount?: number }).assignmentsCount ?? 0;
           if (assignmentCount === 0) {
             setZeroAssignments(true);
+            setPendingGeneratedName(null);
+            generationRequestRef.current = false;
             setPhase("ready");
           } else {
+            // Do NOT set phase back to "ready" here — that would re-enable the
+            // Generate button while the dialog is still visible. Keep phase at
+            // "generating" so the button stays disabled. The dialog close cleanup
+            // (useEffect on !open) resets phase to "idle" after the animation.
             onGenerated(result);
           }
         },
         onError: (error) => {
+          setPendingGeneratedName(null);
+          generationRequestRef.current = false;
           setGenerateErrorMessage(
             getApiErrorMessage(error, GENERATION_BLOCKED_MESSAGE)
           );
@@ -1470,17 +1748,31 @@ const GenerateScheduleDialog = ({
   const isReEvaluating = phase === "re-evaluating";
   const isConfirming = phase === "confirming";
   const isRunningChecks = isPreparing || isValidating || isBuildingDraft || isEvaluating || isOptimizing || isReEvaluating || isConfirming;
-  const isBusy = isRunningChecks || isGenerating;
+  const isBusy = isRunningChecks || isGenerating || isCheckingName;
 
   const hasRun = phase !== "idle";
-  const canRunChecks = Boolean(effectiveSemesterId) && !isBusy;
+  const normalizedName = name.trim().toLowerCase();
   const isDuplicateName = existingNames.some(
-    (n) => n.trim().toLowerCase() === name.trim().toLowerCase()
-  );
-  const canGenerate = Boolean(validationResult?.isValid) && Boolean(optimizationResult?.isValid) && phase === "ready" && name.trim().length >= 3 && !isDuplicateName && !isGenerating && !zeroAssignments;
+    (n) => {
+      const normalizedExistingName = n.trim().toLowerCase();
+      if (normalizedExistingName !== normalizedName) {
+        return false;
+      }
+
+      return !(pendingGeneratedName && pendingGeneratedName === normalizedName);
+    }
+  ) || (Boolean(liveDuplicateName) && liveDuplicateName === normalizedName);
+  const nameValidationMessage = name.trim().length > 0 && name.trim().length < 3
+    ? "Name must be at least 3 characters."
+    : name.trim().length >= 3 && isDuplicateName
+      ? "A schedule with this name already exists. Choose a different name."
+      : null;
+  const hasNameValidationError = Boolean(nameValidationMessage);
+  const canGenerate = Boolean(validationResult?.isValid) && Boolean(optimizationResult?.isValid) && phase === "ready" && name.trim().length >= 3 && !hasNameValidationError && !isBusy && !zeroAssignments;
+  const canRunChecks = Boolean(effectiveSemesterId) && name.trim().length >= 3 && !hasNameValidationError && !isBusy;
   const beforeScore = getOptimizationBeforeScore(validationResult, optimizationResult);
   const afterScore = getOptimizationAfterScore(optimizationResult);
-  const improvement = optimizationResult?.optimization?.improvementPercentage ?? Math.max(0, afterScore - beforeScore);
+  const improvement = getDisplayedImprovementScore(beforeScore, afterScore);
   const finalQualityScore = optimizationResult ? afterScore : beforeScore;
   const assignmentCount = finalPipelineResult?.riskAnalysis?.totalExamsCount ?? finalPipelineResult?.metrics?.examsCount ?? 0;
   const hardViolationCount = finalPipelineResult?.riskAnalysis?.blockingCount ?? finalPipelineResult?.metrics?.blockingIssuesCount ?? 0;
@@ -1536,8 +1828,8 @@ const GenerateScheduleDialog = ({
     const isBlocked = phase === "failed" || Boolean(missingDates) || Boolean(generateErrorMessage);
     const hasDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft";
     const hasEvaluatedDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft" && phase !== "evaluating";
-    const hasOptimized = hasSuccessfulOptimization && phase !== "optimizing";
-    const hasReEvaluated = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "re-evaluating";
+    const hasOptimized = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "evaluating";
+    const hasReEvaluated = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "re-evaluating" && phase !== "evaluating";
     const hasConfirmed = phase === "ready" || phase === "generating" || Boolean(generateErrorMessage);
     const completionMap: Record<PipelineStep["key"], boolean> = {
       prepare: hasPrepared,
@@ -1727,16 +2019,21 @@ const GenerateScheduleDialog = ({
                 <Input
                   id="gen-name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setLiveDuplicateName(null);
+                  }}
                   placeholder="e.g. Spring 2026 — Final Exams"
                   className="h-11 rounded-none border-zinc-200 bg-zinc-50/40 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700"
                   disabled={isBusy}
                 />
-                {name.trim().length > 0 && name.trim().length < 3 && (
-                  <p className="text-[11px] text-amber-600">Name must be at least 3 characters.</p>
+                {nameValidationMessage && (
+                  <p className={`text-[11px] ${isDuplicateName ? "text-rose-600" : "text-amber-600"}`}>
+                    {nameValidationMessage}
+                  </p>
                 )}
-                {name.trim().length >= 3 && isDuplicateName && (
-                  <p className="text-[11px] text-rose-600">A schedule with this name already exists. Choose a different name.</p>
+                {isCheckingName && (
+                  <p className="text-[11px] text-zinc-500">Checking schedule name...</p>
                 )}
               </div>
             </div>
@@ -1762,10 +2059,12 @@ const GenerateScheduleDialog = ({
               >
                 {isRunningChecks ? (
                   <Loader2 className="size-3.5 animate-spin" />
+                ) : isCheckingName ? (
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
                   <ShieldCheck className="size-3.5" />
                 )}
-                {isPreparing ? "Preparing..." : isValidating ? "Validating..." : isBuildingDraft ? "Building..." : isEvaluating ? "Evaluating..." : isOptimizing ? "Optimizing..." : isReEvaluating ? "Re-evaluating..." : isConfirming ? "Confirming..." : hasRun ? "Run Again" : "Start"}
+                {isCheckingName ? "Checking name..." : isPreparing ? "Loading Resources..." : isValidating ? "Candidate Selection..." : isBuildingDraft ? "Build Draft..." : isEvaluating ? "Evaluating..." : isOptimizing ? "Optimization..." : isReEvaluating ? "Re-evaluating..." : isConfirming ? "Confirming..." : hasRun ? "Run Again" : "Start"}
               </Button>
             </div>
 
@@ -1874,16 +2173,49 @@ const GenerateScheduleDialog = ({
                         <p className="mt-3 text-xs font-medium text-emerald-800 dark:text-emerald-300">Re-evaluated improved score: {formatScore(afterScore)}</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <QualityMetricCard label="Room Utilization" value={getQualityMetric(validationResult, optimizationResult, "roomUtilization")} />
-                      <QualityMetricCard label="Proctor Balance" value={getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance")} />
-                      <QualityMetricCard label="Student Spacing" value={getQualityMetric(validationResult, optimizationResult, "studentSpacing")} />
-                      <QualityMetricCard label="Exam Distribution" value={getQualityMetric(validationResult, optimizationResult, "examDistribution")} />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                      <QualityMetricCard label="Room Utilization" value={getQualityMetric(validationResult, optimizationResult, "roomUtilization")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "roomUtilization") : undefined} />
+                      <QualityMetricCard label="Proctor Balance" value={getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance") : undefined} />
+                      <QualityMetricCard label="Student Spacing" value={getQualityMetric(validationResult, optimizationResult, "studentSpacing")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "studentSpacing") : undefined} />
+                      <QualityMetricCard label="Exam Distribution" value={getQualityMetric(validationResult, optimizationResult, "examDistribution")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "examDistribution") : undefined} />
+                      <QualityMetricCard label="Preferred Spacing" value={getQualityMetric(validationResult, optimizationResult, "preferredSpacing")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "preferredSpacing") : undefined} />
                     </div>
+                    {(() => {
+                      const rm = getQualityMetric(validationResult, optimizationResult, "roomUtilization");
+                      const pb = getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance");
+                      const ss = getQualityMetric(validationResult, optimizationResult, "studentSpacing");
+                      const ed = getQualityMetric(validationResult, optimizationResult, "examDistribution");
+                      const ps = getQualityMetric(validationResult, optimizationResult, "preferredSpacing");
+                      const computedTotal = Math.round(rm * 0.25 + pb * 0.25 + ss * 0.20 + ed * 0.15 + ps * 0.15);
+                      return (
+                        <div className="rounded-none border border-zinc-200/80 bg-zinc-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Weighted Score Breakdown</p>
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-1 sm:grid-cols-5">
+                            {([
+                              ["Room ×25%", rm * 0.25],
+                              ["Proctor ×25%", pb * 0.25],
+                              ["Spacing ×20%", ss * 0.20],
+                              ["Distribution ×15%", ed * 0.15],
+                              ["Pref. Spacing ×15%", ps * 0.15],
+                            ] as [string, number][]).map(([lbl, contribution]) => (
+                              <div key={lbl} className="flex items-baseline justify-between gap-1 text-[11px]">
+                                <span className="text-zinc-500 dark:text-zinc-400">{lbl}</span>
+                                <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{contribution.toFixed(1)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex items-center justify-end gap-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700">
+                            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Computed total:</span>
+                            <span className="text-[12px] font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{computedTotal}%</span>
+                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">(reported: {formatScore(afterScore)})</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <ScoreSummaryCard label="Before Optimization" value={formatScore(beforeScore)} variant="draft" />
                       <ScoreSummaryCard label="After Optimization" value={formatScore(afterScore)} variant="optimized" />
-                      <ScoreSummaryCard label="Improvement" value={`+${Math.max(0, Math.round(improvement))}%`} variant="improvement" />
-                      <ScoreSummaryCard label="Before Score" value={formatScore(beforeScore)} variant="draft" />
+                      <ScoreSummaryCard label="Improvement" value={`${improvement >= 0 ? "+" : ""}${improvement}%`} variant="improvement" />
                     </div>
                   </div>
                 )}
@@ -1959,7 +2291,7 @@ const GenerateScheduleDialog = ({
           </Button>
           <Button
             type="button"
-            className="rounded-none h-10 bg-zinc-950 text-white hover:bg-zinc-900 font-semibold inline-flex items-center gap-2"
+            className="rounded-none h-10 bg-zinc-950 text-white hover:bg-zinc-900 font-semibold inline-flex items-center gap-2 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
             disabled={!canGenerate}
             onClick={handleGenerate}
           >
@@ -2045,14 +2377,7 @@ type ScheduleAssignmentListItem = ScheduleAssignment & {
   proctorIds: string[];
   centerIds: string[];
   searchIndex: string;
-};
-
-const getLogicalAssignmentCount = (assignments: ScheduleAssignment[] = []) => {
-  const keys = new Set<string>();
-  for (const assignment of assignments) {
-    keys.add(`${assignment.examId}:${assignment.timeSlotId}`);
-  }
-  return keys.size;
+  logicalAssignments: ScheduleAssignment[];
 };
 
 const CALENDAR_PALETTES: CalendarPalette[] = [
@@ -2496,7 +2821,10 @@ const ScheduleCalendarView = ({
                                   </div>
                                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                                     <ExamStatusBadge
-                                      status={getAssignmentDisplayStatus({ isFinal })}
+                                      status={getAssignmentDisplayStatus({
+                                        status: a.exam?.status,
+                                        isFinal,
+                                      })}
                                       variant="pill"
                                     />
                                   </div>
@@ -2578,64 +2906,101 @@ const ViewProctorsDialog = ({
   open: boolean;
   onOpenChange: (next: boolean) => void;
   assignments: ScheduleAssignment[];
-}) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="rounded-none max-w-md">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          <UserCheck className="size-4" />
-          Assigned Proctors
-        </DialogTitle>
-      </DialogHeader>
-      <div className="space-y-2 py-1 max-h-80 overflow-y-auto">
-        {proctorAssignments.map((a, i) => {
-          const sup = a.proctor;
-          return (
-            <div
-              key={a.id ?? i}
-              className="flex items-center gap-3 p-3 rounded-none border border-zinc-200/60 bg-zinc-50/40 dark:border-zinc-800/60 dark:bg-zinc-900/40"
-            >
-              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 font-semibold text-sm">
-                {(sup?.user?.name?.[0] ?? "?").toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-zinc-950 truncate dark:text-zinc-100">
-                  {sup?.user?.name ?? "Unknown"}
+}) => {
+  const proctorsPagination = useDetailListPagination(proctorAssignments, {
+    pageSize: 12,
+    threshold: 12,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-none max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCheck className="size-4" />
+            Assigned Proctors
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-1 max-h-80 overflow-y-auto">
+          {proctorsPagination.visibleItems.map((a, i) => {
+            const sup = a.proctor;
+            return (
+              <div
+                key={a.id ?? i}
+                className="flex items-center gap-3 p-3 rounded-none border border-zinc-200/60 bg-zinc-50/40 dark:border-zinc-800/60 dark:bg-zinc-900/40"
+              >
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 font-semibold text-sm">
+                  {(sup?.user?.name?.[0] ?? "?").toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-zinc-950 truncate dark:text-zinc-100">
+                    {sup?.user?.name ?? "Unknown"}
+                  </div>
+                  {sup?.user?.email && (
+                    <div className="text-xs text-zinc-500 flex items-center gap-1 truncate dark:text-zinc-400">
+                      <Mail className="size-3 shrink-0" />
+                      {sup.user.email}
+                    </div>
+                  )}
+                  {(sup?.center?.name ?? sup?.department) && (
+                    <div className="text-[11px] text-zinc-400 mt-0.5">
+                      {sup?.center?.name ?? sup?.department}
+                    </div>
+                  )}
+                  {a.room?.name && (
+                    <div className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                      <DoorOpen className="size-3 shrink-0" />
+                      {a.room.name}
+                    </div>
+                  )}
                 </div>
-                {sup?.user?.email && (
-                  <div className="text-xs text-zinc-500 flex items-center gap-1 truncate dark:text-zinc-400">
-                    <Mail className="size-3 shrink-0" />
-                    {sup.user.email}
-                  </div>
-                )}
-                {(sup?.center?.name ?? sup?.department) && (
-                  <div className="text-[11px] text-zinc-400 mt-0.5">
-                    {sup?.center?.name ?? sup?.department}
-                  </div>
-                )}
-                {a.room?.name && (
-                  <div className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                    <DoorOpen className="size-3 shrink-0" />
-                    {a.room.name}
-                  </div>
-                )}
               </div>
+            );
+          })}
+        </div>
+        {proctorsPagination.shouldPaginate && (
+          <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+            <p>
+              Showing <span className="font-semibold text-zinc-900">{proctorsPagination.start}</span>-<span className="font-semibold text-zinc-900">{proctorsPagination.end}</span> of <span className="font-semibold text-zinc-900">{proctorsPagination.total}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={proctorsPagination.page <= 1}
+                onClick={() => proctorsPagination.setPage(proctorsPagination.page - 1)}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="font-semibold text-zinc-900">
+                Page {proctorsPagination.page} of {proctorsPagination.totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={proctorsPagination.page >= proctorsPagination.totalPages}
+                onClick={() => proctorsPagination.setPage(proctorsPagination.page + 1)}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
-          );
-        })}
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          className="rounded-none h-9"
-          onClick={() => onOpenChange(false)}
-        >
-          Close
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            className="rounded-none h-9"
+            onClick={() => onOpenChange(false)}
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const AssignmentDetailsSheet = ({
   assignment,
@@ -2657,6 +3022,10 @@ const AssignmentDetailsSheet = ({
   const registrations = courseOffering?.registrations ?? [];
   const studentsCount =
     registrations.length || courseOffering?.expectedStudents || 0;
+  const registrationsPagination = useDetailListPagination(registrations, {
+    pageSize: 25,
+    threshold: 25,
+  });
   const groupedAssignments = useMemo(() => {
     if (!a) return [] as ScheduleAssignment[];
     return assignments.filter(
@@ -2664,9 +3033,39 @@ const AssignmentDetailsSheet = ({
         candidate.examId === a.examId && candidate.timeSlotId === a.timeSlotId
     );
   }, [a, assignments]);
+  const groupedRooms = useMemo(() => {
+    const roomGroups = new Map<string, {
+      room: ScheduleAssignment["room"];
+      assignments: ScheduleAssignment[];
+      proctors: Array<NonNullable<ScheduleAssignment["proctor"]>>;
+    }>();
+
+    for (const item of groupedAssignments) {
+      const roomKey = item.room?.id ?? item.roomId ?? item.id;
+      const existing = roomGroups.get(roomKey) ?? {
+        room: item.room ?? null,
+        assignments: [],
+        proctors: [],
+      };
+
+      existing.assignments.push(item);
+
+      if (!existing.room && item.room) {
+        existing.room = item.room;
+      }
+
+      if (item.proctor?.id && !existing.proctors.some((proctor) => proctor.id === item.proctor?.id)) {
+        existing.proctors.push(item.proctor);
+      }
+
+      roomGroups.set(roomKey, existing);
+    }
+
+    return Array.from(roomGroups.values());
+  }, [groupedAssignments]);
   const totalAllocatedCapacity = useMemo(
-    () => groupedAssignments.reduce((sum, item) => sum + (item.room?.capacity ?? 0), 0),
-    [groupedAssignments]
+    () => groupedRooms.reduce((sum, group) => sum + (group.room?.capacity ?? 0), 0),
+    [groupedRooms]
   );
 
   // The schedule schema does not model `program` directly, but the API
@@ -2711,7 +3110,10 @@ const AssignmentDetailsSheet = ({
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <ExamStatusBadge
-              status={getAssignmentDisplayStatus({ isFinal })}
+              status={getAssignmentDisplayStatus({
+                status: a?.exam?.status,
+                isFinal,
+              })}
               variant="pill"
             />
           </div>
@@ -2802,10 +3204,10 @@ const AssignmentDetailsSheet = ({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3">
                     <div className="text-[10px] uppercase tracking-wide font-semibold text-zinc-500">
-                      Room Rows
+                      Rooms
                     </div>
                     <div className="mt-1 text-sm font-semibold text-zinc-950 tabular-nums">
-                      {groupedAssignments.length}
+                      {groupedRooms.length}
                     </div>
                   </div>
                   <div className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3">
@@ -2827,31 +3229,51 @@ const AssignmentDetailsSheet = ({
                 </div>
 
                 <div className="space-y-2">
-                  {groupedAssignments.map((item) => (
+                  {groupedRooms.map((group, index) => (
                     <div
-                      key={item.id}
-                      className="flex items-start justify-between gap-3 rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3"
+                      key={group.room?.id ?? `${group.room?.name ?? "room"}-${index}`}
+                      className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3"
                     >
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950">
-                          <DoorOpen className="size-4 text-emerald-700" />
-                          <span className="truncate">{item.room?.name ?? "Not assigned"}</span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950">
+                            <DoorOpen className="size-4 text-emerald-700" />
+                            <span className="truncate">{group.room?.name ?? "Not assigned"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-zinc-500">
+                            <MapPin className="size-3.5" />
+                            <span className="truncate">{group.room?.center?.name ?? "No center"}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-zinc-500">
-                          <MapPin className="size-3.5" />
-                          <span className="truncate">{item.room?.center?.name ?? "No center"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-zinc-500">
-                          <UserCheck className="size-3.5" />
-                          <span className="truncate">{item.proctor?.user?.name ?? "No proctor"}</span>
+                        <div className="shrink-0 text-right text-xs text-zinc-500">
+                          <div className="font-semibold text-zinc-950 tabular-nums">
+                            {group.room?.capacity ?? 0} Seats
+                          </div>
                         </div>
                       </div>
-                      <div className="shrink-0 text-right text-xs text-zinc-500">
-                        <div className="font-semibold text-zinc-950 tabular-nums">
-                          {item.room?.capacity ?? 0} seats
+
+                      <div className="mt-3 border-t border-zinc-200/70 pt-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Assigned Proctors
                         </div>
-                        {item.proctor?.user?.email && (
-                          <div className="mt-1 max-w-42 truncate">{item.proctor.user.email}</div>
+                        {group.proctors.length === 0 ? (
+                          <div className="mt-2 text-sm text-zinc-500">No proctor</div>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            {group.proctors.map((proctor) => (
+                              <div key={proctor.id} className="flex items-start gap-2 text-sm text-zinc-700">
+                                <span className="mt-1 size-1.5 shrink-0 rounded-full bg-zinc-400" />
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium text-zinc-900">
+                                    {proctor.user?.name ?? "No proctor"}
+                                  </div>
+                                  {proctor.user?.email && (
+                                    <div className="truncate text-xs text-zinc-500">{proctor.user.email}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2887,9 +3309,9 @@ const AssignmentDetailsSheet = ({
                               {sup.user.email}
                             </div>
                           )}
-                          {(sup.center?.name ?? sup.department) && (
+                          {sup.department && (
                             <div className="text-[11px] text-zinc-400 mt-0.5">
-                              {sup.center?.name ?? sup.department}
+                              {sup.department}
                             </div>
                           )}
                         </div>
@@ -2914,7 +3336,13 @@ const AssignmentDetailsSheet = ({
                     Status
                   </div>
                   <div className="mt-1.5">
-                    <ExamStatusBadge status={getAssignmentDisplayStatus({ isFinal })} variant="pill" />
+                    <ExamStatusBadge
+                      status={getAssignmentDisplayStatus({
+                        status: a?.exam?.status,
+                        isFinal,
+                      })}
+                      variant="pill"
+                    />
                   </div>
                 </div>
                 <div className="rounded-none border border-zinc-200/60 bg-zinc-50/40 p-3">
@@ -2949,40 +3377,72 @@ const AssignmentDetailsSheet = ({
                   No students are registered for this exam.
                 </div>
               ) : (
-                <ul className="divide-y divide-zinc-100 max-h-72 overflow-y-auto -mx-1 px-1">
-                  {registrations.map((reg, idx) => {
-                    const u = reg.student?.user;
-                    const name = u?.name ?? "Unknown student";
-                    const email = u?.email;
-                    const initial = (name?.[0] ?? "?").toUpperCase();
-                    return (
-                      <li
-                        key={reg.id ?? `${reg.studentId}-${idx}`}
-                        className="flex items-center gap-3 py-2.5"
-                      >
-                        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-zinc-100 text-xs font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
-                          {initial}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-zinc-950 truncate">
-                            {name}
-                          </div>
-                          {email && (
-                            <div className="text-xs text-zinc-500 truncate flex items-center gap-1">
-                              <Mail className="size-3" />
-                              {email}
-                            </div>
-                          )}
-                        </div>
-                        {reg.status && (
-                          <span className="text-[10px] uppercase tracking-wide font-semibold text-zinc-600 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
-                            {reg.status}
+                <>
+                  <ul className="-mx-1 max-h-72 divide-y divide-zinc-100 overflow-y-auto px-1">
+                    {registrationsPagination.visibleItems.map((reg, idx) => {
+                      const u = reg.student?.user;
+                      const name = u?.name ?? "Unknown student";
+                      const email = u?.email;
+                      const initial = (name?.[0] ?? "?").toUpperCase();
+                      return (
+                        <li
+                          key={reg.id ?? `${reg.studentId}-${idx}`}
+                          className="flex items-center gap-3 py-2.5"
+                        >
+                          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-none bg-zinc-100 text-xs font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
+                            {initial}
                           </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-zinc-950 truncate">
+                              {name}
+                            </div>
+                            {email && (
+                              <div className="text-xs text-zinc-500 truncate flex items-center gap-1">
+                                <Mail className="size-3" />
+                                {email}
+                              </div>
+                            )}
+                          </div>
+                          {reg.status && (
+                            <span className="text-[10px] uppercase tracking-wide font-semibold text-zinc-600 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
+                              {reg.status}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {registrationsPagination.shouldPaginate && (
+                    <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                      <p>
+                        Showing <span className="font-semibold text-zinc-900">{registrationsPagination.start}</span>-<span className="font-semibold text-zinc-900">{registrationsPagination.end}</span> of <span className="font-semibold text-zinc-900">{registrationsPagination.total}</span>
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={registrationsPagination.page <= 1}
+                          onClick={() => registrationsPagination.setPage(registrationsPagination.page - 1)}
+                          className="h-8 rounded-none px-2"
+                        >
+                          <ChevronLeft className="size-4" />
+                        </Button>
+                        <span className="font-semibold text-zinc-900">
+                          Page {registrationsPagination.page} of {registrationsPagination.totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={registrationsPagination.page >= registrationsPagination.totalPages}
+                          onClick={() => registrationsPagination.setPage(registrationsPagination.page + 1)}
+                          className="h-8 rounded-none px-2"
+                        >
+                          <ChevronRight className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </SheetSection>
 
@@ -3005,24 +3465,37 @@ const AssignmentDetailsSheet = ({
 
 const EditAssignmentDialog = ({
   assignment,
+  isPublished,
   onOpenChange,
   onChanged,
 }: {
-  assignment: ScheduleAssignment | null;
+  assignment: ScheduleAssignmentListItem | null;
+  isPublished: boolean;
   onOpenChange: (next: boolean) => void;
   onChanged?: (scheduleId: string) => void;
 }) => {
   const open = Boolean(assignment);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Assignment</DialogTitle>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-none border border-zinc-200/80 bg-white p-0 shadow-xl shadow-zinc-950/15 dark:border-zinc-800/80 dark:bg-zinc-950 dark:shadow-black/50 sm:max-w-2xl">
+        <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.96)_45%,rgba(228,228,231,0.88))] px-6 py-5 text-left dark:border-zinc-800/80 dark:bg-[radial-gradient(circle_at_top_left,rgba(39,39,42,0.96),rgba(24,24,27,0.98)_44%,rgba(9,9,11,0.98))]">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-none border border-zinc-200 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+              <Pencil className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Edit Assignment</DialogTitle>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Update room, proctor, time slot, and exam metadata for the selected scheduled exam.
+              </p>
+            </div>
+          </div>
         </DialogHeader>
         {assignment ? (
           <EditAssignmentForm
             key={assignment.id}
             assignment={assignment}
+            isPublished={isPublished}
             onClose={() => onOpenChange(false)}
             onChanged={onChanged}
           />
@@ -3032,47 +3505,124 @@ const EditAssignmentDialog = ({
   );
 };
 
-const EXAM_STATUS_OPTIONS = [
-  "DRAFT",
+const PUBLISHED_EXAM_STATUS_OPTIONS = [
   "SCHEDULED",
-  "IN_PROGRESS",
   "COMPLETED",
   "CANCELLED",
 ] as const;
-type ExamStatusValue = (typeof EXAM_STATUS_OPTIONS)[number];
+type ExamStatusValue = (typeof PUBLISHED_EXAM_STATUS_OPTIONS)[number];
 
 const EditAssignmentForm = ({
   assignment,
+  isPublished,
   onClose,
   onChanged,
 }: {
-  assignment: ScheduleAssignment;
+  assignment: ScheduleAssignmentListItem;
+  isPublished: boolean;
   onClose: () => void;
   onChanged?: (scheduleId: string) => void;
 }) => {
   const updateMutation = useUpdateAssignment();
+  const [roomSearch, setRoomSearch] = useState("");
+  const [proctorSearch, setProctorSearch] = useState("");
+  const [proctorPickerOpen, setProctorPickerOpen] = useState(false);
   const roomsQuery = useRooms();
   const proctorsQuery = useProctors();
   const timeSlotsQuery = useTimeSlots();
+  const groupedAssignments = useMemo(
+    () => assignment.logicalAssignments?.length ? assignment.logicalAssignments : [assignment],
+    [assignment]
+  );
 
   const [roomId, setRoomId] = useState<string>(assignment.roomId ?? "");
-  const [proctorId, setProctorId] = useState<string>(
-    assignment.proctorId ?? ""
-  );
+  const [selectedProctorIds, setSelectedProctorIds] = useState<string[]>(() => groupedAssignments.map((item) => item.proctorId ?? ""));
   const [timeSlotId, setTimeSlotId] = useState<string>(
     assignment.timeSlotId ?? ""
   );
 
   const initialDuration =
     assignment.exam?.duration != null ? String(assignment.exam.duration) : "";
-  const initialStatus = (assignment.exam?.status ?? "") as ExamStatusValue | "";
+  const currentDisplayStatus = getAssignmentDisplayStatus({
+    status: assignment.exam?.status,
+    isFinal: isPublished,
+  });
+  const initialStatus = isPublished && PUBLISHED_EXAM_STATUS_OPTIONS.includes(currentDisplayStatus as ExamStatusValue)
+    ? (currentDisplayStatus as ExamStatusValue)
+    : "";
 
   const [duration, setDuration] = useState<string>(initialDuration);
   const [status, setStatus] = useState<ExamStatusValue | "">(initialStatus);
 
-  const rooms = roomsQuery.data ?? [];
-  const proctors = proctorsQuery.data ?? [];
-  const timeSlots = timeSlotsQuery.data ?? [];
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  const proctors = useMemo(() => proctorsQuery.data ?? [], [proctorsQuery.data]);
+  const timeSlots = useMemo(() => timeSlotsQuery.data ?? [], [timeSlotsQuery.data]);
+  const timeSlotOptions = useMemo(() => {
+    if (!assignment.timeSlot?.id || timeSlots.some((timeSlot) => timeSlot.id === assignment.timeSlot?.id)) return timeSlots;
+    return [assignment.timeSlot, ...timeSlots];
+  }, [assignment.timeSlot, timeSlots]);
+  const roomName = assignment.roomIds.length > 1 ? `${assignment.roomIds.length} rooms assigned` : assignment.room?.name ?? "Unassigned room";
+  const centerName = assignment.room?.center?.name ?? "No center";
+  const proctorName = assignment.proctorIds.length > 1
+    ? `${assignment.proctorIds.length} proctors assigned`
+    : (assignment.proctor as { user?: { name?: string | null } | null } | null)?.user?.name ?? "Unassigned proctor";
+  const roomOptions = useMemo(() => {
+    if (!assignment.room?.id || rooms.some((room) => room.id === assignment.room?.id)) return rooms;
+    return [assignment.room, ...rooms];
+  }, [assignment.room, rooms]);
+  const proctorOptions = useMemo(() => {
+    if (!assignment.proctor?.id || proctors.some((proctor) => proctor.id === assignment.proctor?.id)) return proctors;
+    return [assignment.proctor, ...proctors];
+  }, [assignment.proctor, proctors]);
+  const filteredRoomOptions = useMemo(() => {
+    const term = roomSearch.trim().toLowerCase();
+    if (!term) return roomOptions;
+    return roomOptions.filter((room) => [room.name, room.center?.name, String(room.capacity ?? "")]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLowerCase().includes(term)));
+  }, [roomOptions, roomSearch]);
+  const getProctorOptionName = useCallback((proctor: (typeof proctorOptions)[number]) =>
+    proctor.user?.name ?? (proctor as { name?: string }).name ?? "—", []);
+  const getProctorOptionEmail = useCallback((proctor: (typeof proctorOptions)[number]) =>
+    proctor.user?.email ?? (proctor as { email?: string }).email, []);
+  const filteredProctorOptions = useMemo(() => {
+    const term = proctorSearch.trim().toLowerCase();
+    if (!term) return proctorOptions;
+    return proctorOptions.filter((proctor) => [getProctorOptionName(proctor), getProctorOptionEmail(proctor), proctor.department]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLowerCase().includes(term)));
+  }, [getProctorOptionEmail, getProctorOptionName, proctorOptions, proctorSearch]);
+  const isProctorUnavailableForSelectedSlot = (proctor: (typeof proctorOptions)[number]) => {
+    const availableTimeSlots = (proctor as { availableTimeSlots?: Array<{ id?: string; timeSlotId?: string; timeSlot?: { id?: string } }> }).availableTimeSlots;
+    if (!timeSlotId || !Array.isArray(availableTimeSlots)) return false;
+    return !availableTimeSlots.some((slot) => (slot.id ?? slot.timeSlotId ?? slot.timeSlot?.id) === timeSlotId);
+  };
+  const selectedProctors = useMemo(
+    () => selectedProctorIds
+      .map((selectedId) => proctorOptions.find((proctor) => proctor.id === selectedId) ?? null)
+      .filter((proctor): proctor is (typeof proctorOptions)[number] => proctor !== null),
+    [proctorOptions, selectedProctorIds]
+  );
+  const duplicateSelectedProctorIds = new Set(
+    selectedProctorIds.filter((selectedId, index) => selectedId && selectedProctorIds.indexOf(selectedId) !== index)
+  );
+  const selectedProctorAvailabilityError = selectedProctors.some((proctor) => proctor && isProctorUnavailableForSelectedSlot(proctor))
+    ? "One or more selected proctors are not available for the selected time slot."
+    : duplicateSelectedProctorIds.size > 0
+      ? "Each assignment row must have a different proctor selected."
+      : selectedProctorIds.length !== groupedAssignments.length
+        ? `Select ${groupedAssignments.length} proctor${groupedAssignments.length === 1 ? "" : "s"} for this assignment.`
+        : undefined;
+  const selectedRoomLabel = useMemo(() => {
+    const selectedRoom = roomOptions.find((room) => room.id === roomId);
+    if (!selectedRoom) return roomName;
+    return selectedRoom.center?.name ? `${selectedRoom.name} • ${selectedRoom.center.name}` : selectedRoom.name;
+  }, [roomId, roomName, roomOptions]);
+  const selectedProctorSummaryLabel = useMemo(() => {
+    if (selectedProctors.length === 0) return `Select ${groupedAssignments.length} proctor${groupedAssignments.length === 1 ? "" : "s"}`;
+    if (selectedProctors.length === 1) return getProctorOptionName(selectedProctors[0]);
+    return `${selectedProctors.length} proctors selected`;
+  }, [getProctorOptionName, groupedAssignments.length, selectedProctors]);
 
   const trimmedDuration = duration.trim();
   const parsedDuration =
@@ -3081,35 +3631,77 @@ const EditAssignmentForm = ({
     trimmedDuration !== "" &&
     (Number.isNaN(parsedDuration) || (parsedDuration ?? 0) <= 0);
 
-  const dirty =
-    roomId !== assignment.roomId ||
-    proctorId !== assignment.proctorId ||
-    timeSlotId !== assignment.timeSlotId ||
-    parsedDuration !== (assignment.exam?.duration ?? null) ||
-    (status || null) !== (assignment.exam?.status ?? null);
+  const dirty = isPublished
+    ? status !== currentDisplayStatus
+    : roomId !== assignment.roomId ||
+      [...selectedProctorIds].sort().join(":") !== [...groupedAssignments.map((item) => item.proctorId ?? "")].sort().join(":") ||
+      timeSlotId !== assignment.timeSlotId ||
+      parsedDuration !== (assignment.exam?.duration ?? null);
+
+  const toggleSelectedProctor = (proctorId: string) => {
+    setSelectedProctorIds((current) => {
+      if (current.includes(proctorId)) {
+        return current.filter((id) => id !== proctorId);
+      }
+      if (current.length >= groupedAssignments.length) {
+        return current;
+      }
+      return [...current, proctorId];
+    });
+  };
+
+  const removeSelectedProctor = (proctorId: string) => {
+    setSelectedProctorIds((current) => current.filter((id) => id !== proctorId));
+  };
+
+  const isProctorOptionDisabled = (proctor: (typeof proctorOptions)[number]) => {
+    const alreadySelected = selectedProctorIds.includes(proctor.id ?? "");
+    if (isProctorUnavailableForSelectedSlot(proctor) && !alreadySelected) return true;
+    if (!alreadySelected && selectedProctorIds.length >= groupedAssignments.length) return true;
+    return false;
+  };
+
+  const getProctorOptionDisabledReason = (proctor: (typeof proctorOptions)[number]) => {
+    const alreadySelected = selectedProctorIds.includes(proctor.id ?? "");
+    if (isProctorUnavailableForSelectedSlot(proctor) && !alreadySelected) return "Unavailable for selected time slot";
+    if (!alreadySelected && selectedProctorIds.length >= groupedAssignments.length) {
+      return `Only ${groupedAssignments.length} proctor${groupedAssignments.length === 1 ? "" : "s"} can be selected`;
+    }
+    return undefined;
+  };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!dirty || durationInvalid) return;
+    if (!dirty || durationInvalid || (!isPublished && selectedProctorAvailabilityError)) return;
 
     const payload: {
+      assignmentIds?: string[];
       roomId?: string;
       proctorId?: string;
+      proctorIds?: string[];
       timeSlotId?: string;
       exam?: { duration?: number; status?: ExamStatusValue };
     } = {};
 
-    if (roomId !== assignment.roomId) payload.roomId = roomId;
-    if (proctorId !== assignment.proctorId)
-      payload.proctorId = proctorId;
-    if (timeSlotId !== assignment.timeSlotId)
-      payload.timeSlotId = timeSlotId;
+    if (!isPublished) {
+      if (assignment.assignmentIds.length > 1) payload.assignmentIds = assignment.assignmentIds;
+      if (roomId !== assignment.roomId) payload.roomId = roomId;
+      if (assignment.assignmentIds.length > 1) {
+        if ([...selectedProctorIds].sort().join(":") !== [...groupedAssignments.map((item) => item.proctorId ?? "")].sort().join(":")) {
+          payload.proctorIds = selectedProctorIds;
+        }
+      } else if (selectedProctorIds[0] !== assignment.proctorId) {
+        payload.proctorId = selectedProctorIds[0];
+      }
+      if (timeSlotId !== assignment.timeSlotId)
+        payload.timeSlotId = timeSlotId;
+    }
 
     const examPatch: { duration?: number; status?: ExamStatusValue } = {};
-    if (parsedDuration !== (assignment.exam?.duration ?? null)) {
+    if (!isPublished && parsedDuration !== (assignment.exam?.duration ?? null)) {
       if (parsedDuration != null) examPatch.duration = parsedDuration;
     }
-    if ((status || null) !== (assignment.exam?.status ?? null)) {
+    if (isPublished && status !== currentDisplayStatus) {
       if (status) examPatch.status = status;
     }
     if (Object.keys(examPatch).length > 0) payload.exam = examPatch;
@@ -3135,78 +3727,208 @@ const EditAssignmentForm = ({
     : undefined;
 
   const isPending = updateMutation.isPending;
+  const course = assignment.exam?.courseOffering?.course;
+  const scheduleName = assignment.schedule?.name ?? "Current schedule";
+  const timeSlotLabel = formatTimeSlotLabel(assignment.timeSlot, "Time slot not set");
+  const selectedTimeSlotLabel = useMemo(() => {
+    const selectedTimeSlot = timeSlotOptions.find((timeSlot) => timeSlot.id === timeSlotId);
+    return selectedTimeSlot ? formatTimeSlotLabel(selectedTimeSlot, timeSlotLabel) : timeSlotLabel;
+  }, [timeSlotId, timeSlotLabel, timeSlotOptions]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-      <div className="space-y-1.5">
-        <Label htmlFor="edit-room">Room</Label>
-        <Select
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-black/20 md:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Exam</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+              {course?.title ?? course?.name ?? "Selected exam"}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {[course?.code, scheduleName].filter(Boolean).join(" · ") || "Assignment details"}
+            </p>
+          </div>
+          <div className="rounded-none border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 dark:shadow-black/20">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Current slot</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-100">{timeSlotLabel}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-none border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 dark:shadow-black/20">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Assigned room</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-100">{roomName}</p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{centerName}</p>
+          </div>
+          <div className="rounded-none border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 dark:shadow-black/20">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Assigned proctors</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-100">{proctorName}</p>
+          </div>
+          <div className="rounded-none border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/80 dark:shadow-black/20">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Exam status</p>
+            <div className="mt-1">
+              <ExamStatusBadge status={isPublished ? status || currentDisplayStatus : currentDisplayStatus} />
+            </div>
+          </div>
+        </div>
+
+        {!isPublished ? (
+          <>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:*:min-w-0">
+          <div className="min-w-0 space-y-2">
+            <Label htmlFor="edit-room" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Room</Label>
+        <AsyncSearchSelect
           value={roomId}
+          selectedLabel={selectedRoomLabel}
+          placeholder="Select a room"
+          searchPlaceholder="Search rooms by name"
+          options={filteredRoomOptions}
+          searchValue={roomSearch}
+          onSearchChange={setRoomSearch}
           onValueChange={setRoomId}
+          getOptionValue={(room) => room.id ?? ""}
+          getOptionLabel={(room) => room.name}
+          renderOption={(room) => (
+            <>
+              {room.name}
+              {room.capacity != null ? <span className="ml-1 text-xs text-zinc-400">· cap {room.capacity}</span> : null}
+              {room.center?.name ? <span className="ml-1 text-xs text-zinc-400">· {room.center.name}</span> : null}
+            </>
+          )}
           disabled={isPending || roomsQuery.isLoading}
-        >
-          <SelectTrigger id="edit-room" className="rounded-none">
-            <SelectValue placeholder="Select a room" />
-          </SelectTrigger>
-          <SelectContent>
-            {rooms.map((r) => (
-              <SelectItem key={r.id} value={r.id ?? ""}>
-                {r.name}
-                {r.capacity != null ? ` · cap ${r.capacity}` : ""}
-                {r.center?.name ? ` · ${r.center.name}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          isLoading={roomsQuery.isFetching}
+          className="h-11 min-w-0 bg-zinc-50/40 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100"
+        />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="edit-proctor">Proctor</Label>
-        <Select
-          value={proctorId}
-          onValueChange={setProctorId}
-          disabled={isPending || proctorsQuery.isLoading}
-        >
-          <SelectTrigger id="edit-proctor" className="rounded-none">
-            <SelectValue placeholder="Select a proctor" />
-          </SelectTrigger>
-          <SelectContent>
-            {proctors.map((s) => (
-              <SelectItem key={s.id} value={s.id ?? ""}>
-                {s.user?.name ?? s.name ?? "—"}
-                {s.user?.email ? ` · ${s.user.email}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <div className="min-w-0 space-y-2">
+            <Label htmlFor="edit-proctor" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+              {groupedAssignments.length > 1 ? `Proctors (${groupedAssignments.length})` : "Proctor"}
+            </Label>
+        <Popover open={proctorPickerOpen} onOpenChange={setProctorPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending || proctorsQuery.isLoading}
+              className={cn(
+                "min-h-11 h-auto w-full justify-between rounded-none border-zinc-200 bg-zinc-50/40 px-3 py-2 text-left text-sm font-normal shadow-sm hover:border-zinc-300 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100",
+                selectedProctorAvailabilityError && "border-destructive/60 bg-destructive/5"
+              )}
+            >
+              <span className={cn("min-w-0 flex-1 whitespace-normal wrap-anywhere text-left leading-4", selectedProctorIds.length === 0 && "text-zinc-500")}>
+                {selectedProctorSummaryLabel}
+              </span>
+              <ChevronDown className="ml-2 size-4 shrink-0 text-zinc-400" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+            <div className="border-b border-zinc-200 p-2 dark:border-zinc-800">
+              <Input
+                value={proctorSearch}
+                onChange={(event) => setProctorSearch(event.target.value)}
+                placeholder="Search proctors by name or email"
+                className="h-9 rounded-none border-zinc-200 text-sm shadow-none dark:border-zinc-700"
+              />
+              <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                Select {groupedAssignments.length} proctor{groupedAssignments.length === 1 ? "" : "s"} for this assignment.
+              </p>
+            </div>
+            <div className="max-h-72 overflow-y-auto p-1">
+              {proctorsQuery.isFetching ? (
+                <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading
+                </div>
+              ) : filteredProctorOptions.length === 0 ? (
+                <div className="px-2 py-3 text-sm text-zinc-500">No results found</div>
+              ) : (
+                filteredProctorOptions.map((proctor) => {
+                  const proctorId = proctor.id ?? "";
+                  const selected = selectedProctorIds.includes(proctorId);
+                  const disabled = isProctorOptionDisabled(proctor);
+                  const disabledReason = getProctorOptionDisabledReason(proctor);
+                  return (
+                    <button
+                      key={proctorId}
+                      type="button"
+                      disabled={disabled}
+                      title={disabledReason}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none transition-colors hover:bg-zinc-100 focus:bg-zinc-100 dark:hover:bg-zinc-800 dark:focus:bg-zinc-800",
+                        disabled && "cursor-not-allowed opacity-50 hover:bg-transparent focus:bg-transparent"
+                      )}
+                      onClick={() => toggleSelectedProctor(proctorId)}
+                    >
+                      <Check className={cn("size-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+                      <span className="min-w-0 flex-1 whitespace-normal wrap-anywhere leading-4">
+                        {getProctorOptionName(proctor)}
+                        {getProctorOptionEmail(proctor) ? <span className="ml-1 text-xs text-zinc-400">· {getProctorOptionEmail(proctor)}</span> : null}
+                        {disabledReason ? <span className="mt-0.5 block text-xs text-zinc-500">{disabledReason}</span> : null}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+        {selectedProctorIds.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {selectedProctorIds.map((selectedId) => {
+              const selectedProctor = proctorOptions.find((proctor) => proctor.id === selectedId);
+              const label = selectedProctor ? getProctorOptionName(selectedProctor) : selectedId;
+              return (
+                <Badge key={selectedId} variant="secondary" className="rounded-none border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                  <span className="max-w-56 truncate">{label}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedProctor(selectedId)}
+                    className="ml-1 inline-flex size-4 items-center justify-center rounded-none hover:bg-zinc-200/70 dark:hover:bg-zinc-800"
+                    aria-label={`Remove ${label}`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        ) : null}
+        {selectedProctorAvailabilityError ? (
+          <p className="text-[11px] text-rose-600 dark:text-rose-400">{selectedProctorAvailabilityError}</p>
+        ) : null}
       </div>
+        </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="edit-timeslot">Time Slot</Label>
-        <Select
-          value={timeSlotId}
-          onValueChange={setTimeSlotId}
-          disabled={isPending || timeSlotsQuery.isLoading}
-        >
-          <SelectTrigger id="edit-timeslot" className="rounded-none">
-            <SelectValue placeholder="Select a time slot" />
-          </SelectTrigger>
-          <SelectContent>
-            {timeSlots.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                {formatDate(t.date ?? t.startTime)} · {formatTime(t.startTime)}{" "}
-                – {formatTime(t.endTime)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        <div className="space-y-2">
+            <Label htmlFor="edit-timeslot" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Time Slot</Label>
+            <Select
+              value={timeSlotId}
+              onValueChange={setTimeSlotId}
+              disabled={isPending || timeSlotsQuery.isLoading}
+            >
+              <SelectTrigger
+                id="edit-timeslot"
+                title={selectedTimeSlotLabel}
+                className="min-h-11 h-auto rounded-none border-zinc-200 bg-zinc-50/40 py-2 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700"
+              >
+                <SelectValue placeholder="Select a time slot" />
+              </SelectTrigger>
+              <SelectContent className="rounded-none border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                {timeSlotOptions.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {formatTimeSlotLabel(t, "Time slot TBD")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="edit-duration">
+          <Label htmlFor="edit-duration" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
             Duration{" "}
-            <span className="text-zinc-400 font-normal">(optional, min)</span>
+            <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional, min)</span>
           </Label>
           <Input
             id="edit-duration"
@@ -3214,53 +3936,64 @@ const EditAssignmentForm = ({
             inputMode="numeric"
             min={1}
             placeholder="e.g. 90"
-            className="rounded-none"
+            className="h-11 rounded-none border-zinc-200 bg-zinc-50/40 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             disabled={isPending}
           />
           {durationInvalid && (
-            <p className="text-[11px] text-rose-600">
+            <p className="text-[11px] text-rose-600 dark:text-rose-400">
               Duration must be a positive whole number.
             </p>
           )}
         </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="edit-status">
-            Status <span className="text-zinc-400 font-normal">(optional)</span>
-          </Label>
-          <Select
-            value={status}
-            onValueChange={(v) => setStatus(v as ExamStatusValue)}
-            disabled={isPending}
-          >
-            <SelectTrigger id="edit-status" className="rounded-none">
-              <SelectValue placeholder="Keep current" />
-            </SelectTrigger>
-            <SelectContent>
-              {EXAM_STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s.replaceAll("_", " ")}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+          </div>
+          </>
+        ) : (
+          <div className="space-y-2 rounded-none border border-zinc-200 bg-zinc-50/80 px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-black/20">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Published schedule control</p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                Published schedules allow status updates while keeping the assigned room, proctor, and time locked.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status" className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                Status
+              </Label>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as ExamStatusValue)}
+                disabled={isPending}
+              >
+                <SelectTrigger id="edit-status" className="h-11 rounded-none border-zinc-200 bg-white shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus-visible:ring-zinc-700">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                  {PUBLISHED_EXAM_STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s.replaceAll("_", " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
       {errorMessage && (
-        <div className="border border-rose-200 bg-rose-50 text-rose-700 text-xs p-2 flex items-start gap-2">
+          <div className="flex items-start gap-2 border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300">
           <AlertTriangle className="size-3.5 mt-0.5 shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
+        </div>
 
-      <DialogFooter className="mt-4">
+        <DialogFooter className="mt-auto border-t border-zinc-200/70 bg-zinc-50/70 px-6 py-4 dark:border-zinc-800/80 dark:bg-zinc-900/70 sm:justify-between">
         <Button
           type="button"
           variant="outline"
-          className="rounded-none"
+            className="rounded-none border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           onClick={onClose}
           disabled={isPending}
         >
@@ -3268,8 +4001,8 @@ const EditAssignmentForm = ({
         </Button>
         <Button
           type="submit"
-          className="rounded-none bg-zinc-950 hover:bg-zinc-800"
-          disabled={!dirty || durationInvalid || isPending}
+          className="rounded-none bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+          disabled={!dirty || durationInvalid || Boolean(selectedProctorAvailabilityError) || isPending}
         >
           {isPending ? (
             <>
@@ -3277,7 +4010,7 @@ const EditAssignmentForm = ({
               Saving…
             </>
           ) : (
-            "Save Changes"
+            isPublished ? "Update Status" : "Save Changes"
           )}
         </Button>
       </DialogFooter>
@@ -3377,32 +4110,30 @@ const DeleteAssignmentDialog = ({
 };
 
 export function SchedulesPage() {
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | undefined>(() => {
     return localStorage.getItem(SELECTED_SCHEDULE_STORAGE_KEY) ?? undefined;
   });
   const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
   const [generateOpen, setGenerateOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<Schedule | null>(null);
 
-  // filters
-  const [semesterFilter, setSemesterFilter] = useState<string>(ALL);
-  const [courseFilter, setCourseFilter] = useState<string>(ALL);
-  const [proctorFilter, setProctorFilter] = useState<string>(ALL);
-  const [centerFilter, setCenterFilter] = useState<string>(ALL);
-  const [dateFilter, setDateFilter] = useState<string>(ALL);
+  // Filter state is declared before the assignment query so active values are passed as server params.
 
   // view mode (table | calendar)
   const [viewMode, setViewMode] = useState<"table" | "calendar">("table");
 
   const schedulesQuery = useSchedules({ limit: 100 });
-  const schedules = schedulesQuery.data?.data ?? [];
+  const schedules = useMemo(() => schedulesQuery.data?.data ?? [], [schedulesQuery.data?.data]);
+  const knownScheduleIds = useMemo(() => new Set(schedules.map((schedule) => schedule.id)), [schedules]);
 
   const openGenerateFromRoute = searchParams.get("openGenerate") === "true";
   const routeView = searchParams.get("view");
   const routeScheduleId =
     searchParams.get("scheduleId") ?? searchParams.get("id") ?? undefined;
   const routeAssignmentId = searchParams.get("assignmentId") ?? undefined;
+
+  useHighlightRow("data-schedule-id", routeScheduleId ?? null, schedules.length);
 
   const setGenerateDialogOpen = (next: boolean) => {
     setGenerateOpen(next);
@@ -3415,8 +4146,45 @@ export function SchedulesPage() {
     setSearchParams(nextParams);
   };
 
-  // auto-select most recent
-  const effectiveId = routeScheduleId ?? selectedId ?? schedules[0]?.id;
+  // Sync URL param → React state so the dialog `open` prop depends only on
+  // `generateOpen`. This avoids a race condition where React Router's
+  // `setSearchParams` and React's `setGenerateOpen` update in separate renders,
+  // briefly making `openGenerateFromRoute=true` after `generateOpen` was set
+  // to false, causing the dialog to flicker open for ~1s on close.
+  useEffect(() => {
+    if (openGenerateFromRoute && !generateOpen) {
+      setGenerateOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openGenerateFromRoute]);
+
+  const hasLoadedSchedules = schedulesQuery.isSuccess;
+
+  // Validate persisted and route schedule IDs against the live list before issuing detail queries.
+  const effectiveId = useMemo(() => {
+    if (!hasLoadedSchedules) return undefined;
+    if (routeScheduleId && knownScheduleIds.has(routeScheduleId)) return routeScheduleId;
+    if (selectedId && knownScheduleIds.has(selectedId)) return selectedId;
+    return schedules[0]?.id;
+  }, [hasLoadedSchedules, knownScheduleIds, routeScheduleId, schedules, selectedId]);
+
+  useEffect(() => {
+    if (!hasLoadedSchedules) return;
+
+    if (routeScheduleId && !knownScheduleIds.has(routeScheduleId)) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("scheduleId");
+      nextParams.delete("id");
+      nextParams.delete("assignmentId");
+      nextParams.delete("aPage");
+      setSearchParams(nextParams, { replace: true });
+    }
+
+    if (selectedId && !knownScheduleIds.has(selectedId)) {
+      setSelectedId(undefined);
+      localStorage.removeItem(SELECTED_SCHEDULE_STORAGE_KEY);
+    }
+  }, [hasLoadedSchedules, knownScheduleIds, routeScheduleId, searchParams, selectedId, setSearchParams]);
 
   useEffect(() => {
     if (!effectiveId) return;
@@ -3425,19 +4193,97 @@ export function SchedulesPage() {
 
   const scheduleQuery = useSchedule(effectiveId);
   const schedule: Schedule | undefined = scheduleQuery.data?.id === effectiveId ? scheduleQuery.data : undefined;
-  const assignmentsQuery = useScheduleAssignments(effectiveId);
+  // ---- Server-side paginated assignments ----
+  // Filter state is declared before the query so active values can be passed as server params.
+  // Use the full selected schedule when available so filter dropdowns cover all existing values.
+  const nowMs = Date.now();
+  const adminStatusOptions = useMemo(
+    () => (schedule?.isFinal ? [...PUBLISHED_STATUS_FILTER_OPTIONS] : [...DRAFT_STATUS_FILTER_OPTIONS]),
+    [schedule?.isFinal]
+  );
+  const filters = useAssignmentScheduleFilters(schedule?.assignments ?? [], nowMs, {
+    statusOptions: adminStatusOptions,
+    includePhaseFilter: false,
+  });
+  const search = filters.state.query;
+  const setSearch = filters.setters.setQuery;
+
+  const [debouncedAssignmentSearch, setDebouncedAssignmentSearch] = useState(filters.state.query);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedAssignmentSearch(filters.state.query), 250);
+    return () => window.clearTimeout(handle);
+  }, [filters.state.query]);
+  useEffect(() => {
+    if (!adminStatusOptions.some((option) => option.value === filters.state.status)) {
+      filters.setters.setStatus("all");
+    }
+  }, [adminStatusOptions, filters.setters, filters.state.status]);
+  const ASSIGNMENT_PAGE_SIZE = 100;
+  const assignmentPageParam = Number(searchParams.get("aPage") ?? "1");
+  const assignmentSortField = "startTime";
+  const assignmentSortDirection = filters.state.sort === "latest" ? "desc" : "asc";
+  const assignmentPage =
+    Number.isFinite(assignmentPageParam) && assignmentPageParam >= 1
+      ? Math.floor(assignmentPageParam)
+      : 1;
+  const setAssignmentPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("aPage");
+    else nextParams.set("aPage", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const assignmentsQuery = useAssignmentsPage({
+    scheduleId: effectiveId,
+    page: assignmentPage,
+    pageSize: ASSIGNMENT_PAGE_SIZE,
+    search: debouncedAssignmentSearch,
+    sortField: assignmentSortField,
+    sortDirection: assignmentSortDirection,
+    status: filters.state.status !== "all" ? filters.state.status : undefined,
+    centerId: filters.state.center !== ALL ? filters.state.center : undefined,
+    roomId: filters.state.room !== ALL ? filters.state.room : undefined,
+    timeSlotId: filters.state.timeSlot !== ALL ? filters.state.timeSlot : undefined,
+    proctorId: filters.state.proctor !== ALL ? filters.state.proctor : undefined,
+    courseId: filters.state.course !== ALL ? filters.state.course : undefined,
+    semesterId: undefined,
+    phase: undefined,
+    examDate: filters.state.examDate || undefined,
+    startDate: filters.state.startDate || undefined,
+    endDate: filters.state.endDate || undefined,
+  });
+
+  const assignmentsTotalPages = assignmentsQuery.data?.meta?.totalPages ?? 1;
+  const assignmentsTotal = assignmentsQuery.data?.meta?.total ?? 0;
+  const filteredAssignmentsTotal = assignmentsQuery.data?.meta?.logicalTotal ?? assignmentsTotal;
+  const selectedScheduleSummary = schedule ?? schedules.find((item) => item.id === effectiveId);
+  const scheduleAssignmentsCount = getScheduleAssignmentCount(selectedScheduleSummary) || filteredAssignmentsTotal;
 
   const publishMutation = usePublishSchedule();
   const unpublishMutation = useUnpublishSchedule();
   const semestersQuery = useSemesters();
-  const semesters = (semestersQuery.data ?? []) as SemesterOption[];
+  const semesters = useMemo(() => (semestersQuery.data ?? []) as SemesterOption[], [semestersQuery.data]);
+  const activeSemesterId = useMemo(() => semesters.find(s => (s as { isActive?: boolean }).isActive)?.id, [semesters]);
 
   const showPageLoading = useDelayedLoading(schedulesQuery.isLoading, 800);
 
   const assignments: ScheduleAssignment[] = useMemo(
-    () => (assignmentsQuery.data ?? []).filter((assignment) => assignment.scheduleId === effectiveId),
-    [assignmentsQuery.data, effectiveId]
+    () => assignmentsQuery.data?.data ?? [],
+    [assignmentsQuery.data]
   );
+
+  // Reset assignment page to 1 when any filter / search changes
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (next.has("aPage")) {
+        next.delete("aPage");
+        return next;
+      }
+      return prev;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveId, debouncedAssignmentSearch, filters.state.room, filters.state.proctor, filters.state.course, filters.state.semester, filters.state.center, filters.state.timeSlot, filters.state.status, filters.state.phase, filters.state.examDate, filters.state.startDate, filters.state.endDate, filters.state.sort]);
 
   const persistedAssignments = useMemo<ScheduleAssignmentListItem[]>(() => {
     const groups = new Map<string, ScheduleAssignment[]>();
@@ -3455,20 +4301,23 @@ export function SchedulesPage() {
       const roomIds = [...new Set(group.map((assignment) => assignment.roomId).filter(Boolean))];
       const proctorIds = [...new Set(group.map((assignment) => assignment.proctorId).filter(Boolean))];
       const centerIds = [...new Set(group.map((assignment) => assignment.room?.center?.id).filter(Boolean))] as string[];
-      const searchIndex = group
-        .flatMap((assignment) => [
+      const searchIndex = buildSearchIndex(
+        ...group.flatMap((assignment) => [
           assignment.exam?.courseOffering?.course?.code,
           assignment.exam?.courseOffering?.course?.name,
           assignment.exam?.courseOffering?.course?.title,
           assignment.exam?.courseOffering?.semester?.name,
+          assignment.exam?.status,
+          assignment.schedule?.name,
+          assignment.schedule?.examPeriod,
           assignment.room?.name,
           assignment.room?.center?.name,
           assignment.proctor?.user?.name,
           assignment.proctor?.user?.email,
+          formatDate(assignment.timeSlot?.date ?? assignment.timeSlot?.startTime),
+          formatTime(assignment.timeSlot?.startTime),
         ])
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      );
 
       return {
         ...primary,
@@ -3477,57 +4326,29 @@ export function SchedulesPage() {
         proctorIds,
         centerIds,
         searchIndex,
+        logicalAssignments: group,
       };
     });
   }, [assignments]);
 
-  // derived filter options from the current schedule
-  const filterOptions = useMemo(() => {
-    const semestersMap = new Map<string, string>();
-    const coursesMap = new Map<string, string>();
-    const proctorsMap = new Map<string, string>();
-    const centersMap = new Map<string, string>();
-    const datesSet = new Set<string>();
-
-    for (const a of assignments) {
-      const sem = a.exam?.courseOffering?.semester;
-      if (sem?.id) semestersMap.set(sem.id, sem.name ?? sem.id);
-      const course = a.exam?.courseOffering?.course;
-      if (course?.id) coursesMap.set(course.id, course.code ?? course.name ?? course.id);
-      const sup = a.proctor;
-      if (sup?.id) proctorsMap.set(sup.id, sup.user?.name ?? sup.user?.email ?? sup.id);
-      const center = a.room?.center;
-      if (center?.id) centersMap.set(center.id, center.name);
-      const dKey = dateKey(a.timeSlot?.date ?? a.timeSlot?.startTime);
-      if (dKey) datesSet.add(dKey);
-    }
-
-    const sortedDates = Array.from(datesSet).sort();
-    return {
-      semesters: Array.from(semestersMap.entries()),
-      courses: Array.from(coursesMap.entries()),
-      proctors: Array.from(proctorsMap.entries()),
-      centers: Array.from(centersMap.entries()),
-      dates: sortedDates,
-    };
-  }, [assignments]);
-
-  // filtered + searched assignments
-  const filteredAssignments = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return persistedAssignments.filter((a) => {
-      if (semesterFilter !== ALL && a.exam?.courseOffering?.semester?.id !== semesterFilter) return false;
-      if (courseFilter !== ALL && a.exam?.courseOffering?.course?.id !== courseFilter) return false;
-      if (proctorFilter !== ALL && !a.proctorIds.includes(proctorFilter)) return false;
-      if (centerFilter !== ALL && !a.centerIds.includes(centerFilter)) return false;
-      if (dateFilter !== ALL) {
-        const k = dateKey(a.timeSlot?.date ?? a.timeSlot?.startTime);
-        if (k !== dateFilter) return false;
-      }
-      if (!term) return true;
-      return a.searchIndex.includes(term);
-    });
-  }, [persistedAssignments, search, semesterFilter, courseFilter, proctorFilter, centerFilter, dateFilter]);
+  // Server handles filtering and sorting; client only groups the current page.
+  const filteredAssignments = useMemo(
+    () => persistedAssignments,
+    [persistedAssignments]
+  );
+  const assignmentById = useMemo(
+    () => new Map(assignments.map((assignment) => [assignment.id, assignment])),
+    [assignments]
+  );
+  const {
+    scrollRef: assignmentTableScrollRef,
+    onScroll: onAssignmentTableScroll,
+    virtualRows: virtualAssignmentRows,
+    topPadding: assignmentTopPadding,
+    bottomPadding: assignmentBottomPadding,
+    isVirtualized: isAssignmentTableVirtualized,
+    containerClassName: assignmentTableContainerClassName,
+  } = useVirtualRows(filteredAssignments, { estimateRowHeight: 72, threshold: 80, maxHeight: 720 });
 
   const calendarAssignments = filteredAssignments;
 
@@ -3539,47 +4360,49 @@ export function SchedulesPage() {
       if (a.proctorId) proctors.add(a.proctorId);
     }
     return {
-      total: persistedAssignments.length,
+      total: scheduleAssignmentsCount,
       rooms: rooms.size,
       proctors: proctors.size,
     };
-  }, [assignments, persistedAssignments.length]);
+  }, [assignments, scheduleAssignmentsCount]);
 
   const versionCountOverrides = useMemo(() => {
     if (!effectiveId) return {} as Record<string, { assignments?: number }>;
 
     return {
       [effectiveId]: {
-        assignments: persistedAssignments.length,
+        assignments: scheduleAssignmentsCount,
       },
     };
-  }, [effectiveId, persistedAssignments.length]);
+  }, [effectiveId, scheduleAssignmentsCount]);
 
   // Selected assignment for the row actions
   const [viewAssignment, setViewAssignment] = useState<ScheduleAssignment | null>(null);
-  const [editAssignment, setEditAssignment] = useState<ScheduleAssignment | null>(null);
+  const [editAssignment, setEditAssignment] = useState<ScheduleAssignmentListItem | null>(null);
   const [deleteAssignment, setDeleteAssignment] = useState<ScheduleAssignmentListItem | null>(null);
   const [viewProctors, setViewProctors] = useState<ScheduleAssignment[] | null>(null);
   const [lastHighlightedAssignmentId, setLastHighlightedAssignmentId] = useState<string | null>(null);
 
-  const clearFilters = () => {
-    setSemesterFilter(ALL);
-    setCourseFilter(ALL);
-    setProctorFilter(ALL);
-    setCenterFilter(ALL);
-    setDateFilter(ALL);
-    setSearch("");
-  };
+  // Bulk delete for assignments
+  const deleteAssignmentMutation = useDeleteAssignment();
+  const assignmentBulkDelete = useBulkDelete({
+    entityName: "assignment",
+    entityNamePlural: "assignments",
+    deleteItem: (id) =>
+      deleteAssignmentMutation.mutateAsync({ scheduleId: effectiveId!, assignmentId: id, deleteGroup: true }),
+  });
 
-  const activeFilterCount = [
-    semesterFilter,
-    courseFilter,
-    proctorFilter,
-    centerFilter,
-    dateFilter,
-  ].filter((v) => v !== ALL).length;
-
-  const hasActiveFilters = search.trim() !== "" || activeFilterCount > 0;
+  const clearFilters = filters.reset;
+  const adminAssignmentFields = useMemo(
+    () => filters.fields.filter((field) => field.key !== "semester"),
+    [filters.fields]
+  );
+  const adminAssignmentBadges = useMemo(
+    () => filters.badges.filter((badge) => badge.key !== "semester"),
+    [filters.badges]
+  );
+  const activeAssignmentFilterCount = adminAssignmentBadges.length;
+  const hasActiveFilters = filters.hasActiveFilters;
   const highlightedAssignmentId =
     routeAssignmentId && routeAssignmentId !== lastHighlightedAssignmentId
       ? routeAssignmentId
@@ -3610,36 +4433,40 @@ export function SchedulesPage() {
 
   const handleGenerated = (result: { scheduleId?: string; schedule?: { id?: string } }) => {
     setGenerateDialogOpen(false);
+    // Kick off the refetch immediately so data is ready when the animation ends.
+    void schedulesQuery.refetch();
     const newId = result?.scheduleId ?? result?.schedule?.id;
     if (newId) {
-      // Delay navigation until after the dialog close animation (duration-200) to
-      // prevent the re-render from remounting the dialog mid-animation (reappear glitch).
-      setTimeout(() => {
-        setViewAssignment(null);
-        setEditAssignment(null);
-        setDeleteAssignment(null);
-        setViewProctors(null);
-        setLastHighlightedAssignmentId(null);
-        clearFilters();
-        setSelectedId(newId);
-        const nextParams = new URLSearchParams(searchParams);
-        nextParams.set("scheduleId", newId);
-        nextParams.delete("id");
-        nextParams.delete("assignmentId");
-        nextParams.delete("openGenerate");
-        setSearchParams(nextParams);
-        void schedulesQuery.refetch();
-      }, 250);
-    } else {
-      void schedulesQuery.refetch();
+      // State updates and URL sync are deferred until after the close animation.
+      window.setTimeout(() => {
+        window.requestAnimationFrame(() => {
+          startTransition(() => {
+            setViewAssignment(null);
+            setEditAssignment(null);
+            setDeleteAssignment(null);
+            setViewProctors(null);
+            setLastHighlightedAssignmentId(null);
+            clearFilters();
+            setSelectedId(newId);
+
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.set("scheduleId", newId);
+            nextParams.delete("id");
+            nextParams.delete("assignmentId");
+            nextParams.delete("aPage");
+            nextParams.delete("openGenerate");
+            setSearchParams(nextParams);
+          });
+        });
+      }, DIALOG_CLOSE_SETTLE_DELAY_MS);
     }
   };
 
   const handleAssignmentChanged = (scheduleId: string) => {
-    void schedulesQuery.refetch();
-    void assignmentsQuery.refetch();
+    void queryClient.invalidateQueries({ queryKey: scheduleAssignmentKeys.schedule(scheduleId) });
+    void queryClient.invalidateQueries({ queryKey: scheduleKeys.lists });
     if (scheduleId === effectiveId) {
-      void scheduleQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(scheduleId) });
     }
   };
 
@@ -3732,11 +4559,12 @@ export function SchedulesPage() {
     );
   }
 
+  const isAssignmentsInitialLoading = assignmentsQuery.isLoading && !assignmentsQuery.data;
+  const isAssignmentsRefreshing = assignmentsQuery.isFetching && !!assignmentsQuery.data;
   const isDetailLoading =
     scheduleQuery.isLoading ||
     scheduleQuery.isFetching ||
-    assignmentsQuery.isLoading ||
-    assignmentsQuery.isFetching;
+    isAssignmentsInitialLoading;
   const suppressDetailError = scheduleQuery.isError && isAuthExpiredError(scheduleQuery.error);
 
   return (
@@ -3769,26 +4597,42 @@ export function SchedulesPage() {
         <TooltipProvider delayDuration={150}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  variant="outline"
-                  onClick={handlePublish}
-                  disabled={
-                    !schedule ||
-                    schedule.isFinal === true ||
-                    publishMutation.isPending
-                  }
-                  className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
-                >
-                  {publishMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="size-4" />
-                  )}
-                  {schedule?.isFinal ? "Published" : "Mark as Final"}
-                </Button>
-              </span>
+              {(() => {
+                const scheduleSemesterId = schedule?.assignments?.[0]?.exam?.courseOffering?.semester?.id;
+                const semesterInactive = !!schedule && !!activeSemesterId && !!scheduleSemesterId && scheduleSemesterId !== activeSemesterId;
+                return (
+                  <span className="inline-flex">
+                    <Button
+                      variant="outline"
+                      onClick={handlePublish}
+                      disabled={
+                        !schedule ||
+                        schedule.isFinal === true ||
+                        publishMutation.isPending ||
+                        semesterInactive
+                      }
+                      className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
+                    >
+                      {publishMutation.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="size-4" />
+                      )}
+                      {schedule?.isFinal ? "Published" : "Mark as Final"}
+                    </Button>
+                  </span>
+                );
+              })()}
             </TooltipTrigger>
+            {(() => {
+              const scheduleSemesterId = schedule?.assignments?.[0]?.exam?.courseOffering?.semester?.id;
+              const semesterInactive = !!schedule && !schedule.isFinal && !!activeSemesterId && !!scheduleSemesterId && scheduleSemesterId !== activeSemesterId;
+              return semesterInactive ? (
+                <TooltipContent side="bottom" className="text-xs bg-zinc-950 text-white rounded-none border-0">
+                  Semester inactive
+                </TooltipContent>
+              ) : null;
+            })()} 
           </Tooltip>
         </TooltipProvider>
 
@@ -3848,13 +4692,12 @@ export function SchedulesPage() {
               <span className="max-w-56 truncate text-sm font-semibold text-zinc-900">
                 {schedule.name}
               </span>
-              <StatusBadge isFinal={schedule.isFinal} />
+              <StatusBadge schedule={schedule} />
             </>
           )}
         </div>
       </StickyActionBar>
 
-      {/* Schedule Versions */}
       <ScheduleVersionsTable
         schedules={schedules}
         activeId={effectiveId}
@@ -3873,6 +4716,7 @@ export function SchedulesPage() {
           nextParams.set("scheduleId", id);
           nextParams.delete("id");
           nextParams.delete("assignmentId");
+          nextParams.delete("aPage");
           setSearchParams(nextParams);
         }}
         onDeleted={(deletedId) => {
@@ -3885,6 +4729,7 @@ export function SchedulesPage() {
         isPublishing={publishMutation.isPending}
         onRefetch={() => schedulesQuery.refetch()}
         isLoading={schedulesQuery.isLoading}
+        activeSemesterId={activeSemesterId}
       />
 
       <PublishScheduleDialog
@@ -3923,8 +4768,8 @@ export function SchedulesPage() {
                   This schedule is published and locked.
                 </p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Assignments cannot be edited or deleted while published. Use &ldquo;Return to
-                  Draft&rdquo; to unlock, make changes, then republish.
+                  Published schedules still block reassignment and deletion. You can only update an
+                  assignment to Completed or Cancelled until the schedule is returned to draft.
                 </p>
               </div>
               <Button
@@ -3946,6 +4791,32 @@ export function SchedulesPage() {
                 )}
                 Return to Draft
               </Button>
+            </div>
+          )}
+
+          {isAutoUnpublishedSchedule(schedule) && (
+            <div className="mb-6 flex items-start gap-3 rounded-none border border-rose-200 bg-rose-50 px-4 py-3 shadow-sm">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-700" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-rose-800">
+                  This schedule was auto-unpublished after upstream changes.
+                </p>
+                <p className="mt-0.5 text-xs text-rose-700/90">
+                  {getAutoUnpublishSummary(schedule)} It has been returned to draft so invalid published assignments are not shown in student and proctor portals.
+                </p>
+                {getAutoUnpublishReasonLines(schedule).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {getAutoUnpublishReasonLines(schedule).map((reason) => (
+                      <span
+                        key={reason}
+                        className="inline-flex items-center rounded-none border border-rose-200 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700"
+                      >
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -3989,114 +4860,24 @@ export function SchedulesPage() {
           </div>
 
           {/* Filters */}
-          <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm mb-4">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative w-full sm:max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400 pointer-events-none" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search course, room, proctor…"
-                    className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      onClick={clearFilters}
-                      className="h-10 rounded-none text-zinc-700 hover:text-zinc-950 inline-flex items-center gap-1.5 px-2"
-                    >
-                      <X className="size-4" /> Clear
-                    </Button>
-                  )}
-                  <FilterPopover activeCount={activeFilterCount} onClear={clearFilters}>
-                    <FilterField label="Semester">
-                      <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-                        <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All semesters" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All semesters</SelectItem>
-                          {filterOptions.semesters.map(([id, label]) => (
-                            <SelectItem key={id} value={id}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FilterField>
-
-                    <FilterField label="Course">
-                      <Select value={courseFilter} onValueChange={setCourseFilter}>
-                        <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All courses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All courses</SelectItem>
-                          {filterOptions.courses.map(([id, label]) => (
-                            <SelectItem key={id} value={id}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FilterField>
-
-                    <FilterField label="Proctor">
-                      <Select value={proctorFilter} onValueChange={setProctorFilter}>
-                        <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All proctors" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All proctors</SelectItem>
-                          {filterOptions.proctors.map(([id, label]) => (
-                            <SelectItem key={id} value={id}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FilterField>
-
-                    <FilterField label="Center">
-                      <Select value={centerFilter} onValueChange={setCenterFilter}>
-                        <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All centers" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All centers</SelectItem>
-                          {filterOptions.centers.map(([id, label]) => (
-                            <SelectItem key={id} value={id}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FilterField>
-
-                    <FilterField label="Date">
-                      <Select value={dateFilter} onValueChange={setDateFilter}>
-                        <SelectTrigger className="h-10 rounded-none border-zinc-200 bg-transparent">
-                          <SelectValue placeholder="All dates" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All dates</SelectItem>
-                          {filterOptions.dates.map((d) => (
-                            <SelectItem key={d} value={d}>
-                              {formatDate(d)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FilterField>
-                  </FilterPopover>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="mb-4 space-y-2">
+            <ScheduleFilterToolbar
+              query={search}
+              onQueryChange={setSearch}
+              queryPlaceholder="Search course name, code, room, center, proctor, schedule"
+              activeCount={activeAssignmentFilterCount}
+              resultSummary={`Showing ${filteredAssignments.length} of ${filteredAssignmentsTotal} assignments`}
+              startDate={filters.state.startDate}
+              endDate={filters.state.endDate}
+              onStartDateChange={filters.setters.setStartDate}
+              onEndDateChange={filters.setters.setEndDate}
+              examDate={filters.state.examDate}
+              onExamDateChange={filters.setters.setExamDate}
+              onReset={clearFilters}
+              fields={adminAssignmentFields}
+            />
+            <ActiveFilterBadges badges={adminAssignmentBadges} onClearAll={clearFilters} />
+          </div>
 
           {/* Detail error */}
           {scheduleQuery.isError && !suppressDetailError && (
@@ -4216,12 +4997,49 @@ export function SchedulesPage() {
 
           {/* Assignments table */}
           {activeViewMode === "table" ? (
+          <>
+          {!schedule?.isFinal && (
+            <BulkDeleteToolbar
+              selectedCount={assignmentBulkDelete.selectedCount}
+              totalCount={filteredAssignments.length}
+              isDeleting={assignmentBulkDelete.isDeleting}
+              onClear={assignmentBulkDelete.clearSelection}
+              onDelete={() => assignmentBulkDelete.setIsConfirmOpen(true)}
+              className="mb-3"
+            />
+          )}
           <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div
+                ref={assignmentTableScrollRef}
+                onScroll={onAssignmentTableScroll}
+                className={cn("overflow-x-auto", assignmentTableContainerClassName)}
+              >
+                {isAssignmentsRefreshing && (
+                  <div className="sticky top-0 z-10 flex items-center justify-end gap-2 border-b border-zinc-200/60 bg-white/90 px-4 py-2 text-xs text-zinc-500 backdrop-blur sm:px-6">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Updating assignments...
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-zinc-50/60">
+                      {!schedule?.isFinal && (
+                        <TableHead className="w-10 pl-3">
+                          <RowSelectCheckbox
+                            checked={
+                              filteredAssignments.length > 0 &&
+                              filteredAssignments.every((a) => assignmentBulkDelete.selectedIds.has(a.id))
+                            }
+                            indeterminate={
+                              assignmentBulkDelete.selectedCount > 0 &&
+                              !filteredAssignments.every((a) => assignmentBulkDelete.selectedIds.has(a.id))
+                            }
+                            label="Select all assignments"
+                            onChange={(checked) => assignmentBulkDelete.toggleAll(filteredAssignments, checked)}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Course</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Code</TableHead>
                       <TableHead className="text-xs uppercase tracking-wide text-zinc-500">Semester</TableHead>
@@ -4237,22 +5055,15 @@ export function SchedulesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isDetailLoading ? (
+                    {isAssignmentsInitialLoading ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="p-0">
-                          <TableSkeletonRows
-                            columns={12}
-                            rows={
-                              filteredAssignments.length > 0
-                                ? filteredAssignments.length
-                                : 10
-                            }
-                          />
+                        <TableCell colSpan={schedule?.isFinal ? 12 : 13} className="p-0">
+                          <TableSkeletonRows columns={schedule?.isFinal ? 12 : 13} rows={10} />
                         </TableCell>
                       </TableRow>
                     ) : filteredAssignments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="p-0">
+                        <TableCell colSpan={schedule?.isFinal ? 12 : 13} className="p-0">
                           <EmptyState
                             icon={ClipboardList}
                             title={hasActiveFilters ? "No matching assignments" : "No assignments yet"}
@@ -4266,13 +5077,19 @@ export function SchedulesPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredAssignments.map((a) => {
+                      <>
+                      {isAssignmentTableVirtualized && assignmentTopPadding > 0 && (
+                        <TableRow aria-hidden="true">
+                          <TableCell colSpan={12} style={{ height: assignmentTopPadding, padding: 0 }} />
+                        </TableRow>
+                      )}
+                      {virtualAssignmentRows.map(({ item: a }) => {
                         const course = a.exam?.courseOffering?.course;
                         const sem = a.exam?.courseOffering?.semester;
                         const ts = a.timeSlot;
-                        const proctorAssignments = assignments.filter((assignment) =>
-                          a.assignmentIds.includes(assignment.id)
-                        );
+                        const proctorAssignments = a.assignmentIds
+                          .map((id) => assignmentById.get(id))
+                          .filter((assignment): assignment is ScheduleAssignment => Boolean(assignment));
                         const hasMultipleProctors = a.proctorIds.length > 1;
                         const studentsCount =
                           a.exam?.courseOffering?.registrations?.length ??
@@ -4301,6 +5118,15 @@ export function SchedulesPage() {
                               }
                             }}
                           >
+                            {!schedule?.isFinal && (
+                              <TableCell className="w-10 pl-3" onClick={(e) => e.stopPropagation()}>
+                                <RowSelectCheckbox
+                                  checked={assignmentBulkDelete.selectedIds.has(a.id)}
+                                  label={`Select ${courseTitle}`}
+                                  onChange={(checked) => assignmentBulkDelete.toggleSelected(a.id, checked)}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell>
                               <div className="font-semibold text-zinc-950">{courseTitle}</div>
                             </TableCell>
@@ -4354,6 +5180,7 @@ export function SchedulesPage() {
                             <TableCell>
                               <ExamStatusBadge
                                 status={getAssignmentDisplayStatus({
+                                  status: a.exam?.status,
                                   isFinal: schedule?.isFinal,
                                 })}
                               />
@@ -4397,18 +5224,12 @@ export function SchedulesPage() {
                                     </DropdownMenuItem>
                                   )}
 
-                                  <LockedActionTooltip isLocked={!!schedule?.isFinal}>
-                                    <DropdownMenuItem
-                                      className="rounded-none cursor-pointer"
-                                      disabled={!!schedule?.isFinal}
-                                      onClick={(e) => {
-                                        if (schedule?.isFinal) return e.preventDefault();
-                                        setEditAssignment(a);
-                                      }}
-                                    >
-                                      <Pencil className="size-4 mr-2" /> Edit assignment
-                                    </DropdownMenuItem>
-                                  </LockedActionTooltip>
+                                  <DropdownMenuItem
+                                    className="rounded-none cursor-pointer"
+                                    onClick={() => setEditAssignment(a)}
+                                  >
+                                    <Pencil className="size-4 mr-2" /> {schedule?.isFinal ? "Update assignment status" : "Edit assignment"}
+                                  </DropdownMenuItem>
 
                                   <DropdownMenuSeparator />
 
@@ -4429,13 +5250,62 @@ export function SchedulesPage() {
                             </TableCell>
                           </TableRow>
                         );
-                      })
+                      })}
+                      {isAssignmentTableVirtualized && assignmentBottomPadding > 0 && (
+                        <TableRow aria-hidden="true">
+                          <TableCell colSpan={schedule?.isFinal ? 12 : 13} style={{ height: assignmentBottomPadding, padding: 0 }} />
+                        </TableRow>
+                      )}
+                      </>
                     )}
                   </TableBody>
                 </Table>
               </div>
+              {assignmentsTotalPages > 1 && (
+                <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600 sm:px-6">
+                  <p>
+                    Page{" "}
+                    <span className="font-semibold text-zinc-900">{assignmentPage}</span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-zinc-900">{assignmentsTotalPages}</span>
+                    {" · "}
+                    <span className="font-semibold text-zinc-900">{filteredAssignmentsTotal}</span>{" "}
+                    total assignments
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={assignmentPage <= 1}
+                      onClick={() => setAssignmentPage(Math.max(1, assignmentPage - 1))}
+                      className="h-8 rounded-none px-2"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={assignmentPage >= assignmentsTotalPages}
+                      onClick={() => setAssignmentPage(Math.min(assignmentsTotalPages, assignmentPage + 1))}
+                      className="h-8 rounded-none px-2"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          <DeleteConfirmModal
+            open={assignmentBulkDelete.isConfirmOpen}
+            title="Delete Assignments?"
+            description={`This will permanently delete ${assignmentBulkDelete.selectedCount} selected assignment${assignmentBulkDelete.selectedCount === 1 ? "" : "s"} and all their grouped rows. This action cannot be undone.`}
+            isLoading={assignmentBulkDelete.isDeleting}
+            onCancel={() => assignmentBulkDelete.setIsConfirmOpen(false)}
+            onConfirm={assignmentBulkDelete.confirmDelete}
+          />
+          </>
           ) : isDetailLoading ? (
             <Card className="rounded-none border border-zinc-200/60 bg-white shadow-sm">
               <CardContent className="p-6 space-y-4">
@@ -4464,12 +5334,16 @@ export function SchedulesPage() {
       )}
 
       <GenerateScheduleDialog
-        open={generateOpen || openGenerateFromRoute}
+        open={generateOpen}
         onOpenChange={setGenerateDialogOpen}
         semesters={semesters}
         semestersLoading={semestersQuery.isLoading}
         onGenerated={handleGenerated}
         existingNames={schedules.map((s) => s.name)}
+        onValidateScheduleName={async (scheduleName) => {
+          const result = await fetchSchedules({ limit: 100, search: scheduleName });
+          return !result.data.some((schedule) => schedule.name.trim().toLowerCase() === scheduleName.trim().toLowerCase());
+        }}
       />
 
       <AssignmentDetailsSheet
@@ -4483,6 +5357,7 @@ export function SchedulesPage() {
 
       <EditAssignmentDialog
         assignment={editAssignment}
+        isPublished={!!schedule?.isFinal}
         onChanged={handleAssignmentChanged}
         onOpenChange={(next) => {
           if (!next) setEditAssignment(null);

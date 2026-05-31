@@ -25,6 +25,8 @@ type PaginatedRoomsPayload = {
   meta?: unknown;
 };
 
+const ROOMS_PAGE_SIZE = 200;
+
 const mapBackendRoom = (room: BackendRoom): Room => ({
   id: room.id,
   name: room.name,
@@ -37,8 +39,65 @@ const mapBackendRoom = (room: BackendRoom): Room => ({
 });
 
 export const fetchRooms = async (): Promise<Room[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms", { params: { limit: 5000 } });
-  return (response.data?.data?.data || []).map(mapBackendRoom);
+  const rooms: BackendRoom[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms", {
+      params: { page, pageSize: ROOMS_PAGE_SIZE },
+    });
+    const payload = response.data?.data;
+    rooms.push(...(payload?.data ?? []));
+    totalPages = readRoomMeta(payload?.meta, page, ROOMS_PAGE_SIZE).totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return rooms.map(mapBackendRoom);
+};
+
+export type RoomPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedRooms = { data: Room[]; meta: RoomPageMeta };
+
+const readRoomMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): RoomPageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const fetchRoomsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  centerId,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  centerId?: string;
+} = {}): Promise<PagedRooms> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms", {
+    params: {
+      page,
+      limit: pageSize,
+      search: search?.trim() ? search.trim() : undefined,
+      centerId: centerId || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapBackendRoom),
+    meta: readRoomMeta(payload?.meta, page, pageSize),
+  };
 };
 
 export const fetchRoom = async (id: string): Promise<Room> => {
@@ -68,7 +127,7 @@ export const deleteRoom = async (id: string): Promise<void> => {
 };
 
 export const fetchAvailableRooms = async (): Promise<Room[]> => {
-  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms/available", { params: { limit: 5000 } });
+  const response = await axiosClient.get<ApiEnvelope<PaginatedRoomsPayload>>("/rooms/available", { params: { pageSize: ROOMS_PAGE_SIZE } });
   return (response.data?.data?.data || []).map(mapBackendRoom);
 };
 

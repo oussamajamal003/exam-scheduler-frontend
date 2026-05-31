@@ -4,6 +4,8 @@ export type RolePortal = 'student' | 'proctor';
 
 export type RoleNotificationType =
   | 'SCHEDULE_PUBLISHED'
+  | 'SCHEDULE_REPUBLISHED'
+  | 'SCHEDULE_UNPUBLISHED'
   | 'SCHEDULE_UPDATED'
   | 'ROOM_TIME_CHANGE'
   | 'ANNOUNCEMENT'

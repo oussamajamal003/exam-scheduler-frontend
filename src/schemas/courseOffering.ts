@@ -63,8 +63,10 @@ export const courseOfferingSchema = z.object({
   instructor: z.string().nullable().optional(),
   expectedStudents: z.number().optional().default(0),
   capacity: z.number().nullable().optional(),
+  credits: z.number().nullable().optional(),
   day: z.string().nullable().optional(),
   time: z.string().nullable().optional(),
+  endTime: z.string().nullable().optional(),
   roomLabel: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   courseType: courseTypeSchema.optional().default("COURSE"),
@@ -75,7 +77,21 @@ export const courseOfferingSchema = z.object({
   registrationsCount: z.number().optional().default(0),
   examsCount: z.number().optional().default(0),
   enrollments: z.array(z.unknown()).optional(),
-  exams: z.array(z.unknown()).optional(),
+  exams: z.array(
+    z.object({
+      id: z.string(),
+      assignments: z.array(
+        z.object({
+          id: z.string().optional(),
+          scheduleName: z.string().optional(),
+          timeSlotLabel: z.string().optional(),
+          timeSlotDate: z.string().nullable().optional(),
+          timeSlotStart: z.string().nullable().optional(),
+          timeSlotEnd: z.string().nullable().optional(),
+        })
+      ).optional().default([]),
+    })
+  ).optional(),
 });
 
 export type CourseOffering = z.infer<typeof courseOfferingSchema>;
@@ -87,8 +103,10 @@ export type CreateCourseOfferingDto = {
   instructor?: string;
   expectedStudents?: number;
   capacity?: number;
+  credits?: number;
   day?: string;
   time?: string;
+  endTime?: string;
   roomLabel?: string;
   notes?: string;
   courseType: CourseType;
@@ -114,6 +132,9 @@ export type OfferingExamAssignment = {
   proctorName?: string;
   timeSlotLabel?: string;
   scheduleName?: string;
+  timeSlotDate?: string | null;
+  timeSlotStart?: string | null;
+  timeSlotEnd?: string | null;
 };
 
 export type OfferingExam = {

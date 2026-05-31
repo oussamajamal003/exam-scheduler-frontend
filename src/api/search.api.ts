@@ -1,12 +1,15 @@
 import { axiosClient } from "./axiosclient";
 
 export type SearchResultType =
+  | "admin-dashboard"
   | "semester"
   | "course"
   | "course-offering"
   | "exam"
   | "student"
+  | "student-dashboard"
   | "proctor"
+  | "proctor-dashboard"
   | "admin"
   | "program"
   | "department"

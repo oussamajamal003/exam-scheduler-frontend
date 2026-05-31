@@ -1,13 +1,40 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchRooms, fetchRoom, fetchAvailableRooms, createRoom, updateRoom, deleteRoom } from "../../api/room.api";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchRooms, fetchRoomsPage, fetchRoom, fetchAvailableRooms, createRoom, updateRoom, deleteRoom } from "../../api/room.api";
 import { CreateRoomDto, UpdateRoomDto } from "../../schemas/room";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
 export const useRooms = () => {
   return useQuery({
     queryKey: ["rooms"],
     queryFn: fetchRooms,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useRoomsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+  centerId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  centerId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["rooms", "page", { page, pageSize, search, centerId: centerId ?? null }],
+    queryFn: () => fetchRoomsPage({ page, pageSize, search, centerId }),
+    enabled,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -32,9 +59,10 @@ export const useCreateRoom = () => {
 
   return useMutation({
     mutationFn: (data: CreateRoomDto) => createRoom(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeRooms: true,
+      });
       addToast({
         type: "success",
         title: "Room Added",
@@ -57,10 +85,11 @@ export const useUpdateRoom = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateRoomDto }) => updateRoom({ id, data }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeRooms: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["rooms", data.id] });
-      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
       addToast({
         type: "success",
         title: "Room Updated",
@@ -83,10 +112,11 @@ export const useDeleteRoom = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteRoom(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    onSuccess: async (_data, id) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeRooms: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["rooms", id] });
-      queryClient.invalidateQueries({ queryKey: ["rooms", "available"] });
       addToast({
         type: "success",
         title: "Room Deleted",

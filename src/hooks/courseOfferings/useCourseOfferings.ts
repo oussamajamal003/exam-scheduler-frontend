@@ -4,7 +4,9 @@ import {
   deleteCourseOffering,
   fetchCourseOffering,
   fetchCourseOfferings,
+  fetchCourseOfferingsPage,
   fetchCoursesForOfferings,
+  fetchCoursesForOfferingsPage,
   fetchSelectedCourseForOffering,
   updateCourseOffering,
 } from "../../api/courseOffering.api";
@@ -14,12 +16,51 @@ import {
 } from "../../schemas/courseOffering";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
-export const useCourseOfferings = (search = "") => {
+export const useCourseOfferings = ({
+  search = "",
+  semesterId,
+  departmentId,
+  enabled = true,
+}: {
+  search?: string;
+  semesterId?: string;
+  departmentId?: string;
+  enabled?: boolean;
+} = {}) => {
   return useQuery({
-    queryKey: ["course-offerings", search],
-    queryFn: () => fetchCourseOfferings(search),
+    queryKey: ["course-offerings", semesterId ?? null, departmentId ?? null, search],
+    queryFn: () => fetchCourseOfferings({ search, semesterId, departmentId }),
+    enabled,
     placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useCourseOfferingsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+  semesterId,
+  departmentId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  semesterId?: string;
+  departmentId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["course-offerings", "page", { page, pageSize, search, semesterId: semesterId ?? null, departmentId: departmentId ?? null }],
+    queryFn: () => fetchCourseOfferingsPage({ page, pageSize, search, semesterId, departmentId }),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -31,10 +72,26 @@ export const useCourseOffering = (id?: string) => {
   });
 };
 
-export const useCoursesForOfferings = () => {
+export const useCoursesForOfferings = ({ enabled = true }: { enabled?: boolean } = {}) => {
   return useQuery({
     queryKey: ["courses", "for-offerings"],
     queryFn: fetchCoursesForOfferings,
+    enabled,
+  });
+};
+
+export const useCoursesForOfferingsPage = ({
+  search = "",
+  enabled = true,
+}: {
+  search?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["courses", "for-offerings", "page", { search }],
+    queryFn: () => fetchCoursesForOfferingsPage({ search, pageSize: 30 }),
+    enabled,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -52,8 +109,11 @@ export const useCreateCourseOffering = () => {
 
   return useMutation({
     mutationFn: (data: CreateCourseOfferingDto) => createCourseOffering(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: "success",
         title: "Offering Added",
@@ -77,8 +137,11 @@ export const useUpdateCourseOffering = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCourseOfferingDto }) =>
       updateCourseOffering({ id, data }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["course-offering", data.id] });
       addToast({
         type: "success",
@@ -102,8 +165,11 @@ export const useDeleteCourseOffering = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteCourseOffering(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["course-offerings"] });
+    onSuccess: async () => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: "success",
         title: "Offering Deleted",

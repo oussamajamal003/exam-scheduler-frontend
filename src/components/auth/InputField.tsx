@@ -27,10 +27,10 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           ref={ref} 
           {...props} 
           className={cn(
-            "h-11 border-white/28 bg-white/14 text-white shadow-none transition-all placeholder:text-white/45 hover:bg-white/18 focus-visible:bg-white/20 focus-visible:ring-1",
+            "h-11 border-white/28! bg-white/14! text-white! shadow-none transition-all placeholder:text-white/45! hover:bg-white/18! focus-visible:bg-white/20! focus-visible:ring-1",
             error 
-              ? "border-rose-300/45 bg-rose-500/10 hover:bg-rose-500/12 focus-visible:border-rose-200 focus-visible:ring-rose-200/30" 
-              : "focus-visible:border-white/45 focus-visible:ring-white/20",
+              ? "border-rose-300/45! bg-rose-500/10! hover:bg-rose-500/12! focus-visible:border-rose-200! focus-visible:ring-rose-200/30" 
+              : "focus-visible:border-white/45! focus-visible:ring-white/20",
             className
           )}
         />

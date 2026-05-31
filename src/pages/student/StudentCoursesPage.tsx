@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BookOpen, GraduationCap, List, PanelsTopLeft, ShieldCheck, Table2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
+import { useHighlightRow } from '@/hooks/common/useHighlightRow';
 import type { StudentCourseDashboardItem } from '@/api/roleDashboard.api';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +39,10 @@ const CourseCard = ({ courseOffering }: { courseOffering: StudentCourseDashboard
   const course = courseOffering.course;
 
   return (
-    <div className="rounded-none border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40">
+    <div
+      data-course-offering-id={courseOffering.id}
+      className="rounded-none border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-zinc-950 dark:text-zinc-50">{course?.code ?? 'Course'}</p>
@@ -75,9 +80,20 @@ const CourseCard = ({ courseOffering }: { courseOffering: StudentCourseDashboard
 };
 
 export const StudentCoursesPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const dashboardQuery = useStudentDashboard();
   const courses = dashboardQuery.data?.courses ?? [];
   const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
+
+  const resolvedHighlightId = React.useMemo(() => {
+    const courseId = searchParams.get('courseId') ?? searchParams.get('offeringId');
+    if (!courseId) return null;
+    // Direct match by offering id
+    if (courses.some((co) => co.id === courseId)) return courseId;
+    // Match by base course id (what CommandSearch sends)
+    return courses.find((co) => co.course?.id === courseId)?.id ?? null;
+  }, [courses, searchParams]);
+  useHighlightRow('data-course-offering-id', resolvedHighlightId, courses.length);
 
   if (dashboardQuery.isLoading) return <CourseSkeleton />;
 
@@ -187,7 +203,7 @@ export const StudentCoursesPage: React.FC = () => {
                 {courses.map((courseOffering) => {
                   const examStatus = getExamStatus(courseOffering);
                   return (
-                    <TableRow key={courseOffering.registrationId} className="border-zinc-200/70 dark:border-zinc-800/70">
+                    <TableRow key={courseOffering.registrationId} data-course-offering-id={courseOffering.id} className="border-zinc-200/70 dark:border-zinc-800/70">
                       <TableCell className="font-semibold text-zinc-950 dark:text-zinc-50">{courseOffering.course?.code ?? 'Course'}</TableCell>
                       <TableCell className="max-w-xs whitespace-normal text-zinc-600 dark:text-zinc-300">{courseOffering.course?.title ?? 'Untitled course'}</TableCell>
                       <TableCell>{courseOffering.instructor ?? 'Not assigned'}</TableCell>

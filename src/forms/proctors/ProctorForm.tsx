@@ -19,8 +19,8 @@ import {
 import { AlertCircle, CheckCircle2, ChevronsUpDown, Clock3, Search, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useDepartments } from "../../hooks/departments/useDepartments";
-import { useCenters } from "../../hooks/centers/useCenters";
 import { useTimeSlots } from "../../hooks/timeSlots/useTimeSlots";
+import { useProctors } from "../../hooks/proctors/useProctors";
 
 const formatTimeSlotLabel = (slot: TimeSlot) => {
   const date = slot.date || slot.startTime;
@@ -54,6 +54,7 @@ interface ProctorFormProps {
   isLoading?: boolean;
   submitErrorMessage?: string | null;
   submitValidationMessages?: Record<string, string[]>;
+  onClearSubmitError?: () => void;
 }
 
 export function ProctorForm({ 
@@ -61,27 +62,25 @@ export function ProctorForm({
   onSubmit, 
   isLoading,
   submitErrorMessage,
-  submitValidationMessages = {}
+  submitValidationMessages = {},
+  onClearSubmitError,
 }: ProctorFormProps) {
   const [timeSlotSearch, setTimeSlotSearch] = useState("");
+  const { data: existingProctors = [], isLoading: isLoadingExisting } = useProctors();
   const form = useForm({
     resolver: zodResolver(proctorSchema),
     defaultValues: initialData || {
       name: "",
       email: "",
       department: "",
-      centerId: "",
-      center: "",
       timeSlotIds: [],
     },
     mode: "onChange",
   });
 
   const departmentsQuery = useDepartments("");
-  const centersQuery = useCenters("");
   const timeSlotsQuery = useTimeSlots();
   const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
-  const centers = useMemo(() => centersQuery.data ?? [], [centersQuery.data]);
   const timeSlots = useMemo(() => timeSlotsQuery.data ?? [], [timeSlotsQuery.data]);
 
   useEffect(() => {
@@ -94,26 +93,20 @@ export function ProctorForm({
       name: "",
       email: "",
       department: "",
-      centerId: "",
-      center: "",
       timeSlotIds: [],
     });
   }, [form, initialData]);
 
   const watchedName = useWatch({ control: form.control, name: "name" });
   const watchedEmail = useWatch({ control: form.control, name: "email" });
+  const currentProctorId = initialData?.id ?? "";
   const selectedDepartment = useWatch({ control: form.control, name: "department" });
   const selectedDepartmentId = useMemo(
     () => departments.find((department) => department.name === selectedDepartment)?.id,
     [departments, selectedDepartment]
   );
-  const selectedCenterId = useWatch({ control: form.control, name: "centerId" });
   const watchedTimeSlotIds = useWatch({ control: form.control, name: "timeSlotIds" });
   const selectedTimeSlotIds = useMemo(() => watchedTimeSlotIds ?? [], [watchedTimeSlotIds]);
-  const selectedCenter = useMemo(
-    () => centers.find((center) => center.id === selectedCenterId) ?? null,
-    [centers, selectedCenterId]
-  );
   const selectedTimeSlots = useMemo(() => {
     const selectedIds = new Set(selectedTimeSlotIds);
     return timeSlots.filter((slot) => selectedIds.has(slot.id));
@@ -123,11 +116,31 @@ export function ProctorForm({
     if (!term) return timeSlots;
     return timeSlots.filter((slot) => formatTimeSlotLabel(slot).toLowerCase().includes(term));
   }, [timeSlotSearch, timeSlots]);
+  const normalizedEmail = (watchedEmail ?? "").trim().toLowerCase();
+  const duplicateEmailProctor = useMemo(
+    () => existingProctors.find((proctor) => {
+      if (!normalizedEmail || proctor.id === currentProctorId) return false;
+      const candidateEmail = proctor.user?.email ?? proctor.email ?? "";
+      return candidateEmail.trim().toLowerCase() === normalizedEmail;
+    }) ?? null,
+    [currentProctorId, existingProctors, normalizedEmail]
+  );
+  const duplicateEmailMessage = duplicateEmailProctor
+    ? "Proctor email already exists."
+    : null;
+  const hasSubmitErrors = Boolean(submitErrorMessage) || Object.keys(submitValidationMessages ?? {}).length > 0;
+  const clearSubmitErrors = () => {
+    if (!isLoading && hasSubmitErrors) {
+      onClearSubmitError?.();
+    }
+  };
 
   const toggleTimeSlot = (timeSlotId: string) => {
     const nextIds = selectedTimeSlotIds.includes(timeSlotId)
       ? selectedTimeSlotIds.filter((id) => id !== timeSlotId)
       : [...selectedTimeSlotIds, timeSlotId];
+
+    clearSubmitErrors();
 
     form.setValue("timeSlotIds", nextIds, {
       shouldDirty: true,
@@ -156,6 +169,13 @@ export function ProctorForm({
 
   const hasFieldErrors = Object.keys(form.formState.errors).length > 0;
 
+  const isSubmitBlocked =
+    isLoading ||
+    isLoadingExisting ||
+    hasFieldErrors ||
+    Boolean(duplicateEmailMessage) ||
+    Boolean(submitValidationMessages?.email?.length);
+
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
       {submitErrorMessage && (
@@ -172,7 +192,7 @@ export function ProctorForm({
         <div className="relative">
           <Input
             id="name"
-            {...form.register("name")}
+            {...form.register("name", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
               (form.formState.errors.name || submitValidationMessages?.name)
@@ -207,28 +227,28 @@ export function ProctorForm({
           <Input
             id="email"
             type="email"
-            {...form.register("email")}
+            {...form.register("email", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              (form.formState.errors.email || submitValidationMessages?.email)
+              (form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             placeholder="e.g., m.ali@university.edu"
             disabled={isLoading}
           />
-          {(form.formState.errors.email || submitValidationMessages?.email) && (
+          {(form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !submitValidationMessages?.email && !!watchedEmail && (
+          {!form.formState.errors.email && !submitValidationMessages?.email && !duplicateEmailMessage && !!watchedEmail && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {(form.formState.errors.email || submitValidationMessages?.email) && (
+        {(form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {(form.formState.errors.email?.message ?? submitValidationMessages?.email?.[0]) as string}
+              {(form.formState.errors.email?.message ?? submitValidationMessages?.email?.[0] ?? duplicateEmailMessage) as string}
             </p>
           </div>
         )}
@@ -241,6 +261,7 @@ export function ProctorForm({
         <Select
           value={selectedDepartmentId || undefined}
           onValueChange={(value) => {
+            clearSubmitErrors();
             const department = departments.find((item) => item.id === value);
             form.setValue("department", department?.name ?? "", {
               shouldDirty: true,
@@ -287,67 +308,6 @@ export function ProctorForm({
         )}
       </div>
 
-      <div className="space-y-2.5">
-        <Label htmlFor="center" className="text-sm font-semibold text-zinc-950">
-          Center
-        </Label>
-        <Select
-          value={selectedCenterId || undefined}
-          onValueChange={(value) => {
-            const center = centers.find((item) => item.id === value);
-            form.setValue("centerId", value, {
-              shouldDirty: true,
-              shouldTouch: true,
-              shouldValidate: true,
-            });
-            form.setValue("center", center?.name ?? "", {
-              shouldDirty: true,
-            });
-          }}
-          disabled={isLoading || centersQuery.isLoading || centers.length === 0}
-        >
-          <SelectTrigger
-            id="center"
-            className={cn(
-              "h-10 w-full rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              (form.formState.errors.centerId || submitValidationMessages?.centerId)
-                ? "border-destructive/60 bg-destructive/5"
-                : "hover:border-zinc-300 focus-visible:border-zinc-400"
-            )}
-          >
-            <SelectValue
-              placeholder={
-                centersQuery.isLoading
-                  ? "Loading centers..."
-                  : centers.length === 0
-                    ? "No centers available"
-                    : "Select a center"
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {centers.map((center) => (
-              <SelectItem key={center.id} value={center.id}>
-                {center.location ? `${center.name} (${center.location})` : center.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedCenter && (
-          <p className="text-xs text-zinc-500">
-            Selected center: {selectedCenter.name}
-            {selectedCenter.location ? `, ${selectedCenter.location}` : ""}
-          </p>
-        )}
-        {(form.formState.errors.centerId || submitValidationMessages?.centerId) && (
-          <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
-            <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
-            <p className="text-xs font-medium text-destructive leading-snug">
-              {(form.formState.errors.centerId?.message ?? submitValidationMessages?.centerId?.[0]) as string}
-            </p>
-          </div>
-        )}
-      </div>
 
       <div className="space-y-2.5">
         <Label className="text-sm font-semibold text-zinc-950">Available Time Slots</Label>
@@ -375,7 +335,10 @@ export function ProctorForm({
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
                 <Input
                   value={timeSlotSearch}
-                  onChange={(event) => setTimeSlotSearch(event.target.value)}
+                  onChange={(event) => {
+                    clearSubmitErrors();
+                    setTimeSlotSearch(event.target.value);
+                  }}
                   placeholder="Search by date or time"
                   className="h-9 rounded-none border-zinc-200 pl-9 text-sm"
                 />
@@ -434,7 +397,7 @@ export function ProctorForm({
 
       <Button
         type="submit"
-        disabled={isLoading || hasFieldErrors}
+        disabled={isSubmitBlocked}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

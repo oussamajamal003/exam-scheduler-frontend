@@ -51,7 +51,7 @@ export const Login: React.FC = () => {
 
         <button
           type="submit"
-          className="w-full bg-slate-900 text-white py-2 px-4 rounded-md font-medium hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
+          className="auth-login-button w-full rounded-md bg-zinc-950 px-4 py-2 font-medium text-white transition-colors hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2 dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-900 dark:focus:ring-offset-zinc-950"
         >
           Sign In
         </button>

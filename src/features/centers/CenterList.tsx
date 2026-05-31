@@ -1,4 +1,5 @@
-﻿import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+﻿import { useEffect, useMemo } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Center } from "../../schemas/center";
@@ -6,16 +7,29 @@ import { Building2, Edit2, Eye, MapPin, Trash2, Users } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface CenterListProps {
   centers: Center[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  pagination?: {
+    page: number;
+    pageCount: number;
+    pageSize: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onEditCenter: (center: Center) => void;
   onDeleteCenter: (center: Center) => void;
   onViewCenter: (center: Center) => void;
   onAddCenter?: () => void;
+  highlightedCenterId?: string | null;
 }
 
 export function CenterList({
@@ -23,12 +37,28 @@ export function CenterList({
   isLoading,
   isDeleting,
   search,
+  pagination,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onEditCenter,
   onDeleteCenter,
   onViewCenter,
   onAddCenter,
+  highlightedCenterId,
 }: CenterListProps) {
   const rows = Array.isArray(centers) ? centers : [];
+  const selectedCount = rows.filter((center) => selectedIds?.has(center.id)).length;
+  const isAllSelected = rows.length > 0 && selectedCount === rows.length;
+  const totalCount = pagination?.totalCount ?? rows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(rows, { estimateRowHeight: 76 });
+  const targetCenterIndex = useMemo(
+    () => rows.findIndex((c) => c.id === highlightedCenterId),
+    [rows, highlightedCenterId]
+  );
+  useEffect(() => {
+    if (targetCenterIndex >= 0) scrollToIndex(targetCenterIndex);
+  }, [targetCenterIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -47,15 +77,20 @@ export function CenterList({
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Centers</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{rows.length}</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{totalCount}</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all centers" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || rows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Location</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Total Rooms</TableHead>
@@ -66,13 +101,13 @@ export function CenterList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={rows.length > 0 ? rows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 6 : 5} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 6 : 5} rows={rows.length > 0 ? rows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 6 : 5} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Building2}
@@ -90,15 +125,27 @@ export function CenterList({
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((center, idx) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 6 : 5} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: center, index: idx }) => (
                   <TableRow
                     key={center.id}
+                    data-center-id={center.id}
                     onClick={() => onViewCenter(center)}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60 cursor-pointer",
                       idx === rows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${center.name}`} checked={selectedIds?.has(center.id) ?? false} disabled={isDeleting} onChange={(checked) => onToggleSelected(center.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950 text-sm">{center?.name ?? "Untitled"}</div>
                       {center?.code && (
@@ -158,11 +205,32 @@ export function CenterList({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 6 : 5} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {pagination && pagination.pageCount > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 px-4 py-3 text-sm sm:px-6">
+            <span className="text-xs font-medium text-zinc-500">
+              Page {pagination.page} of {pagination.pageCount} • {pagination.totalCount} centers
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-8 rounded-none" disabled={isLoading || pagination.page <= 1} onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}>
+                Previous
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="h-8 rounded-none" disabled={isLoading || pagination.page >= pagination.pageCount} onClick={() => pagination.onPageChange(Math.min(pagination.pageCount, pagination.page + 1))}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

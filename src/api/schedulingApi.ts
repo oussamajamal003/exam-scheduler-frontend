@@ -334,12 +334,18 @@ export type PublishScheduleDto = {
   examPeriod: string;
 };
 
+export type PublishScheduleResult = {
+  schedule: Schedule;
+  eventType: 'SCHEDULE_PUBLISHED' | 'SCHEDULE_REPUBLISHED' | null;
+  scheduleVersion: number | null;
+};
+
 // PATCH /api/scheduling/:id/publish
 export const publishSchedule = async (
   id: string,
   payload: PublishScheduleDto
-): Promise<Schedule> => {
-  const response = await axiosClient.patch<ApiEnvelope<Schedule>>(
+): Promise<PublishScheduleResult> => {
+  const response = await axiosClient.patch<ApiEnvelope<PublishScheduleResult>>(
     `/scheduling/${id}/publish`,
     payload
   );

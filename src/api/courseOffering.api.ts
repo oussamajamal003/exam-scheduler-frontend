@@ -108,8 +108,10 @@ type BackendOfferingList = {
   instructor?: string | null;
   expectedStudents?: number;
   capacity?: number | null;
+  credits?: number | null;
   day?: string | null;
   time?: string | null;
+  endTime?: string | null;
   roomLabel?: string | null;
   notes?: string | null;
   courseType?: "COURSE" | "PROJECT";
@@ -194,8 +196,12 @@ const mapBackendOffering = (
   fallbackCourse?: OfferingCourse | null
 ): CourseOffering => {
   const course = mergeOfferingCourse(offering.course, fallbackCourse);
-  const enrollments = offering.enrollments ?? offering.registrations ?? [];
-  const exams = offering.exams ?? [];
+  const enrollments = Array.isArray(offering.enrollments)
+    ? offering.enrollments
+    : Array.isArray(offering.registrations)
+      ? offering.registrations
+      : undefined;
+  const exams = Array.isArray(offering.exams) ? offering.exams : undefined;
 
   return {
     id: offering.id,
@@ -215,8 +221,10 @@ const mapBackendOffering = (
     instructor: offering.instructor ?? null,
     expectedStudents: offering.expectedStudents ?? 0,
     capacity: offering.capacity ?? null,
+    credits: offering.credits ?? null,
     day: offering.day ?? null,
     time: offering.time ?? null,
+    endTime: offering.endTime ?? null,
     roomLabel: offering.roomLabel ?? null,
     notes: offering.notes ?? null,
     courseType: offering.courseType ?? "COURSE",
@@ -224,10 +232,10 @@ const mapBackendOffering = (
     status: offering.status ?? "ACTIVE",
     createdAt: offering.createdAt,
     updatedAt: offering.updatedAt,
-    enrollments,
-    exams,
-    registrationsCount: enrollments.length || offering._count?.registrations || 0,
-    examsCount: exams.length || offering._count?.exams || 0,
+    ...(enrollments ? { enrollments } : {}),
+    ...(exams ? { exams: exams.map(mapBackendExam) } : {}),
+    registrationsCount: enrollments?.length ?? offering._count?.registrations ?? 0,
+    examsCount: exams?.length ?? offering._count?.exams ?? 0,
   };
 };
 
@@ -255,6 +263,9 @@ const mapBackendExam = (exam: BackendExam): OfferingExam => ({
     proctorName: assignment.proctor?.user?.name ?? undefined,
     timeSlotLabel: formatTimeSlotLabel(assignment.timeSlot),
     scheduleName: assignment.schedule?.name ?? undefined,
+    timeSlotDate: assignment.timeSlot?.date ?? null,
+    timeSlotStart: assignment.timeSlot?.startTime ?? null,
+    timeSlotEnd: assignment.timeSlot?.endTime ?? null,
   })),
 });
 
@@ -290,17 +301,80 @@ const fetchCourseForOffering = async (courseId: string): Promise<OfferingCourse 
 
 // ===== Public API =====
 
-export const fetchCourseOfferings = async (search = ""): Promise<CourseOffering[]> => {
+export const fetchCourseOfferings = async ({
+  search = "",
+  semesterId,
+  departmentId,
+}: {
+  search?: string;
+  semesterId?: string;
+  departmentId?: string;
+} = {}): Promise<CourseOffering[]> => {
   const offeringsResponse = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendOfferingList>>>(
     "/course-offerings",
     {
-      params: { limit: 5000, search: search || undefined },
+      params: {
+        limit: 5000,
+        search: search || undefined,
+        semesterId: semesterId || undefined,
+        departmentId: departmentId || undefined,
+      },
     }
   );
 
   return (offeringsResponse.data?.data?.data ?? []).map((offering) =>
     mapBackendOffering(offering)
   );
+};
+
+export type CoursePageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedOfferings = { data: CourseOffering[]; meta: CoursePageMeta };
+
+const readOfferingMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): CoursePageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const fetchCourseOfferingsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  semesterId,
+  departmentId,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  semesterId?: string;
+  departmentId?: string;
+} = {}): Promise<PagedOfferings> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendOfferingList>>>(
+    "/course-offerings",
+    {
+      params: {
+        page,
+        limit: pageSize,
+        search: search?.trim() ? search.trim() : undefined,
+        semesterId: semesterId || undefined,
+        departmentId: departmentId || undefined,
+      },
+    }
+  );
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map((offering) => mapBackendOffering(offering)),
+    meta: readOfferingMeta(payload?.meta, page, pageSize),
+  };
 };
 
 export const fetchCourseOffering = async (id: string): Promise<CourseOfferingDetail> => {
@@ -346,6 +420,31 @@ export const deleteCourseOffering = async (id: string): Promise<void> => {
 
 export const fetchCoursesForOfferings = async (): Promise<OfferingCourse[]> => {
   return Array.from((await fetchCoursesIndex()).values());
+};
+
+export const fetchCoursesForOfferingsPage = async ({
+  page = 1,
+  pageSize = 30,
+  search = "",
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+} = {}): Promise<OfferingCourse[]> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendCourse>>>(
+    "/courses",
+    {
+      params: {
+        page,
+        limit: pageSize,
+        search: search.trim() || undefined,
+      },
+    }
+  );
+
+  return (response.data?.data?.data ?? [])
+    .map((course) => mapBackendCourse(course))
+    .filter((course): course is OfferingCourse => Boolean(course));
 };
 
 export const fetchSelectedCourseForOffering = async (

@@ -1,4 +1,7 @@
-﻿import { useDeferredValue, useState, useMemo } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -6,7 +9,9 @@ import { Badge } from "../../components/ui/badge";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
+import { useToast } from "../../components/ui/toast";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { ClipboardList, Users, Plus, RefreshCw, TrendingUp, Search, Calendar, Clock } from "lucide-react";
 import { EmptyState } from "../../components/shared/EmptyState";
@@ -16,7 +21,7 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import { ProctorList } from "../../features/proctors/ProctorList";
 import { ProctorForm } from "../../forms/proctors/ProctorForm";
 import { Proctor } from "../../schemas/proctor";
-import { useProctors, useCreateProctor, useUpdateProctor, useDeleteProctor, useProctorWorkload } from "../../hooks/proctors/useProctors";
+import { useProctorsPage, useCreateProctor, useUpdateProctor, useDeleteProctor, useProctorWorkload } from "../../hooks/proctors/useProctors";
 
 function formatAvailabilityLabel(slot: NonNullable<Proctor["availableTimeSlots"]>[number]) {
   const date = slot.date || slot.startTime;
@@ -84,7 +89,7 @@ function WorkloadContent({ proctor, onClose }: { proctor: Proctor | null; onClos
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">Proctor</p>
           <p className="mt-0.5 truncate text-sm font-bold text-zinc-950">{proctor?.name}</p>
-          <p className="text-[11px] text-zinc-500">{proctor?.center}</p>
+          <p className="text-[11px] text-zinc-500">{proctor?.department}</p>
         </div>
         <div className="flex items-center gap-1.5 rounded-none bg-indigo-50 px-3 py-2 shrink-0">
           <ClipboardList className="size-4 text-indigo-600" />
@@ -179,17 +184,91 @@ function WorkloadContent({ proctor, onClose }: { proctor: Proctor | null; onClos
 }
 
 export function ProctorsPage() {
-  const { data: proctors = [], isLoading, isFetching, isError, error, refetch } = useProctors();
-  const [search, setSearch] = useState("");
+  const getProctorSubmitValidationMessages = (error: unknown) => {
+    const baseErrors = getApiValidationErrors(error);
+    const message = getApiErrorMessage(error, "").toLowerCase();
+    if (!baseErrors.email && message.includes("email already exists")) {
+      return { ...baseErrors, email: ["Proctor email already exists."] };
+    }
+    return baseErrors;
+  };
+
+  const PAGE_SIZE = 50;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { addToast } = useToast();
+  const { filters, setFilter } = usePersistentFilters('proctors', { search: '' });
+  const search = filters.search;
+  const [silentSearch, setSilentSearch] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hlId = params.get('proctorId') ?? params.get('id');
+    const hl = params.get('_hl');
+    return (hlId && hl) ? hl : '';
+  });
+  const setSearch = (value: string) => {
+    if (value && silentSearch) setSilentSearch('');
+    setFilter('search', value);
+  };
   const deferredSearch = useDeferredValue(search.trim());
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+  const proctorsQuery = useProctorsPage({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: deferredSearch || silentSearch,
+  });
+  const proctors = useMemo(() => proctorsQuery.data?.data ?? [], [proctorsQuery.data]);
+  const proctorsMeta = proctorsQuery.data?.meta;
+  const totalProctors = proctorsMeta?.total ?? proctors.length;
+  const totalPages = proctorsMeta?.totalPages ?? 1;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProctor, setEditingProctor] = useState<Proctor | null>(null);
   const [workloadProctor, setWorkloadProctor] = useState<Proctor | null>(null);
   const [deletingProctor, setDeletingProctor] = useState<Proctor | null>(null);
+  const [selectedProctorIds, setSelectedProctorIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   
   const createMutation = useCreateProctor();
   const updateMutation = useUpdateProctor();
   const deleteMutation = useDeleteProctor();
+  const highlightedProctorId = searchParams.get("proctorId") ?? searchParams.get("id");
+  const _hlProctorParam = searchParams.get('_hl');
+  useEffect(() => {
+    if (highlightedProctorId && _hlProctorParam) setSilentSearch(_hlProctorParam);
+    else if (!highlightedProctorId) setSilentSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedProctorId, _hlProctorParam]);
+  const submitError = createMutation.isError
+    ? createMutation.error
+    : updateMutation.isError
+      ? updateMutation.error
+      : undefined;
+  const submitValidationMessages = useMemo(
+    () => (submitError ? getProctorSubmitValidationMessages(submitError) : undefined),
+    [submitError]
+  );
+  const submitErrorMessage = useMemo(() => {
+    if (!submitError) return null;
+    if (submitValidationMessages?.email?.length) {
+      return submitValidationMessages.email[0];
+    }
+    return getApiErrorMessage(submitError, createMutation.isError ? "Failed to create proctor." : "Failed to update proctor.");
+  }, [createMutation.isError, submitError, submitValidationMessages]);
+  const clearSubmitErrors = () => {
+    createMutation.reset();
+    updateMutation.reset();
+  };
+
+  useEffect(() => {
+    if (currentPage !== 1) setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearch]);
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
@@ -197,6 +276,16 @@ export function ProctorsPage() {
     setEditingProctor(null);
     setIsFormOpen(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openCreateModal();
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openEditModal = (proctor: Proctor) => {
     setEditingProctor(proctor);
@@ -237,28 +326,72 @@ export function ProctorsPage() {
     }
   };
 
-  const handleRefresh = () => {
-    refetch();
+  const toggleSelectedProctor = (id: string, checked: boolean) => {
+    setSelectedProctorIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   };
 
-  const filteredProctors = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
-    if (!term) return proctors;
-    return proctors.filter((s) =>
-      [s.name, s.email, s.department, s.center]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(term))
-    );
-  }, [deferredSearch, proctors]);
+  const clearSelectedProctors = () => {
+    setSelectedProctorIds(new Set());
+  };
+
+  const confirmBulkDelete = async () => {
+    const ids = Array.from(selectedProctorIds);
+    if (ids.length === 0) return;
+
+    setIsBulkDeleting(true);
+    const results = await Promise.allSettled(ids.map((id) => deleteMutation.mutateAsync(id)));
+    const deletedIds = ids.filter((_, index) => results[index].status === "fulfilled");
+    const failedCount = results.length - deletedIds.length;
+
+    setSelectedProctorIds((current) => {
+      const next = new Set(current);
+      deletedIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    setIsBulkDeleting(false);
+
+    if (failedCount === 0) {
+      setIsBulkDeleteOpen(false);
+      addToast({ type: "success", title: "Proctors deleted", description: `${deletedIds.length} selected proctor${deletedIds.length === 1 ? "" : "s"} removed.` });
+      return;
+    }
+
+    addToast({ type: "error", title: "Bulk delete incomplete", description: `${deletedIds.length} deleted, ${failedCount} failed. Review the remaining selected rows and try again.` });
+  };
+
+  const handleRefresh = () => {
+    proctorsQuery.refetch();
+  };
+
+  const filteredProctors = proctors;
+
+  const toggleAllVisibleProctors = (checked: boolean) => {
+    setSelectedProctorIds((current) => {
+      const next = new Set(current);
+      filteredProctors.forEach((proctor) => {
+        if (!proctor.id) return;
+        if (checked) next.add(proctor.id);
+        else next.delete(proctor.id);
+      });
+      return next;
+    });
+  };
 
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
-  const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const isTableLoading = isSearching || proctorsQuery.isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const showPageLoading = useDelayedLoading(proctorsQuery.isLoading, 1000);
   const showTableLoading = useDelayedLoading(isTableLoading);
   const totalAvailabilityLinks = useMemo(
     () => proctors.reduce((sum, proctor) => sum + (proctor.availableTimeSlots?.length ?? 0), 0),
     [proctors]
   );
+
+  useHighlightRow("data-proctor-id", highlightedProctorId, proctors.length);
 
   if (showPageLoading) {
     return (
@@ -268,12 +401,12 @@ export function ProctorsPage() {
     );
   }
 
-  if (isError) {
+  if (proctorsQuery.isError) {
     return (
       <div className="p-6">
         <Card className="p-6 space-y-3">
-          <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load proctors.")}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
+          <p className="text-sm text-red-600">{getApiErrorMessage(proctorsQuery.error, "Failed to load proctors.")}</p>
+          <Button onClick={() => proctorsQuery.refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -303,12 +436,12 @@ export function ProctorsPage() {
           <Plus className="size-4" />
           Add Proctor
         </Button>
-        <Button 
+        <Button
           variant="outline"
           onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-4 transition-transform ${proctorsQuery.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
         <div className="relative sm:ml-auto sm:w-72">
@@ -316,8 +449,8 @@ export function ProctorsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email or center"
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            placeholder="Search by name or email"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
@@ -329,7 +462,7 @@ export function ProctorsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Proctors</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{proctors.length}</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{totalProctors}</p>
                 <p className="text-xs text-zinc-500 mt-2">Staff members active</p>
               </div>
               <div className="p-2 rounded-none bg-purple-50">
@@ -366,37 +499,50 @@ export function ProctorsPage() {
         </Card>
       </div>
 
-      <ProctorList
-        proctors={filteredProctors}
-        isLoading={showTableLoading}
-        isDeleting={deleteMutation.isPending}
-        search={search}
-        onAdd={openCreateModal}
-        onEditProctor={openEditModal}
-        onDeleteProctor={setDeletingProctor}
-        onViewWorkload={setWorkloadProctor}
-      />
+      <div className="mb-8">
+        <BulkDeleteToolbar
+          selectedCount={selectedProctorIds.size}
+          totalCount={filteredProctors.length}
+          isDeleting={isBulkDeleting || deleteMutation.isPending}
+          onClear={clearSelectedProctors}
+          onDelete={() => setIsBulkDeleteOpen(true)}
+        />
+        <ProctorList
+          proctors={filteredProctors}
+          isLoading={showTableLoading}
+          isDeleting={deleteMutation.isPending || isBulkDeleting}
+          search={search}
+          highlightedProctorId={highlightedProctorId}
+          selectedIds={selectedProctorIds}
+          onToggleSelected={toggleSelectedProctor}
+          onToggleAll={toggleAllVisibleProctors}
+          onAdd={openCreateModal}
+          onEditProctor={openEditModal}
+          onDeleteProctor={setDeletingProctor}
+          onViewWorkload={setWorkloadProctor}
+          pagination={{
+            page: currentPage,
+            pageCount: totalPages,
+            pageSize: PAGE_SIZE,
+            totalCount: totalProctors,
+            onPageChange: setPage,
+          }}
+        />
+      </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editingProctor ? "Edit Proctor" : "Add New Proctor"}</DialogTitle>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="mt-4 flex-1 overflow-y-auto pr-1">
             <ProctorForm 
               initialData={editingProctor ?? undefined} 
               onSubmit={handleSubmit} 
               isLoading={isSaving}
-              submitErrorMessage={
-                createMutation.isError ? getApiErrorMessage(createMutation.error, "Failed to create proctor.") :
-                updateMutation.isError ? getApiErrorMessage(updateMutation.error, "Failed to update proctor.") :
-                null
-              }
-              submitValidationMessages={
-                createMutation.isError ? getApiValidationErrors(createMutation.error) :
-                updateMutation.isError ? getApiValidationErrors(updateMutation.error) :
-                {}
-              }
+              submitErrorMessage={submitErrorMessage}
+              submitValidationMessages={submitValidationMessages ?? {}}
+              onClearSubmitError={clearSubmitErrors}
             />
           </div>
         </DialogContent>
@@ -410,6 +556,16 @@ export function ProctorsPage() {
         description={`Are you sure you want to completely remove ${deletingProctor?.name}? This action cannot be undone and may unassign them from their workloads.`}
         isLoading={deleteMutation.isPending}
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete proctor.") : undefined}
+      />
+
+      <DeleteConfirmModal
+        open={isBulkDeleteOpen}
+        onCancel={() => setIsBulkDeleteOpen(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete Selected Proctors"
+        description={`This will permanently delete ${selectedProctorIds.size} selected proctor${selectedProctorIds.size === 1 ? "" : "s"}. This action cannot be undone.`}
+        confirmLabel="Bulk Delete"
+        isLoading={isBulkDeleting}
       />
 
       <Dialog open={!!workloadProctor} onOpenChange={(open) => !open && setWorkloadProctor(null)}>

@@ -14,8 +14,12 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 0,
+            // Reuse cached data for 60s before background refetch; prevents
+            // hammering the API on rerenders and route revisits.
+            staleTime: 60_000,
+            gcTime: 5 * 60_000,
             refetchOnWindowFocus: false,
+            refetchOnMount: true,
             retry: (failureCount, error) => {
               if (isAuthExpiredError(error)) return false;
               return failureCount < 1;

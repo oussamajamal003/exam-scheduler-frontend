@@ -1,13 +1,38 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getStudents, createStudent, updateStudent, deleteStudent, getStudentExams } from "../../api/student.api";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getStudents, getStudentsPage, createStudent, updateStudent, deleteStudent, getStudentExams } from "../../api/student.api";
 import { CreateStudentDto, UpdateStudentDto } from "../../schemas/student";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
-export const useStudents = () => {
+export const useStudents = ({ enabled = true }: { enabled?: boolean } = {}) => {
   return useQuery({
     queryKey: ["students"],
     queryFn: getStudents,
+    enabled,
+  });
+};
+
+export const useStudentsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+  programId,
+  departmentId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  programId?: string;
+  departmentId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["students", "page", { page, pageSize, search, programId: programId ?? null, departmentId: departmentId ?? null }],
+    queryFn: () => getStudentsPage({ page, pageSize, search, programId, departmentId }),
+    enabled,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -17,8 +42,11 @@ export const useCreateStudent = () => {
 
   return useMutation({
     mutationFn: (data: CreateStudentDto) => createStudent(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["students"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       addToast({
         type: "success",
         title: "Student Added",
@@ -41,8 +69,11 @@ export const useUpdateStudent = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateStudentDto }) => updateStudent(id, data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["students"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       addToast({
         type: "success",
         title: "Student Updated",
@@ -65,8 +96,11 @@ export const useDeleteStudent = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteStudent(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["students"] });
+    onSuccess: async (_data, id) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeEnrollments: true,
+        includeStudents: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["students", id] });
       addToast({
         type: "success",

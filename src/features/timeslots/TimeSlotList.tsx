@@ -1,4 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { TimeSlot } from "../../schemas/timeSlot";
@@ -6,12 +7,17 @@ import { AlertTriangle, Clock, Edit2, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface TimeSlotListProps {
   timeSlots: TimeSlot[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onEditTimeSlot: (slot: TimeSlot) => void;
   onDeleteTimeSlot: (slot: TimeSlot) => void;
   onAddTimeSlot?: () => void;
@@ -79,12 +85,18 @@ export function TimeSlotList({
   isLoading,
   isDeleting,
   search,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onEditTimeSlot,
   onDeleteTimeSlot,
   onAddTimeSlot,
 }: TimeSlotListProps) {
   const slotRows = Array.isArray(timeSlots) ? timeSlots : [];
-  const conflictIds = detectConflicts(slotRows);
+  const selectedCount = slotRows.filter((slot) => selectedIds?.has(slot.id)).length;
+  const isAllSelected = slotRows.length > 0 && selectedCount === slotRows.length;
+  const conflictIds = useMemo(() => detectConflicts(slotRows), [slotRows]);
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName } = useVirtualRows(slotRows, { estimateRowHeight: 76 });
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -97,7 +109,7 @@ export function TimeSlotList({
             Time Slot Management
           </CardTitle>
           <p className="text-sm leading-6 text-zinc-500 max-w-2xl">
-            Define exam time windows. Overlapping slots on the same date are flagged as local review warnings before assignments are made; blocking scheduling issues are surfaced directly in the Generate Schedule flow.
+            Define candidate exam time windows. Overlapping options are allowed here and flagged for review; the scheduling engine blocks actual room, proctor, and student assignment conflicts.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
@@ -108,10 +120,15 @@ export function TimeSlotList({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all time slots" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || slotRows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Date</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Start Time</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">End Time</TableHead>
@@ -123,13 +140,13 @@ export function TimeSlotList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={slotRows.length > 0 ? slotRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 7 : 6} rows={slotRows.length > 0 ? slotRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : slotRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Clock}
@@ -147,9 +164,15 @@ export function TimeSlotList({
                   </TableCell>
                 </TableRow>
               ) : (
-                slotRows.map((slot, idx) => {
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: slot, index: idx }) => {
                   const inConflict = conflictIds.has(slot.id);
-                  const assignmentsCount = slot?.assignments?.length ?? slot?.assignmentsCount ?? 0;
+                  const assignmentsCount = slot?.assignmentsCount ?? 0;
                   return (
                     <TableRow
                       key={slot.id}
@@ -159,12 +182,17 @@ export function TimeSlotList({
                         inConflict && "bg-amber-50/40 shadow-[inset_4px_0_0_0_#f59e0b]"
                       )}
                     >
+                      {onToggleSelected && (
+                        <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                          <RowSelectCheckbox label={`Select ${formatDate(slot.date ?? slot.startTime)} ${formatTime(slot.startTime)}`} checked={selectedIds?.has(slot.id) ?? false} disabled={isDeleting} onChange={(checked) => onToggleSelected(slot.id, checked)} />
+                        </TableCell>
+                      )}
                       <TableCell className="px-4 py-4 sm:px-6">
                         <div className="font-semibold text-zinc-950 text-sm flex items-center gap-2">
                           {formatDate(slot.date ?? slot.startTime)}
                           {inConflict && (
                             <span className="inline-flex items-center gap-1 rounded-none border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                              <AlertTriangle className="size-3" /> Overlap Warning
+                              <AlertTriangle className="size-3" /> Overlaps Existing Option
                             </span>
                           )}
                         </div>
@@ -208,7 +236,13 @@ export function TimeSlotList({
                       </TableCell>
                     </TableRow>
                   );
-                })
+                })}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>

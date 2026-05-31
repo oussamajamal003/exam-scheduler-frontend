@@ -2,6 +2,7 @@ import React from 'react';
 
 import { useSchedule, useScheduleAnalysis } from '@/hooks/schedules/useSchedules';
 import { useScheduleAssignments } from '@/hooks/assignments/useAssignments';
+import { getScheduleAssignmentCount } from '@/lib/scheduleCounts';
 
 import type { Schedule, ScheduleAssignment } from '@/schemas/schedule';
 import type { WeakArea } from '@/components/dashboard/WeakAreasPanel';
@@ -258,11 +259,10 @@ const extractOptimization = (schedule?: Schedule | null): OptimizationSnapshot =
       ['afterScore'],
       ['optimizedScore'],
     ]);
-    const improvement = firstNumber(evaluation, [['improvementPercentage']]);
     return {
       before,
       after,
-      improvement: improvement ?? (before != null && after != null ? after - before : null),
+      improvement: before != null && after != null ? after - before : null,
       strategy: typeof meta.strategy === 'string' ? meta.strategy : null,
       attempted: true,
     };
@@ -283,12 +283,7 @@ const extractOptimization = (schedule?: Schedule | null): OptimizationSnapshot =
       : typeof opt.method === 'string'
         ? opt.method
         : null;
-  const improvement =
-    typeof opt.improvementPercentage === 'number'
-      ? opt.improvementPercentage
-      : before != null && after != null
-        ? after - before
-        : null;
+  const improvement = before != null && after != null ? after - before : null;
   return { before, after, improvement, strategy, attempted: true };
 };
 
@@ -376,9 +371,7 @@ const buildStatus = (
       tone: 'success',
       label: 'Final schedule published',
       statusLabel: 'Live',
-      description: `“${selectedSchedule.name}” is live with ${
-        selectedSchedule._count?.assignments ?? assignmentsCount ?? 0
-      } assignments.`,
+      description: `“${selectedSchedule.name}” is live with ${getScheduleAssignmentCount(selectedSchedule) || assignmentsCount || 0} assignments.`,
     };
   }
   return {
@@ -476,7 +469,9 @@ export const useDashboardAnalytics = (
     draftScore: scorePct(optimization.before),
     optimizedScore: scorePct(optimization.after ?? selectedDetailed?.qualityScore),
     improvementScore:
-      optimization.improvement != null ? Math.round(optimization.improvement) : null,
+      scorePct(optimization.before) != null && scorePct(optimization.after ?? selectedDetailed?.qualityScore) != null
+        ? scorePct(optimization.after ?? selectedDetailed?.qualityScore)! - scorePct(optimization.before)!
+        : null,
   };
 
   const queries = [detailQuery, assignmentsQuery, analysisQuery];

@@ -1,10 +1,14 @@
-import { useDeferredValue, useState, useMemo } from "react";
+import { useDeferredValue, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Card, CardContent } from "../../components/ui/card";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { Building2, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
@@ -12,13 +16,43 @@ import { Building2, Plus, RefreshCw, TrendingUp, Search } from "lucide-react";
 import { RoomList } from "../../features/rooms/RoomList";
 import { RoomForm } from "../../forms/rooms/RoomForm";
 import { Room } from "../../schemas/room";
-import { useRooms, useCreateRoom, useUpdateRoom, useDeleteRoom } from "../../hooks/rooms/useRooms";
+import { useRoomsPage, useCreateRoom, useUpdateRoom, useDeleteRoom } from "../../hooks/rooms/useRooms";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
 
 export function RoomsCentersPage() {
-  const { data: rooms = [], isLoading, isFetching, isError, error, refetch } = useRooms();
-  const [search, setSearch] = useState("");
+  const PAGE_SIZE = 50;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { filters, setFilter } = usePersistentFilters('rooms', { search: '' });
+  const search = filters.search;
+  const [silentSearch, setSilentSearch] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hlId = params.get('roomId') ?? params.get('id');
+    const hl = params.get('_hl');
+    return (hlId && hl) ? hl : '';
+  });
+  const setSearch = (value: string) => {
+    if (value && silentSearch) setSilentSearch('');
+    setFilter('search', value);
+  };
   const deferredSearch = useDeferredValue(search.trim());
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+  const roomsQuery = useRoomsPage({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: deferredSearch || silentSearch,
+  });
+  const rooms = useMemo(() => roomsQuery.data?.data ?? [], [roomsQuery.data]);
+  const roomsMeta = roomsQuery.data?.meta;
+  const totalRooms = roomsMeta?.total ?? rooms.length;
+  const totalPages = roomsMeta?.totalPages ?? 1;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<Room | null>(null);
@@ -26,6 +60,12 @@ export function RoomsCentersPage() {
   const createMutation = useCreateRoom();
   const updateMutation = useUpdateRoom();
   const deleteMutation = useDeleteRoom();
+  const bulkDelete = useBulkDelete({ entityName: "room", entityNamePlural: "rooms", deleteItem: (id) => deleteMutation.mutateAsync(id) });
+
+  useEffect(() => {
+    if (currentPage !== 1) setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearch]);
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const isErrorAction = createMutation.isError || updateMutation.isError;
@@ -34,10 +74,30 @@ export function RoomsCentersPage() {
   const submitErrorMessage = isErrorAction ? getApiErrorMessage(actionError, "Failed to save room.") : null;
   const submitValidationMessages = isErrorAction ? getApiValidationErrors(actionError) : null;
 
+  const highlightedRoomId = searchParams.get("roomId") ?? searchParams.get("id");
+  const _hlRoomParam = searchParams.get('_hl');
+  useEffect(() => {
+    if (highlightedRoomId && _hlRoomParam) setSilentSearch(_hlRoomParam);
+    else if (!highlightedRoomId) setSilentSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedRoomId, _hlRoomParam]);
+
+  useHighlightRow("data-room-id", highlightedRoomId, rooms.length);
+
   const openCreateModal = () => {
     setEditingRoom(null);
     setIsFormOpen(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openCreateModal();
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openEditModal = (room: Room) => {
     setEditingRoom(room);
@@ -79,23 +139,15 @@ export function RoomsCentersPage() {
   };
 
   const handleRefresh = () => {
-    refetch();
+    roomsQuery.refetch();
   };
 
-  const filteredRooms = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
-    if (!term) return rooms;
-    return rooms.filter((r) =>
-      [r.name, r.center?.name, r.centerName, r.status]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(term))
-    );
-  }, [deferredSearch, rooms]);
+  const filteredRooms = rooms;
 
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || roomsQuery.isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
-  const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const showPageLoading = useDelayedLoading(roomsQuery.isLoading, 1000);
 
   if (showPageLoading) {
     return (
@@ -105,12 +157,12 @@ export function RoomsCentersPage() {
     );
   }
 
-  if (isError) {
+  if (roomsQuery.isError) {
     return (
       <div className="p-6">
         <Card className="p-6 space-y-3">
-          <p className="text-sm text-red-600">{getApiErrorMessage(error, "Failed to load rooms.")}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
+          <p className="text-sm text-red-600">{getApiErrorMessage(roomsQuery.error, "Failed to load rooms.")}</p>
+          <Button onClick={() => roomsQuery.refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -145,7 +197,7 @@ export function RoomsCentersPage() {
           onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-4 transition-transform ${roomsQuery.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
         <div className="relative sm:ml-auto sm:w-72">
@@ -154,7 +206,7 @@ export function RoomsCentersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or center"
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
@@ -166,7 +218,7 @@ export function RoomsCentersPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Rooms</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{rooms.length}</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{totalRooms}</p>
                 <p className="text-xs text-zinc-500 mt-2">Active facilities available</p>
               </div>
               <div className="p-2 rounded-none bg-orange-50">
@@ -217,14 +269,26 @@ export function RoomsCentersPage() {
 
       {/* Rooms List */}
       <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={filteredRooms.length} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
         <RoomList
           rooms={filteredRooms}
           isLoading={showTableLoading}
-          isDeleting={deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
           search={search}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(filteredRooms, checked)}
           onAdd={openCreateModal}
           onEditRoom={openEditModal}
           onDeleteRoom={setDeletingRoom}
+          highlightedRoomId={highlightedRoomId}
+          pagination={{
+            page: currentPage,
+            pageCount: totalPages,
+            pageSize: PAGE_SIZE,
+            totalCount: totalRooms,
+            onPageChange: setPage,
+          }}
         />
       </div>
 
@@ -253,6 +317,16 @@ export function RoomsCentersPage() {
         description={`Are you sure you want to completely remove ${deletingRoom?.name} at ${deletingRoom?.center?.name ?? deletingRoom?.centerName ?? "this center"}? This could result in scheduling conflicts for active exams.`}
         isLoading={deleteMutation.isPending}
         errorMessage={deleteMutation.isError ? getApiErrorMessage(deleteMutation.error, "Failed to delete room.") : undefined}
+      />
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
+        title="Delete Selected Rooms"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected room${bulkDelete.selectedCount === 1 ? "" : "s"}. This could affect active scheduling data.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
       />
     </div>
   );

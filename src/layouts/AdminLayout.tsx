@@ -26,6 +26,7 @@ import {
   UserCog,
   UserRound,
   Users,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,6 +53,7 @@ import { cn } from '@/lib/utils';
 import { useLogout } from '@/hooks/auth/useLogout';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
+import { useSemesters } from '@/hooks/semesters/useSemesters';
 
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import {
@@ -106,6 +108,7 @@ const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
 const routeMap: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Monitor scheduling operations and platform health in one command center.' },
   '/schedule': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
+  '/schedules': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
   '/scheduling': { title: 'Schedules', subtitle: 'Generate and review exam schedule plans with operational clarity.' },
   '/departments': { title: 'Programs / Departments', subtitle: 'Manage relational program data, department ownership, and course coverage in one workspace.' },
   '/semesters': { title: 'Semesters', subtitle: 'Control academic timelines, calendars, and planning windows precisely.' },
@@ -118,6 +121,15 @@ const routeMap: Record<string, { title: string; subtitle: string }> = {
   '/centers': { title: 'Centers', subtitle: 'Configure exam centers and manage distribution across locations.' },
   '/timeslots': { title: 'Time Slots', subtitle: 'Define scheduling windows and balance availability across sessions.' },
   '/settings': { title: 'Settings', subtitle: 'Tune system defaults, preferences, and administrative controls.' },
+};
+
+const navRouteAliases: Record<string, string[]> = {
+  '/scheduling': ['/schedule', '/schedules', '/scheduling'],
+};
+
+const matchesNavItem = (pathname: string, itemTo: string) => {
+  const candidates = navRouteAliases[itemTo] ?? [itemTo];
+  return candidates.some((candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`));
 };
 
 const getInitials = (name?: string) => {
@@ -162,7 +174,7 @@ const SectionGroup: React.FC<{
   onItemSelect: () => void;
 }> = ({ section, isOpen, isCollapsed, onOpenChange, onItemSelect }) => {
   const location = useLocation();
-  const hasActiveChild = section.items.some((item) => location.pathname === item.to);
+  const hasActiveChild = section.items.some((item) => matchesNavItem(location.pathname, item.to));
   const SectionIcon = section.icon;
 
   React.useEffect(() => {
@@ -201,7 +213,7 @@ const SectionGroup: React.FC<{
           <DropdownMenuLabel>{section.title}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {section.items.map((item) => {
-            const isActive = location.pathname === item.to;
+            const isActive = matchesNavItem(location.pathname, item.to);
             return (
               <DropdownMenuItem key={item.to} asChild className={cn(isActive && 'bg-zinc-950 text-white focus:bg-zinc-950 focus:text-white dark:bg-zinc-100 dark:text-zinc-950 dark:focus:bg-zinc-100 dark:focus:text-zinc-950')}>
                 <NavLink
@@ -248,22 +260,25 @@ const SectionGroup: React.FC<{
               key={item.to}
               to={item.to}
               onClick={onItemSelect}
-              className={({ isActive }) =>
+              className={() =>
                 cn(
                   'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
-                  isActive
+                  matchesNavItem(location.pathname, item.to)
                     ? 'bg-zinc-950 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950'
                     : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
                 )
               }
             >
-              {({ isActive }) => (
+              {() => {
+                const isActive = matchesNavItem(location.pathname, item.to);
+                return (
                 <>
                   {isActive && <span className="absolute inset-y-2 left-1.5 w-0.5 rounded-full bg-white/60" />}
                   <item.icon className="size-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
                 </>
-              )}
+                );
+              }}
             </NavLink>
           ))}
         </div>
@@ -286,6 +301,12 @@ export const AdminLayout: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true');
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() =>
     Object.fromEntries(sidebarSections.map((section) => [section.title, true]))
+  );
+
+  const semestersQuery = useSemesters();
+  const activeSemesterName = React.useMemo(
+    () => (semestersQuery.data ?? []).find(s => s.isActive)?.name,
+    [semestersQuery.data]
   );
 
   // Command palette state + global Ctrl/Cmd+K shortcut
@@ -318,7 +339,11 @@ export const AdminLayout: React.FC = () => {
     setIsSidebarOpen(false);
   }, [location.pathname]);
 
-  const currentPage = routeMap[location.pathname] ?? {
+  const matchedRoute = Object.entries(navRouteAliases).find(([, aliases]) =>
+    aliases.some((alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`))
+  )?.[0];
+
+  const currentPage = routeMap[location.pathname] ?? (matchedRoute ? routeMap[matchedRoute] : undefined) ?? {
     title: 'Admin Workspace',
     subtitle: 'Control exam scheduling from a single premium operations workspace.',
   };
@@ -518,6 +543,13 @@ export const AdminLayout: React.FC = () => {
                 onOpen={() => setIsCommandOpen(true)}
                 className="md:hidden"
               />
+
+              {activeSemesterName && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <Zap className="size-3 fill-emerald-500 text-emerald-500 dark:fill-emerald-400 dark:text-emerald-400" />
+                  {activeSemesterName}
+                </span>
+              )}
 
               <Tooltip>
                 <TooltipTrigger asChild>

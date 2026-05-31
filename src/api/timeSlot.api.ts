@@ -12,14 +12,45 @@ type PaginatedResponse<T> = {
   meta?: unknown;
 };
 
+type RawMeta = Record<string, number>;
+
+const TIME_SLOTS_PAGE_SIZE = 200;
+
+export type PaginatedMeta = {
+  total: number;
+  totalCount: number;
+  page: number;
+  limit: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedTimeSlots = {
+  data: TimeSlot[];
+  meta: PaginatedMeta;
+};
+
 type BackendTimeSlot = {
   id: string;
   date?: string | null;
   startTime: string;
   endTime: string;
   duration?: number | null;
-  _count?: { assignments?: number };
-  assignments?: unknown[];
+  assignments?: Array<{ scheduleId?: string; examId?: string }>;
+};
+
+const countLogicalTimeSlotAssignments = (
+  assignments: Array<{ scheduleId?: string; examId?: string }> = []
+) => {
+  const keys = new Set<string>();
+  for (const assignment of assignments) {
+    if (assignment.scheduleId && assignment.examId) {
+      keys.add(`${assignment.scheduleId}:${assignment.examId}`);
+      continue;
+    }
+    keys.add(JSON.stringify(assignment));
+  }
+  return keys.size;
 };
 
 const mapBackendTimeSlot = (slot: BackendTimeSlot): TimeSlot => ({
@@ -29,8 +60,20 @@ const mapBackendTimeSlot = (slot: BackendTimeSlot): TimeSlot => ({
   endTime: slot.endTime,
   duration: slot.duration ?? undefined,
   assignments: slot.assignments ?? [],
-  assignmentsCount: slot.assignments?.length ?? slot._count?.assignments ?? 0,
+  assignmentsCount: countLogicalTimeSlotAssignments(slot.assignments ?? []),
 });
+
+const readMeta = (raw: unknown, page: number, pageSize: number): PaginatedMeta => {
+  const m = (raw ?? {}) as RawMeta;
+  return {
+    total:      m.total      ?? m.totalCount ?? 0,
+    totalCount: m.total      ?? m.totalCount ?? 0,
+    page:       m.page       ?? page,
+    limit:      m.limit      ?? m.pageSize   ?? pageSize,
+    pageSize:   m.pageSize   ?? m.limit      ?? pageSize,
+    totalPages: m.totalPages ?? 1,
+  };
+};
 
 const combineDateTime = (date: string, time: string): string => {
   if (!date || !time) return new Date().toISOString();
@@ -62,11 +105,53 @@ const serialize = <T extends Partial<CreateTimeSlotDto>>(payload: T) => {
   return out;
 };
 
+/** Legacy: fetches all time slots (kept for backwards compatibility with mutations/form). */
 export const fetchTimeSlots = async (): Promise<TimeSlot[]> => {
+  const timeSlots: BackendTimeSlot[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendTimeSlot>>>("/timeslots", {
+      params: { page, pageSize: TIME_SLOTS_PAGE_SIZE },
+    });
+    const payload = response.data?.data;
+    timeSlots.push(...(payload?.data ?? []));
+    totalPages = readMeta(payload?.meta, page, TIME_SLOTS_PAGE_SIZE).totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return timeSlots.map(mapBackendTimeSlot);
+};
+
+/** Paginated + searchable fetch — use this for the TimeSlotsPage list. */
+export const fetchTimeSlotsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  sortField,
+  sortDirection,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sortField?: string;
+  sortDirection?: "asc" | "desc";
+} = {}): Promise<PagedTimeSlots> => {
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendTimeSlot>>>("/timeslots", {
-    params: { limit: 5000 },
+    params: {
+      page,
+      pageSize,
+      search: search?.trim() || undefined,
+      sortField: sortField || undefined,
+      sortDirection: sortDirection || undefined,
+    },
   });
-  return (response.data?.data?.data ?? []).map(mapBackendTimeSlot);
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapBackendTimeSlot),
+    meta: readMeta(payload?.meta, page, pageSize),
+  };
 };
 
 export const createTimeSlot = async (data: CreateTimeSlotDto): Promise<TimeSlot> => {

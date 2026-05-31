@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { roomSchema, Room } from "../../schemas/room";
 import { useCenters } from "../../hooks/centers/useCenters";
+import { useRooms } from "../../hooks/rooms/useRooms";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
@@ -20,6 +21,7 @@ interface RoomFormProps {
 
 export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: RoomFormProps) {
   const { data: centers = [], isLoading: centersLoading } = useCenters();
+  const { data: rooms = [] } = useRooms();
 
   const form = useForm({
     resolver: zodResolver(roomSchema),
@@ -45,6 +47,13 @@ export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage,
   }, [initialData?.id]);
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const roomName = form.watch("name");
+  const duplicateRoom = rooms.find(
+    (room) =>
+      room.id !== initialData?.id &&
+      (room.name ?? "").trim().toLowerCase() === (roomName ?? "").trim().toLowerCase()
+  );
+  const duplicateNameMessage = roomName?.trim() && duplicateRoom ? `Room name "${duplicateRoom.name}" already exists.` : null;
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
@@ -68,25 +77,25 @@ export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage,
             {...form.register("name")}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              (form.formState.errors.name || submitValidationMessages?.name)
+              (form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage)
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="e.g., Room 101"
           />
-          {(form.formState.errors.name || submitValidationMessages?.name) && (
+          {(form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!(form.formState.errors.name || submitValidationMessages?.name) && !!form.watch("name") && (
+          {!(form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage) && !!roomName && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {(form.formState.errors.name || submitValidationMessages?.name) && (
+        {(form.formState.errors.name || submitValidationMessages?.name || duplicateNameMessage) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {(form.formState.errors.name?.message as string) || submitValidationMessages?.name?.[0]}
+              {(form.formState.errors.name?.message as string) || submitValidationMessages?.name?.[0] || duplicateNameMessage}
             </p>
           </div>
         )}
@@ -211,7 +220,7 @@ export function RoomForm({ initialData, onSubmit, isLoading, submitErrorMessage,
 
       <Button
         type="submit"
-        disabled={isLoading || hasErrors}
+        disabled={isLoading || hasErrors || Boolean(duplicateNameMessage)}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

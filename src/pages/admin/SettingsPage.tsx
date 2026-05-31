@@ -83,7 +83,7 @@ export const SettingsPage: React.FC = () => {
             Constraint Scheduling Demo Dataset
           </CardTitle>
           <CardDescription>
-            Generate persistent feasible datasets A, B, and C. Creating one dataset no longer clears the others, and demo data is removed only when an admin explicitly confirms Clear Demo Data.
+            Generate persistent feasible datasets A, B, and C. Regeneration preserves existing schedules, and Clear Demo Data removes the selected demo dataset only when an admin explicitly confirms it.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-4">
@@ -102,7 +102,7 @@ export const SettingsPage: React.FC = () => {
             </div>
             <div className="rounded-none border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="font-semibold text-zinc-900">Safe cleanup</p>
-              <p className="mt-1">Clear Demo Data removes only demo-generated entities and does not touch manually created records.</p>
+              <p className="mt-1">Clear Demo Data removes the selected demo dataset, its schedules, assignments, and related demo entities without touching manually created records outside that dataset.</p>
             </div>
           </div>
 
@@ -220,7 +220,7 @@ export const SettingsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Clear Demo Data</DialogTitle>
             <DialogDescription>
-              Choose which demo dataset to clear. Only the selected demo dataset will be removed, and manually created data is preserved.
+              Choose which demo dataset to clear. The related schedules must already be deleted from Schedule Versions before this dataset can be removed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -246,7 +246,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
           <div className="rounded-none border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
-            {selectedClearDatasetConfig.title} will be removed, including its schedules, assignments, enrollments, rooms, proctors, time slots, and related demo-generated records.
+            Delete the related schedule first from Schedule Versions. After that, {selectedClearDatasetConfig.title} can be removed together with its assignments, enrollments, rooms, proctors, time slots, and related demo-generated records.
           </div>
           <DialogFooter>
             <Button

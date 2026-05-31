@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -6,20 +7,36 @@ import { Edit2, Trash2, Library, BookOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface CourseListProps {
   courses: Course[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onAdd?: () => void;
   onEditCourse: (course: Course) => void;
   onViewDetails: (course: Course) => void;
   onDeleteCourse: (course: Course) => void;
+  highlightedCourseId?: string | null;
 }
 
-export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEditCourse, onViewDetails, onDeleteCourse }: CourseListProps) {
+export function CourseList({ courses, isLoading, isDeleting, search, selectedIds, onToggleSelected, onToggleAll, onAdd, onEditCourse, onViewDetails, onDeleteCourse, highlightedCourseId }: CourseListProps) {
   const courseRows = Array.isArray(courses) ? courses : [];
+  const selectedCount = courseRows.filter((course) => course.id && selectedIds?.has(course.id)).length;
+  const isAllSelected = courseRows.length > 0 && selectedCount === courseRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(courseRows, { estimateRowHeight: 76 });
+  const targetCourseIndex = useMemo(
+    () => courseRows.findIndex((c) => c.id === highlightedCourseId),
+    [courseRows, highlightedCourseId]
+  );
+  useEffect(() => {
+    if (targetCourseIndex >= 0) scrollToIndex(targetCourseIndex);
+  }, [targetCourseIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -39,10 +56,15 @@ export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEd
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all courses" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || courseRows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Code</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Course Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Credits</TableHead>
@@ -54,13 +76,13 @@ export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEd
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <TableSkeletonRows columns={6} rows={courseRows.length > 0 ? courseRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 7 : 6} rows={courseRows.length > 0 ? courseRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : courseRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Library}
@@ -78,14 +100,26 @@ export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEd
                   </TableCell>
                 </TableRow>
               ) : (
-                courseRows.map((course, idx) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: course, index: idx }) => (
                   <TableRow
                     key={course.id}
+                    data-course-id={course.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
                       idx === courseRows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${course.code}`} checked={course.id ? selectedIds?.has(course.id) ?? false : false} disabled={isDeleting} onChange={(checked) => course.id && onToggleSelected(course.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm tracking-wide">{course.code}</span>
                     </TableCell>
@@ -134,7 +168,13 @@ export function CourseList({ courses, isLoading, isDeleting, search, onAdd, onEd
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>

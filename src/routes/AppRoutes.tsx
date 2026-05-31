@@ -1,4 +1,4 @@
-﻿import React from 'react';
+﻿import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
@@ -6,31 +6,39 @@ import StudentLayout from '@/layouts/StudentLayout';
 import ProctorLayout from '@/layouts/ProctorLayout';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
-import { StudentDashboardPage } from '@/pages/student/StudentDashboardPage';
-import { StudentSchedulePage } from '@/pages/student/StudentSchedulePage';
-import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
-import { StudentSettingsPage } from '@/pages/student/StudentSettingsPage';
-import { ProctorDashboardPage } from '@/pages/supervisor/ProctorDashboardPage';
-import { ProctorSchedulePage } from '@/pages/supervisor/ProctorSchedulePage';
-import { ProctorStudentsPage } from '@/pages/supervisor/ProctorStudentsPage';
-import { ProctorSettingsPage } from '@/pages/supervisor/ProctorSettingsPage';
-import { StudentsPage } from '@/pages/admin/StudentsPage';
-import { CoursesPage } from '../pages/admin/CoursesPage';
-import { ProctorsPage } from '@/pages/admin/ProctorsPage';
-import { RoomsCentersPage } from '../pages/admin/RoomsCentersPage';
-import { CentersPage } from '../pages/admin/CentersPage';
-import { TimeSlotsPage } from '../pages/admin/TimeSlotsPage';
-import { DepartmentsPage } from '@/pages/admin/DepartmentsPage';
-import { CourseOfferingsPage } from '@/pages/admin/CourseOfferingsPage';
-import { CourseOfferingDetailPage } from '@/pages/admin/CourseOfferingDetailPage';
-import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage';
-import { SemestersPage } from '@/pages/admin/SemestersPage';
-import { SchedulesPage } from '@/pages/admin/SchedulesPage';
-import { SettingsPage } from '@/pages/admin/SettingsPage';
 import { NotFound } from '@/pages/NotFound';
 import { PageSpinner } from '@/components/shared/PageSpinner';
 import { AuthGuard, RoleGuard, GuestGuard } from '@/guards/authguard';
 import { ADMIN_ROLES, getHomePathForRole, normalizeRole } from '@/lib/authRoutes';
+
+// Code-split heavy admin & role pages so the first paint downloads only
+// the dashboard + the login/auth chunks.
+const StudentsPage = React.lazy(() => import('@/pages/admin/StudentsPage').then(m => ({ default: m.StudentsPage })));
+const CoursesPage = React.lazy(() => import('../pages/admin/CoursesPage').then(m => ({ default: m.CoursesPage })));
+const ProctorsPage = React.lazy(() => import('@/pages/admin/ProctorsPage').then(m => ({ default: m.ProctorsPage })));
+const RoomsCentersPage = React.lazy(() => import('../pages/admin/RoomsCentersPage').then(m => ({ default: m.RoomsCentersPage })));
+const CentersPage = React.lazy(() => import('../pages/admin/CentersPage').then(m => ({ default: m.CentersPage })));
+const TimeSlotsPage = React.lazy(() => import('../pages/admin/TimeSlotsPage').then(m => ({ default: m.TimeSlotsPage })));
+const DepartmentsPage = React.lazy(() => import('@/pages/admin/DepartmentsPage').then(m => ({ default: m.DepartmentsPage })));
+const CourseOfferingsPage = React.lazy(() => import('@/pages/admin/CourseOfferingsPage').then(m => ({ default: m.CourseOfferingsPage })));
+const CourseOfferingDetailPage = React.lazy(() => import('@/pages/admin/CourseOfferingDetailPage').then(m => ({ default: m.CourseOfferingDetailPage })));
+const EnrollmentsPage = React.lazy(() => import('@/pages/admin/EnrollmentsPage').then(m => ({ default: m.EnrollmentsPage })));
+const SemestersPage = React.lazy(() => import('@/pages/admin/SemestersPage').then(m => ({ default: m.SemestersPage })));
+const SchedulesPage = React.lazy(() => import('@/pages/admin/SchedulesPage').then(m => ({ default: m.SchedulesPage })));
+const SettingsPage = React.lazy(() => import('@/pages/admin/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const StudentDashboardPage = React.lazy(() => import('@/pages/student/StudentDashboardPage').then(m => ({ default: m.StudentDashboardPage })));
+const StudentSchedulePage = React.lazy(() => import('@/pages/student/StudentSchedulePage').then(m => ({ default: m.StudentSchedulePage })));
+const StudentCoursesPage = React.lazy(() => import('@/pages/student/StudentCoursesPage').then(m => ({ default: m.StudentCoursesPage })));
+const StudentSettingsPage = React.lazy(() => import('@/pages/student/StudentSettingsPage').then(m => ({ default: m.StudentSettingsPage })));
+const ProctorDashboardPage = React.lazy(() => import('@/pages/supervisor/ProctorDashboardPage').then(m => ({ default: m.ProctorDashboardPage })));
+const ProctorSchedulePage = React.lazy(() => import('@/pages/supervisor/ProctorSchedulePage').then(m => ({ default: m.ProctorSchedulePage })));
+const ProctorStudentsPage = React.lazy(() => import('@/pages/supervisor/ProctorStudentsPage').then(m => ({ default: m.ProctorStudentsPage })));
+const ProctorSettingsPage = React.lazy(() => import('@/pages/supervisor/ProctorSettingsPage').then(m => ({ default: m.ProctorSettingsPage })));
+
+const LazyFallback = () => <PageSpinner label="Loading…" />;
+const Lazy = ({ children }: { children: React.ReactNode }) => (
+  <Suspense fallback={<LazyFallback />}>{children}</Suspense>
+);
 
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   const [isLoading, setIsLoading] = React.useState(true);
@@ -100,24 +108,24 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/students" element={<StudentsPage />} />
+            <Route path="/students" element={<Lazy><StudentsPage /></Lazy>} />
 
             {/* Placeholders for future modules */}
-            <Route path="/courses" element={<CoursesPage />} />
-            <Route path="/departments" element={<DepartmentsPage />} />
-            <Route path="/semesters" element={<SemestersPage />} />
-            <Route path="/course-offerings" element={<CourseOfferingsPage />} />
-            <Route path="/course-offerings/:id" element={<CourseOfferingDetailPage />} />
-            <Route path="/enrollments" element={<EnrollmentsPage />} />
+            <Route path="/courses" element={<Lazy><CoursesPage /></Lazy>} />
+            <Route path="/departments" element={<Lazy><DepartmentsPage /></Lazy>} />
+            <Route path="/semesters" element={<Lazy><SemestersPage /></Lazy>} />
+            <Route path="/course-offerings" element={<Lazy><CourseOfferingsPage /></Lazy>} />
+            <Route path="/course-offerings/:id" element={<Lazy><CourseOfferingDetailPage /></Lazy>} />
+            <Route path="/enrollments" element={<Lazy><EnrollmentsPage /></Lazy>} />
             <Route path="/exams" element={<PlaceholderPage title="Exams Management" />} />
-            <Route path="/rooms" element={<RoomsCentersPage />} />
-            <Route path="/centers" element={<CentersPage />} />
-            <Route path="/proctors" element={<ProctorsPage />} />
-            <Route path="/timeslots" element={<TimeSlotsPage />} />
-            <Route path="/schedule" element={<SchedulesPage />} />
-            <Route path="/schedules" element={<SchedulesPage />} />
-            <Route path="/scheduling" element={<SchedulesPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/rooms" element={<Lazy><RoomsCentersPage /></Lazy>} />
+            <Route path="/centers" element={<Lazy><CentersPage /></Lazy>} />
+            <Route path="/proctors" element={<Lazy><ProctorsPage /></Lazy>} />
+            <Route path="/timeslots" element={<Lazy><TimeSlotsPage /></Lazy>} />
+            <Route path="/schedule" element={<Lazy><SchedulesPage /></Lazy>} />
+            <Route path="/schedules" element={<Lazy><SchedulesPage /></Lazy>} />
+            <Route path="/scheduling" element={<Lazy><SchedulesPage /></Lazy>} />
+            <Route path="/settings" element={<Lazy><SettingsPage /></Lazy>} />
           </Route>
 
           <Route
@@ -128,11 +136,11 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/student" element={<Navigate to="/student/dashboard" replace />} />
-            <Route path="/student/dashboard" element={<StudentDashboardPage />} />
-            <Route path="/student/schedule" element={<StudentSchedulePage />} />
-            <Route path="/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/student/dashboard" element={<Lazy><StudentDashboardPage /></Lazy>} />
+            <Route path="/student/schedule" element={<Lazy><StudentSchedulePage /></Lazy>} />
+            <Route path="/student/courses" element={<Lazy><StudentCoursesPage /></Lazy>} />
             <Route path="/student/notifications" element={<Navigate to="/student/dashboard#notifications" replace />} />
-            <Route path="/student/settings" element={<StudentSettingsPage />} />
+            <Route path="/student/settings" element={<Lazy><StudentSettingsPage /></Lazy>} />
           </Route>
 
           <Route
@@ -143,10 +151,10 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/proctor" element={<Navigate to="/proctor/dashboard" replace />} />
-            <Route path="/proctor/dashboard" element={<ProctorDashboardPage />} />
-            <Route path="/proctor/schedule" element={<ProctorSchedulePage />} />
-            <Route path="/proctor/students" element={<ProctorStudentsPage />} />
-            <Route path="/proctor/settings" element={<ProctorSettingsPage />} />
+            <Route path="/proctor/dashboard" element={<Lazy><ProctorDashboardPage /></Lazy>} />
+            <Route path="/proctor/schedule" element={<Lazy><ProctorSchedulePage /></Lazy>} />
+            <Route path="/proctor/students" element={<Lazy><ProctorStudentsPage /></Lazy>} />
+            <Route path="/proctor/settings" element={<Lazy><ProctorSettingsPage /></Lazy>} />
           </Route>
         </Route>
 

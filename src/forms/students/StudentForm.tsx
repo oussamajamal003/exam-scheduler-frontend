@@ -15,6 +15,7 @@ import {
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { Program } from "../../schemas/program";
+import { useStudents } from "../../hooks/students/useStudents";
 
 interface StudentFormProps {
   initialData?: Student;
@@ -25,9 +26,11 @@ interface StudentFormProps {
   isLoading?: boolean;
   submitErrorMessage?: string;
   submitValidationMessages?: Record<string, string[]>;
+  onClearSubmitError?: () => void;
 }
 
-export function StudentForm({ initialData, programs = [], isProgramsLoading, programsErrorMessage, onSubmit, isLoading, submitErrorMessage, submitValidationMessages }: StudentFormProps) {
+export function StudentForm({ initialData, programs = [], isProgramsLoading, programsErrorMessage, onSubmit, isLoading, submitErrorMessage, submitValidationMessages, onClearSubmitError }: StudentFormProps) {
+  const { data: existingStudents = [], isLoading: isLoadingExisting } = useStudents();
   const form = useForm({
     resolver: zodResolver(studentSchema),
     defaultValues: initialData || {
@@ -60,10 +63,29 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
   const watchedFirstName = useWatch({ control: form.control, name: "firstName" });
   const watchedLastName = useWatch({ control: form.control, name: "lastName" });
   const watchedEmail = useWatch({ control: form.control, name: "email" });
+  const currentStudentId = initialData?.id ?? "";
   const selectedProgram = useMemo(
     () => programs.find((p) => p.id === selectedProgramId) ?? null,
     [programs, selectedProgramId]
   );
+  const normalizedEmail = (watchedEmail ?? "").trim().toLowerCase();
+  const duplicateEmailStudent = useMemo(
+    () => existingStudents.find((student) => {
+      if (!normalizedEmail || student.id === currentStudentId) return false;
+      const candidateEmail = student.user?.email ?? student.email ?? "";
+      return candidateEmail.trim().toLowerCase() === normalizedEmail;
+    }) ?? null,
+    [currentStudentId, existingStudents, normalizedEmail]
+  );
+  const duplicateEmailMessage = duplicateEmailStudent
+    ? "Student email already exists."
+    : null;
+  const hasSubmitErrors = Boolean(submitErrorMessage) || Object.keys(submitValidationMessages ?? {}).length > 0;
+  const clearSubmitErrors = () => {
+    if (!isLoading && hasSubmitErrors) {
+      onClearSubmitError?.();
+    }
+  };
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
 
@@ -83,7 +105,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
         <div className="relative">
           <Input
             id="universityId"
-            {...form.register("universityId")}
+            {...form.register("universityId", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
               form.formState.errors.universityId || submitValidationMessages?.universityId
@@ -118,7 +140,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
           <div className="relative">
             <Input
               id="firstName"
-              {...form.register("firstName")}
+              {...form.register("firstName", { onChange: clearSubmitErrors })}
               className={cn(
                 "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
                 form.formState.errors.firstName || submitValidationMessages?.firstName
@@ -152,7 +174,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
           <div className="relative">
             <Input
               id="lastName"
-              {...form.register("lastName")}
+              {...form.register("lastName", { onChange: clearSubmitErrors })}
               className={cn(
                 "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
                 form.formState.errors.lastName || submitValidationMessages?.lastName
@@ -188,28 +210,28 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
           <Input
             id="email"
             type="email"
-            {...form.register("email")}
+            {...form.register("email", { onChange: clearSubmitErrors })}
             className={cn(
               "h-10 rounded-none border-zinc-200 bg-white/50 text-sm transition-all",
-              form.formState.errors.email || submitValidationMessages?.email
+              form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage
                 ? "border-destructive/60 bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/30"
                 : "hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50"
             )}
             disabled={isLoading}
             placeholder="john.doe@university.edu"
           />
-          {(form.formState.errors.email || submitValidationMessages?.email) && (
+          {(form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage) && (
             <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-destructive" />
           )}
-          {!form.formState.errors.email && !submitValidationMessages?.email && !!watchedEmail && (
+          {!form.formState.errors.email && !submitValidationMessages?.email && !duplicateEmailMessage && !!watchedEmail && (
             <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-500" />
           )}
         </div>
-        {(form.formState.errors.email || submitValidationMessages?.email) && (
+        {(form.formState.errors.email || submitValidationMessages?.email || duplicateEmailMessage) && (
           <div className="flex items-start gap-2 rounded-none bg-destructive/10 px-3 py-2.5 border border-destructive/20">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-destructive leading-snug">
-              {form.formState.errors.email?.message || submitValidationMessages?.email?.join(", ")}
+              {form.formState.errors.email?.message || submitValidationMessages?.email?.join(", ") || duplicateEmailMessage}
             </p>
           </div>
         )}
@@ -222,6 +244,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
         <Select
           value={selectedProgramId || undefined}
           onValueChange={(value) => {
+            clearSubmitErrors();
             const program = programs.find((p) => p.id === value);
             form.setValue("programId", value, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
             form.setValue("program", program?.name ?? "", { shouldDirty: true });
@@ -261,7 +284,7 @@ export function StudentForm({ initialData, programs = [], isProgramsLoading, pro
 
       <Button
         type="submit"
-        disabled={isLoading || hasErrors}
+        disabled={isLoading || isLoadingExisting || hasErrors || Boolean(duplicateEmailMessage) || Boolean(submitValidationMessages?.email?.length)}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

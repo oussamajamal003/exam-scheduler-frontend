@@ -1,13 +1,40 @@
-﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchProctors, fetchProctor, createProctor, updateProctor, deleteProctor, fetchProctorWorkload } from "../../api/proctor.api";
+﻿import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchProctors, fetchProctor, fetchProctorsPage, createProctor, updateProctor, deleteProctor, fetchProctorWorkload } from "../../api/proctor.api";
 import { CreateProctorDto, UpdateProctorDto } from "../../schemas/proctor";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
 export const useProctors = () => {
   return useQuery({
     queryKey: ["proctors"],
     queryFn: fetchProctors,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useProctorsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = "",
+  centerId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  centerId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ["proctors", "page", { page, pageSize, search, centerId: centerId ?? null }],
+    queryFn: () => fetchProctorsPage({ page, pageSize, search, centerId }),
+    enabled,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -25,8 +52,10 @@ export const useCreateProctor = () => {
 
   return useMutation({
     mutationFn: (data: CreateProctorDto) => createProctor(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["proctors"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeProctors: true,
+      });
       addToast({
         type: "success",
         title: "Proctor Added",
@@ -49,8 +78,10 @@ export const useUpdateProctor = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProctorDto }) => updateProctor({ id, data }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["proctors"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeProctors: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["proctors", data.id] });
       addToast({
         type: "success",
@@ -74,8 +105,10 @@ export const useDeleteProctor = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteProctor(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["proctors"] });
+    onSuccess: async (_data, id) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeProctors: true,
+      });
       queryClient.invalidateQueries({ queryKey: ["proctors", id] });
       addToast({
         type: "success",

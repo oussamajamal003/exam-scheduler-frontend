@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -6,20 +7,36 @@ import { Edit2, Trash2, BookOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface StudentListProps {
   students: Student[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  highlightedStudentId?: string | null;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onAdd?: () => void;
   onEditStudent: (student: Student) => void;
   onViewExams: (student: Student) => void;
   onDeleteStudent: (student: Student) => void;
 }
 
-export function StudentList({ students, isLoading, isDeleting, search, onAdd, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
+export function StudentList({ students, isLoading, isDeleting, search, highlightedStudentId, selectedIds, onToggleSelected, onToggleAll, onAdd, onEditStudent, onViewExams, onDeleteStudent }: StudentListProps) {
   const studentRows = Array.isArray(students) ? students : [];
+  const selectedCount = studentRows.filter((student) => student.id && selectedIds?.has(student.id)).length;
+  const isAllSelected = studentRows.length > 0 && selectedCount === studentRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(studentRows, { estimateRowHeight: 76 });
+  const targetStudentIndex = useMemo(
+    () => studentRows.findIndex((s) => s.id === highlightedStudentId),
+    [studentRows, highlightedStudentId]
+  );
+  useEffect(() => {
+    if (targetStudentIndex >= 0) scrollToIndex(targetStudentIndex);
+  }, [targetStudentIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -39,10 +56,21 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox
+                      label="Select all students"
+                      checked={isAllSelected}
+                      indeterminate={selectedCount > 0 && !isAllSelected}
+                      disabled={isDeleting || studentRows.length === 0}
+                      onChange={onToggleAll}
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Univ. ID</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Email</TableHead>
@@ -55,13 +83,13 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-0">
-                    <TableSkeletonRows columns={7} rows={studentRows.length > 0 ? studentRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 8 : 7} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 8 : 7} rows={studentRows.length > 0 ? studentRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : studentRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 8 : 7} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={BookOpen}
@@ -79,14 +107,32 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
                   </TableCell>
                 </TableRow>
               ) : (
-                studentRows.map((student, idx) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 8 : 7} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: student, index: idx }) => (
                   <TableRow
                     key={student.id}
+                    data-student-id={student.id}
                     className={cn(
                       "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
+                      // gold animation applied via useHighlightRow hook
                       idx === studentRows.length - 1 && "border-b-0"
                     )}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox
+                          label={`Select ${student.user?.name ?? `${student.firstName} ${student.lastName}`}`}
+                          checked={student.id ? selectedIds?.has(student.id) ?? false : false}
+                          disabled={isDeleting}
+                          onChange={(checked) => student.id && onToggleSelected(student.id, checked)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <span className="font-bold text-zinc-950 text-sm">{student.universityId}</span>
                     </TableCell>
@@ -136,7 +182,13 @@ export function StudentList({ students, isLoading, isDeleting, search, onAdd, on
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 8 : 7} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>

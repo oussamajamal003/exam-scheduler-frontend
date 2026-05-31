@@ -1,13 +1,15 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchCourses, fetchCourse, fetchCourseDetail, createCourse, updateCourse, deleteCourse } from "../../api/course.api";
 import { CreateCourseDto, UpdateCourseDto } from "../../schemas/course";
 import { useToast } from "../../components/ui/toast";
 import { getSmartErrorDescription } from "../../lib/apiError";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 
-export const useCourses = () => {
+export const useCourses = ({ departmentId }: { departmentId?: string } = {}) => {
   return useQuery({
-    queryKey: ["courses"],
-    queryFn: fetchCourses,
+    queryKey: ["courses", departmentId ?? null],
+    queryFn: () => fetchCourses({ departmentId }),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -33,9 +35,12 @@ export const useCreateCourse = () => {
 
   return useMutation({
     mutationFn: (data: CreateCourseDto) => createCourse(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["courses"] });
-      queryClient.invalidateQueries({ queryKey: ["courses", "for-offerings"] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: "success",
         title: "Course Added",
@@ -58,11 +63,16 @@ export const useUpdateCourse = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCourseDto }) => updateCourse({ id, data }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["courses"] });
-      queryClient.invalidateQueries({ queryKey: ["courses", data.id] });
-      queryClient.invalidateQueries({ queryKey: ["courses", "for-offerings"] });
-      queryClient.invalidateQueries({ queryKey: ["course", "for-offering", data.id] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["courses", data.id] }),
+        queryClient.invalidateQueries({ queryKey: ["course", "for-offering", data.id] }),
+      ]);
       addToast({
         type: "success",
         title: "Course Updated",
@@ -85,11 +95,16 @@ export const useDeleteCourse = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteCourse(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["courses"] });
-      queryClient.invalidateQueries({ queryKey: ["courses", id] });
-      queryClient.invalidateQueries({ queryKey: ["courses", "for-offerings"] });
-      queryClient.invalidateQueries({ queryKey: ["course", "for-offering", id] });
+    onSuccess: async (_data, id) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["courses", id] }),
+        queryClient.invalidateQueries({ queryKey: ["course", "for-offering", id] }),
+      ]);
       addToast({
         type: "success",
         title: "Course Deleted",

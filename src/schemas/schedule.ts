@@ -122,6 +122,7 @@ export type Schedule = {
   createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
+  logicalAssignmentsCount?: number;
   assignments?: ScheduleAssignment[];
   _count?: { assignments?: number };
 };

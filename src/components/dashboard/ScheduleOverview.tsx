@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CalendarClock, ArrowRight } from 'lucide-react';
+import { getScheduleAssignmentCount } from '@/lib/scheduleCounts';
 import type { Schedule } from '@/schemas/schedule';
 
 interface ScheduleOverviewProps {
@@ -70,7 +71,7 @@ export const ScheduleOverview: React.FC<ScheduleOverviewProps> = ({
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
             {top.map((s) => {
-              const assignments = s._count?.assignments ?? s.assignments?.length ?? 0;
+              const assignments = getScheduleAssignmentCount(s);
               return (
                 <li
                   key={s.id}

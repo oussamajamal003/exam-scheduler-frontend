@@ -205,8 +205,11 @@ export function TimeSlotForm({
         <div className="rounded-none border border-amber-300 bg-amber-50 p-3 space-y-2">
           <div className="flex items-center gap-2 text-amber-800">
             <AlertTriangle className="size-4 shrink-0" />
-            <p className="text-sm font-semibold">Overlapping time slot detected</p>
+            <p className="text-sm font-semibold">Overlaps existing option</p>
           </div>
+          <p className="text-xs text-amber-800/90">
+            Overlapping setup options are allowed. The scheduling engine prevents actual room, proctor, and student exam conflicts during assignment.
+          </p>
           <ul className="space-y-1 pl-6 text-xs text-amber-800/90 list-disc">
             {conflicts.map((c) => (
               <li key={c.id}>
@@ -219,7 +222,7 @@ export function TimeSlotForm({
 
       <Button
         type="submit"
-        disabled={isLoading || hasErrors || hasConflicts}
+        disabled={isLoading || hasErrors}
         className="w-full h-10 rounded-none bg-zinc-950 text-white font-semibold shadow-sm shadow-zinc-950/10 hover:bg-zinc-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (

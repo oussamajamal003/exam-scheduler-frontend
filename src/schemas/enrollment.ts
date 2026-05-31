@@ -6,6 +6,13 @@ export type EnrollmentProgram = {
   id: string;
   name: string;
   code?: string;
+  department?: EnrollmentDepartment | null;
+};
+
+export type EnrollmentDepartment = {
+  id: string;
+  name: string;
+  code?: string;
 };
 
 export type EnrollmentSemester = {

@@ -15,15 +15,12 @@ export const proctorSchema = z.object({
       { message: "Proctor email must end with @uni.edu" }
     ),
   department: z.string().min(2, { message: "Department is required" }),
-  centerId: z.string().min(1, { message: "Center is required" }),
   user: z.object({ id: z.string().optional(), name: z.string().optional(), email: z.string().optional(), role: z.string().optional() }).nullable().optional(),
-  center: z.string().optional().default(""),
-  centerRef: z.object({ id: z.string().optional(), name: z.string().optional() }).nullable().optional(),
   availableTimeSlots: z.array(timeSlotSchema).optional().default([]),
   timeSlotIds: z.array(z.string()).optional().default([]),
   assignments: z.array(z.unknown()).optional(),
 });
 
 export type Proctor = z.infer<typeof proctorSchema>;
-export type CreateProctorDto = Pick<Proctor, "name" | "email" | "department" | "centerId" | "center" | "timeSlotIds">;
+export type CreateProctorDto = Pick<Proctor, "name" | "email" | "department" | "timeSlotIds">;
 export type UpdateProctorDto = Partial<CreateProctorDto>;

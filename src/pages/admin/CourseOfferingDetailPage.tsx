@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   BookOpenText,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -23,6 +25,7 @@ import { getApiErrorMessage } from "../../lib/apiError";
 import { formatUtcDate } from "../../lib/dateTime";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import { useCourseOffering } from "../../hooks/courseOfferings/useCourseOfferings";
+import { useDetailListPagination } from "../../hooks/common/useDetailListPagination";
 import { cn } from "../../lib/utils";
 import type { CourseOfferingDetail, OfferingStatus } from "../../schemas/courseOffering";
 
@@ -44,6 +47,20 @@ export function CourseOfferingDetailPage() {
   const navigate = useNavigate();
   const { data: offering, isLoading, isError, error } = useCourseOffering(id);
   const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const registrations: CourseOfferingDetail["registrations"] = offering?.registrations ?? [];
+  const exams: CourseOfferingDetail["exams"] = offering?.exams ?? [];
+  const totalEnrollments = registrations.length;
+  const totalExams = exams.length;
+  const hasAssignments = exams.some((exam) => exam.assignments.length > 0);
+  const isReadyForScheduling = totalEnrollments > 0;
+  const registrationsPagination = useDetailListPagination(registrations, {
+    pageSize: 20,
+    threshold: 20,
+  });
+  const examsPagination = useDetailListPagination(exams, {
+    pageSize: 8,
+    threshold: 8,
+  });
 
   if (showPageLoading) {
     return (
@@ -67,13 +84,6 @@ export function CourseOfferingDetailPage() {
       </div>
     );
   }
-
-  const registrations: CourseOfferingDetail["registrations"] = offering.registrations ?? [];
-  const exams: CourseOfferingDetail["exams"] = offering.exams ?? [];
-  const totalEnrollments = registrations.length;
-  const totalExams = exams.length;
-  const hasAssignments = exams.some((exam) => exam.assignments.length > 0);
-  const isReadyForScheduling = totalEnrollments > 0;
 
   return (
     <div className="p-5 sm:p-6 lg:p-8">
@@ -334,28 +344,60 @@ export function CourseOfferingDetailPage() {
                 description="When students register for this offering they will appear here with their program."
               />
             ) : (
-              <div className="max-h-90 divide-y divide-zinc-200/60 overflow-y-auto">
-                {registrations.map((student, index) => (
-                  <div
-                    key={student.id ?? `${student.universityId ?? "student"}-${index}`}
-                    className="flex items-center justify-between gap-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-950">
-                        {student.name}
-                      </p>
-                      <p className="truncate text-xs text-zinc-500">
-                        {student.email ?? "No email"} · {student.programName ?? "Unassigned program"}
-                      </p>
+              <>
+                <div className="max-h-90 divide-y divide-zinc-200/60 overflow-y-auto">
+                  {registrationsPagination.visibleItems.map((student, index) => (
+                    <div
+                      key={student.id ?? `${student.universityId ?? "student"}-${index}`}
+                      className="flex items-center justify-between gap-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-zinc-950">
+                          {student.name}
+                        </p>
+                        <p className="truncate text-xs text-zinc-500">
+                          {student.email ?? "No email"} · {student.programName ?? "Unassigned program"}
+                        </p>
+                      </div>
+                      {student.universityId && (
+                        <span className="rounded-none bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
+                          {student.universityId}
+                        </span>
+                      )}
                     </div>
-                    {student.universityId && (
-                      <span className="rounded-none bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
-                        {student.universityId}
+                  ))}
+                </div>
+                {registrationsPagination.shouldPaginate && (
+                  <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                    <p>
+                      Showing <span className="font-semibold text-zinc-900">{registrationsPagination.start}</span>-<span className="font-semibold text-zinc-900">{registrationsPagination.end}</span> of <span className="font-semibold text-zinc-900">{registrationsPagination.total}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={registrationsPagination.page <= 1}
+                        onClick={() => registrationsPagination.setPage(registrationsPagination.page - 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="font-semibold text-zinc-900">
+                        Page {registrationsPagination.page} of {registrationsPagination.totalPages}
                       </span>
-                    )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={registrationsPagination.page >= registrationsPagination.totalPages}
+                        onClick={() => registrationsPagination.setPage(registrationsPagination.page + 1)}
+                        className="h-8 rounded-none px-2"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -385,8 +427,9 @@ export function CourseOfferingDetailPage() {
                 description="Once exams are created for this offering they will appear here with rooms, proctors, and time slots."
               />
             ) : (
+              <>
               <div className="space-y-4">
-                {exams.map((exam) => (
+                {examsPagination.visibleItems.map((exam) => (
                   <div
                     key={exam.id}
                     className="rounded-none border border-zinc-200/80 bg-zinc-50/40 p-4"
@@ -440,6 +483,37 @@ export function CourseOfferingDetailPage() {
                   </div>
                 ))}
               </div>
+              {examsPagination.shouldPaginate && (
+                <div className="flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600">
+                  <p>
+                    Showing <span className="font-semibold text-zinc-900">{examsPagination.start}</span>-<span className="font-semibold text-zinc-900">{examsPagination.end}</span> of <span className="font-semibold text-zinc-900">{examsPagination.total}</span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={examsPagination.page <= 1}
+                      onClick={() => examsPagination.setPage(examsPagination.page - 1)}
+                      className="h-8 rounded-none px-2"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="font-semibold text-zinc-900">
+                      Page {examsPagination.page} of {examsPagination.totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={examsPagination.page >= examsPagination.totalPages}
+                      onClick={() => examsPagination.setPage(examsPagination.page + 1)}
+                      className="h-8 rounded-none px-2"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </CardContent>
         </Card>

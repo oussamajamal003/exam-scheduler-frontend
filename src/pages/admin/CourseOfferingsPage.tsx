@@ -1,12 +1,16 @@
-import { useDeferredValue, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import {
   Layers,
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -17,69 +21,159 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { CourseOfferingList } from "../../features/courseOfferings/CourseOfferingList";
 import { CourseOfferingForm } from "../../forms/courseOfferings/CourseOfferingForm";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
+import { ActiveFilterBadges } from "../../components/shared/ActiveFilterBadges";
+import { SearchSelectFilter, type SearchSelectFilterOption } from "../../components/shared/SearchSelectFilter";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import {
-  useCoursesForOfferings,
-  useCourseOfferings,
+  useCourseOfferingsPage,
   useCreateCourseOffering,
   useDeleteCourseOffering,
   useUpdateCourseOffering,
 } from "../../hooks/courseOfferings/useCourseOfferings";
+import { useDepartments } from "../../hooks/departments/useDepartments";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
 import type {
   CourseOffering,
   CreateCourseOfferingDto,
 } from "../../schemas/courseOffering";
 
+const ALL_SEMESTERS = "__all_semesters__";
+const normalizeFilterSearch = (value: string) => value.trim().toLowerCase();
+const formatDepartmentLabel = (department: { name?: string; code?: string | null }) =>
+  [department.name, department.code ? `(${department.code})` : null].filter(Boolean).join(" ");
+
 export function CourseOfferingsPage() {
+  const PAGE_SIZE = 50;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const { filters, setFilter, setFilters } = usePersistentFilters('course-offerings', {
+    search: '',
+    semesterId: '',
+    departmentId: '',
+  });
+  const searchTerm = filters.search;
+  const [silentSearch, setSilentSearch] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hlId = params.get('offeringId') ?? params.get('id');
+    const hl = params.get('_hl');
+    return (hlId && hl) ? hl : '';
+  });
+  const setSearchTerm = (value: string) => {
+    if (value && silentSearch) setSilentSearch('');
+    setFilter('search', value);
+  };
   const deferredSearchTerm = useDeferredValue(searchTerm.trim());
-
-  const offeringsQuery = useCourseOfferings(deferredSearchTerm);
-  const coursesQuery = useCoursesForOfferings();
-  const semestersQuery = useSemesters();
-
-  const offerings = useMemo(() => offeringsQuery.data ?? [], [offeringsQuery.data]);
-  const courses = useMemo(() => coursesQuery.data ?? [], [coursesQuery.data]);
-  const semesters = useMemo(() => semestersQuery.data ?? [], [semestersQuery.data]);
-
+  const semesterParam = filters.semesterId;
+  const departmentParam = filters.departmentId;
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const semestersQuery = useSemesters();
+  const departmentsQuery = useDepartments();
+
+  const semesters = useMemo(() => semestersQuery.data ?? [], [semestersQuery.data]);
+  const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
+  const selectedSemester = useMemo(
+    () => semesters.find((semester) => semester.id === semesterParam) ?? null,
+    [semesters, semesterParam]
+  );
+  const selectedDepartment = useMemo(
+    () => departments.find((department) => department.id === departmentParam) ?? null,
+    [departments, departmentParam]
+  );
+  const selectedSemesterId = selectedSemester?.id ?? "";
+  const selectedDepartmentId = selectedDepartment?.id ?? "";
+
+  // URL-synced server page (1-based)
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const setFilterParam = (key: "semesterId" | "departmentId", value: string) => setFilter(key, value);
+
+  const clearAdvancedFilters = () => {
+    setSilentSearch('');
+    setFilters({ search: '', semesterId: '', departmentId: '' });
+  };
+
+  // Reset to page 1 whenever a filter changes
+  useEffect(() => {
+    if (currentPage !== 1) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("page");
+      setSearchParams(nextParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearchTerm, selectedSemesterId, selectedDepartmentId]);
+
+  const offeringsQuery = useCourseOfferingsPage({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: deferredSearchTerm || silentSearch,
+    semesterId: selectedSemesterId || undefined,
+    departmentId: selectedDepartmentId || undefined,
+  });
+  const offerings = useMemo(() => offeringsQuery.data?.data ?? [], [offeringsQuery.data]);
+  const offeringsMeta = offeringsQuery.data?.meta;
+  const totalOfferings = offeringsMeta?.total ?? offerings.length;
+  const totalPages = offeringsMeta?.totalPages ?? 1;
+
+  const highlightedOfferingId = searchParams.get("offeringId") ?? searchParams.get("id");
+  const _hlOfferingParam = searchParams.get('_hl');
+  useEffect(() => {
+    if (highlightedOfferingId && _hlOfferingParam) setSilentSearch(_hlOfferingParam);
+    else if (!highlightedOfferingId) setSilentSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedOfferingId, _hlOfferingParam]);
+  useHighlightRow("data-course-offering-id", highlightedOfferingId, offerings.length);
+
   const [editingOffering, setEditingOffering] = useState<CourseOffering | null>(null);
   const [deletingOffering, setDeletingOffering] = useState<CourseOffering | null>(null);
+
+  useEffect(() => {
+    if (semestersQuery.isLoading) return;
+    if (!semesterParam) return;
+    const isValidSemester = semesters.some((semester) => semester.id === semesterParam);
+    if (isValidSemester) return;
+    setFilter('semesterId', '');
+  }, [semesterParam, semesters, semestersQuery.isLoading]);
+
+  useEffect(() => {
+    if (departmentsQuery.isLoading) return;
+    if (!departmentParam) return;
+    const isValidDepartment = departments.some((department) => department.id === departmentParam);
+    if (isValidDepartment) return;
+    setFilter('departmentId', '');
+  }, [departmentParam, departments, departmentsQuery.isLoading]);
 
   const createMutation = useCreateCourseOffering();
   const updateMutation = useUpdateCourseOffering();
   const deleteMutation = useDeleteCourseOffering();
+  const bulkDelete = useBulkDelete({ entityName: "course offering", entityNamePlural: "course offerings", deleteItem: (id) => deleteMutation.mutateAsync(id) });
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const filteredOfferings = useMemo(() => {
-    if (!deferredSearchTerm) return offerings;
-    const needle = deferredSearchTerm.toLowerCase();
-    return offerings.filter((offering) => {
-      const haystack = [
-        offering.course?.title,
-        offering.course?.name,
-        offering.course?.code,
-        offering.instructor,
-        offering.program?.name,
-        offering.course?.program?.name,
-        offering.semester?.name,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
-  }, [offerings, deferredSearchTerm]);
+  // Server already filters by search + semester; current page rows are authoritative.
+  const filteredOfferings = offerings;
 
   const getRegistrationCount = (offering: CourseOffering) => {
     return (
@@ -89,7 +183,8 @@ export function CourseOfferingsPage() {
     );
   };
 
-  const totalOfferings = offerings.length;
+  // Metrics: totalOfferings comes from meta (dataset-wide). Other metrics
+  // are *page-scoped* because we no longer download the entire dataset.
   const totalEnrollments = useMemo(
     () =>
       offerings.reduce(
@@ -130,14 +225,15 @@ export function CourseOfferingsPage() {
   };
 
   const handleRefresh = () => {
+    semestersQuery.refetch();
     offeringsQuery.refetch();
   };
 
-  const isFetching = offeringsQuery.isFetching || coursesQuery.isFetching || semestersQuery.isFetching;
+  const isFetching = offeringsQuery.isFetching || semestersQuery.isFetching || departmentsQuery.isFetching;
   const isSearching = searchTerm.trim() !== deferredSearchTerm;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
-  const showPageLoading = useDelayedLoading(offeringsQuery.isLoading, 1000);
+  const showPageLoading = useDelayedLoading(semestersQuery.isLoading || departmentsQuery.isLoading || (offeringsQuery.isLoading && !offeringsQuery.data), 1000);
 
   const handleSubmit = async (data: CreateCourseOfferingDto) => {
     try {
@@ -157,16 +253,32 @@ export function CourseOfferingsPage() {
     deleteMutation.mutate(deletingOffering.id, { onSuccess: closeDeleteModal });
   };
 
-  const isPageError = offeringsQuery.isError;
+  const isPageError = offeringsQuery.isError || semestersQuery.isError || departmentsQuery.isError;
   const pageErrorMessage = getApiErrorMessage(
-    offeringsQuery.error,
-    "Failed to load course offerings."
+    departmentsQuery.error ?? semestersQuery.error ?? offeringsQuery.error,
+    "Failed to load semester-filtered course offerings."
   );
 
-  const coursesErrorMessage = getApiErrorMessage(
-    coursesQuery.error,
-    "Failed to load courses for the offering form."
+  const selectedDepartmentLabel = selectedDepartment?.name ?? selectedDepartmentId;
+  const departmentOptions = useMemo<SearchSelectFilterOption[]>(
+    () => departments.flatMap((department) => {
+      if (!department.id) return [];
+      const label = formatDepartmentLabel(department);
+      return [{
+        value: department.id,
+        label,
+        description: department.code ?? undefined,
+        searchText: normalizeFilterSearch(`${label} ${department.code ?? ""}`),
+      }];
+    }),
+    [departments]
   );
+  const activeFilterBadges = [
+    ...(deferredSearchTerm ? [{ key: "search", label: "Search", value: deferredSearchTerm, onRemove: () => setSearchTerm("") }] : []),
+    ...(selectedSemesterId ? [{ key: "semester", label: "Semester", value: selectedSemester?.name ?? selectedSemesterId, onRemove: () => setFilterParam("semesterId", "") }] : []),
+    ...(selectedDepartmentId ? [{ key: "department", label: "Department", value: selectedDepartmentLabel, onRemove: () => setFilterParam("departmentId", "") }] : []),
+  ];
+  const activeFilterCount = activeFilterBadges.length;
 
   const semestersErrorMessage = getApiErrorMessage(
     semestersQuery.error,
@@ -246,8 +358,8 @@ export function CourseOfferingsPage() {
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Filter by course, instructor, semester…"
-              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/50"
+              placeholder="Filter by course, instructor, or program…"
+              className="h-10 rounded-none border-zinc-200 bg-transparent pl-10 text-sm shadow-none transition-colors hover:bg-zinc-50 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-zinc-300 group-data-[stuck=true]:bg-white/70 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:bg-zinc-950 dark:focus-visible:ring-zinc-700 dark:group-data-[stuck=true]:bg-zinc-950/70"
             />
           </div>
         </div>
@@ -263,7 +375,7 @@ export function CourseOfferingsPage() {
                   Total Offerings
                 </p>
                 <p className="mt-2 text-3xl font-bold text-zinc-950">{totalOfferings}</p>
-                <p className="mt-2 text-xs text-zinc-500">Across all semesters</p>
+                <p className="mt-2 text-xs text-zinc-500">{selectedSemester ? "In the selected semester" : "Across all semesters"}</p>
               </div>
               <div className="rounded-none bg-blue-50 p-2">
                 <Layers className="size-5 text-blue-600" />
@@ -297,7 +409,7 @@ export function CourseOfferingsPage() {
                   Enrolled Students
                 </p>
                 <p className="mt-2 text-3xl font-bold text-zinc-950">{totalEnrollments}</p>
-                <p className="mt-2 text-xs text-zinc-500">Across all offerings</p>
+                <p className="mt-2 text-xs text-zinc-500">Across displayed offerings</p>
               </div>
               <div className="rounded-none bg-violet-50 p-2">
                 <Users className="size-5 text-violet-600" />
@@ -312,7 +424,7 @@ export function CourseOfferingsPage() {
               System Status
             </p>
             <p className="mt-2 text-sm text-zinc-600">
-              Real-time sync enabled. Course offerings pull relational course, semester, registration, and exam assignment data directly from the API layer.
+              Real-time sync enabled. Course offerings refresh against the active semester filter and pull relational course, semester, registration, and exam assignment data directly from the API layer.
             </p>
             <div className="mt-3 flex gap-2">
               <div className="h-2 w-2 rounded-full bg-green-500"></div>
@@ -324,15 +436,99 @@ export function CourseOfferingsPage() {
 
       {/* Offerings List */}
       <div className="mb-8">
+        <div className="mb-4 space-y-4 rounded-none border border-zinc-200/70 bg-linear-to-r from-white via-zinc-50/70 to-zinc-100/60 px-4 py-4 shadow-sm sm:px-5 dark:border-zinc-800/80 dark:from-zinc-950 dark:via-zinc-950/90 dark:to-zinc-900/80 dark:shadow-black/20">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                <SlidersHorizontal className="size-3.5" />
+                Table Filter
+              </div>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                Showing offerings for {selectedSemester?.name ?? "all semesters"}{selectedDepartment ? ` in ${selectedDepartment.name}` : " across all departments"}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Choose a semester and department to narrow the table, or keep all filters open to show every offering.
+              </p>
+            </div>
+            {activeFilterCount > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearAdvancedFilters}
+                className="h-10 rounded-none border-zinc-200 bg-white font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                <X className="mr-2 size-4" />
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <div className="w-full sm:max-w-sm">
+              <label
+                htmlFor="course-offerings-semester-filter"
+                className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400"
+              >
+                Semester
+              </label>
+              <Select
+                value={selectedSemesterId || ALL_SEMESTERS}
+                onValueChange={(value) => {
+                  setFilterParam("semesterId", value === ALL_SEMESTERS ? "" : value);
+                }}
+              >
+                <SelectTrigger
+                  id="course-offerings-semester-filter"
+                  className="h-11 rounded-none border-zinc-200 bg-white text-zinc-950 shadow-sm hover:border-zinc-300 focus-visible:ring-zinc-300/50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:focus-visible:ring-zinc-700/70"
+                >
+                  <SelectValue placeholder={semestersQuery.isLoading ? "Loading semesters..." : "All semesters"} />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-zinc-200 bg-white text-zinc-950 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                  <SelectItem value={ALL_SEMESTERS}>All semesters</SelectItem>
+                  {semesters.map((semester) => (
+                    <SelectItem key={semester.id} value={semester.id}>
+                      {semester.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <SearchSelectFilter
+              label="Department"
+              value={selectedDepartmentId}
+              placeholder="All departments"
+              searchPlaceholder="Search departments"
+              options={departmentOptions}
+              isLoading={departmentsQuery.isLoading}
+              onChange={(value) => setFilterParam("departmentId", value)}
+            />
+          </div>
+
+          <ActiveFilterBadges badges={activeFilterBadges} onClearAll={clearAdvancedFilters} />
+        </div>
+
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={filteredOfferings.length} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
+
         <CourseOfferingList
           offerings={filteredOfferings}
           isLoading={showTableLoading}
-          isDeleting={deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
           search={searchTerm}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(filteredOfferings, checked)}
           onCreateOffering={openCreateModal}
           onEditOffering={openEditModal}
           onViewOffering={handleViewDetails}
           onDeleteOffering={setDeletingOffering}
+          highlightedOfferingId={highlightedOfferingId}
+          pagination={{
+            page: currentPage,
+            pageCount: totalPages,
+            pageSize: PAGE_SIZE,
+            totalCount: totalOfferings,
+            onPageChange: setPage,
+          }}
         />
       </div>
 
@@ -357,6 +553,16 @@ export function CourseOfferingsPage() {
         onConfirm={confirmDelete}
       />
 
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Selected Course Offerings"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected course offering${bulkDelete.selectedCount === 1 ? "" : "s"}${selectedSemester ? ` from ${selectedSemester.name}` : ""}.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
+      />
+
       <Dialog
         open={isFormOpen}
         onOpenChange={(open) => (open ? setIsFormOpen(true) : closeFormModal())}
@@ -371,11 +577,8 @@ export function CourseOfferingsPage() {
             <CourseOfferingForm
               key={editingOffering?.id ?? "new-offering"}
               initialData={editingOffering ?? undefined}
-              courses={courses}
               semesters={semesters}
-              isCoursesLoading={coursesQuery.isLoading}
               isSemestersLoading={semestersQuery.isLoading}
-              coursesErrorMessage={coursesQuery.isError ? coursesErrorMessage : undefined}
               semestersErrorMessage={
                 semestersQuery.isError ? semestersErrorMessage : undefined
               }

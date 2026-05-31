@@ -8,7 +8,7 @@ interface AuthCardProps {
 
 export const AuthCard: React.FC<AuthCardProps> = ({ children, footer }) => {
   return (
-    <Card className="overflow-hidden rounded-2xl border border-white/30 bg-white/10 shadow-2xl shadow-black/18 backdrop-blur-sm transition-all">
+    <Card className="overflow-hidden rounded-2xl border border-white/30 bg-white/10! shadow-2xl shadow-black/18 backdrop-blur-sm transition-all">
       <CardContent className="p-8 pb-6">
         {children}
       </CardContent>

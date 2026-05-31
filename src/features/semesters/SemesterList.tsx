@@ -1,20 +1,33 @@
+import { useEffect, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Semester } from "../../schemas/semester";
-import { CalendarRange, Edit2, Trash2 } from "lucide-react";
+import { CalendarRange, Edit2, Trash2, Zap } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 
 interface SemesterListProps {
   semesters: Semester[];
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  pagination?: {
+    page: number;
+    pageCount: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onEditSemester: (semester: Semester) => void;
   onDeleteSemester: (semester: Semester) => void;
   onAddSemester?: () => void;
+  highlightedSemesterId?: string | null;
 }
 
 const formatDate = (value?: string) => {
@@ -33,11 +46,29 @@ export function SemesterList({
   isLoading,
   isDeleting,
   search,
+  pagination,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onEditSemester,
   onDeleteSemester,
   onAddSemester,
+  highlightedSemesterId,
 }: SemesterListProps) {
   const semesterRows = Array.isArray(semesters) ? semesters : [];
+  const selectedCount = semesterRows.filter((semester) => selectedIds?.has(semester.id)).length;
+  const isAllSelected = semesterRows.length > 0 && selectedCount === semesterRows.length;
+  const currentPage = pagination?.page ?? 1;
+  const pageCount = pagination?.pageCount ?? 1;
+  const totalCount = pagination?.totalCount ?? semesterRows.length;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(semesterRows, { estimateRowHeight: 72 });
+  const targetSemesterIndex = useMemo(
+    () => semesterRows.findIndex((s) => s.id === highlightedSemesterId),
+    [semesterRows, highlightedSemesterId]
+  );
+  useEffect(() => {
+    if (targetSemesterIndex >= 0) scrollToIndex(targetSemesterIndex);
+  }, [targetSemesterIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -56,16 +87,22 @@ export function SemesterList({
         <div className="flex items-center gap-2 rounded-none bg-linear-to-br from-zinc-50 to-zinc-100/80 px-5 py-3 border border-zinc-200/60 shadow-sm">
           <div className="text-right">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-400">Total Semesters</p>
-            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{semesterRows.length}</p>
+            <p className="text-3xl font-bold tracking-tight text-zinc-950 mt-1">{totalCount}</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 hover:bg-transparent bg-zinc-50/40">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all semesters" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || semesterRows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Name</TableHead>
+                <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Status</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">Start Date</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600">End Date</TableHead>
                 <TableHead className="px-4 py-4 sm:px-6 font-bold text-xs uppercase tracking-[0.12em] text-zinc-600 text-right">Total Offerings</TableHead>
@@ -75,13 +112,13 @@ export function SemesterList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
-                    <TableSkeletonRows columns={5} rows={semesterRows.length > 0 ? semesterRows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 7 : 6} rows={semesterRows.length > 0 ? semesterRows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : semesterRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 7 : 6} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={CalendarRange}
@@ -103,21 +140,45 @@ export function SemesterList({
                   </TableCell>
                 </TableRow>
               ) : (
-                semesterRows.map((semester, idx) => {
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: semester, index: idx }) => {
                   const offeringsCount = semester?.courseOfferings?.length ?? semester?.courseOfferingsCount ?? 0;
 
                   return (
                     <TableRow
                       key={semester.id}
+                      data-semester-id={semester.id}
                       className={cn(
                         "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
                         idx === semesterRows.length - 1 && "border-b-0"
                       )}
                     >
+                      {onToggleSelected && (
+                        <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                          <RowSelectCheckbox label={`Select ${semester.name}`} checked={selectedIds?.has(semester.id) ?? false} disabled={isDeleting} onChange={(checked) => onToggleSelected(semester.id, checked)} />
+                        </TableCell>
+                      )}
                       <TableCell className="px-4 py-4 sm:px-6">
                         <div className="font-semibold text-zinc-950 text-sm">{semester?.name ?? "Untitled"}</div>
                         {semester?.academicYear && (
                           <p className="text-xs text-zinc-500 mt-0.5">AY {semester.academicYear}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-4 py-4 sm:px-6">
+                        {semester?.isActive ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-none border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            <Zap className="size-3 fill-emerald-500 text-emerald-500" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-none border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500">
+                            Upcoming
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700">
@@ -156,11 +217,44 @@ export function SemesterList({
                       </TableCell>
                     </TableRow>
                   );
-                })
+                })}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 7 : 6} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {pageCount > 1 && (
+          <div className="flex items-center justify-between border-t border-zinc-200/60 px-4 py-3 sm:px-6">
+            <p className="text-xs text-zinc-500">
+              Page {currentPage} of {pageCount}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-none"
+                onClick={() => pagination?.onPageChange(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-none"
+                onClick={() => pagination?.onPageChange(Math.min(pageCount, currentPage + 1))}
+                disabled={currentPage >= pageCount}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,21 +1,28 @@
 import React from 'react';
-import { CalendarClock, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, Clock, DoorOpen, List, MapPin, Search, UserCheck } from 'lucide-react';
+import { CalendarClock, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, Clock, DoorOpen, List, MapPin, UserCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ActiveFilterBadges } from '@/components/shared/ActiveFilterBadges';
+import { ScheduleFilterToolbar } from '@/components/shared/ScheduleFilterToolbar';
 import { usePublishedSchedulesForRole } from '@/hooks/roleDashboards/useRoleDashboards';
+import { PUBLISHED_ASSIGNMENT_STATUS_OPTIONS, useAssignmentScheduleFilters, type UseAssignmentScheduleFiltersResult } from '@/hooks/assignments/useAssignmentScheduleFilters';
 import { useSchedulePdfDownload } from '@/hooks/schedulePdf/useSchedulePdfDownload';
 import { downloadFullPublishedSchedulePdf } from '@/api/schedulePdf.api';
 import { DownloadPdfButton } from '@/components/roleSchedule/DownloadPdfButton';
 import { formatUtcDate, formatUtcTime } from '@/lib/dateTime';
+import { buildMultiEntitySearchIndex } from '@/lib/smartSearch';
 import { cn } from '@/lib/utils';
 import type { Schedule, ScheduleAssignment } from '@/schemas/schedule';
 
 type ViewMode = 'table' | 'calendar';
+
+type LogicalScheduleAssignment = ScheduleAssignment & {
+  logicalAssignments?: ScheduleAssignment[];
+};
 
 type RoleScheduleViewProps = {
   title: string;
@@ -25,10 +32,49 @@ type RoleScheduleViewProps = {
   error?: boolean;
   emptyLabel: string;
   errorLabel: string;
-  secondaryLabel?: (assignment: ScheduleAssignment) => string;
+  secondaryLabel?: (assignment: LogicalScheduleAssignment) => string;
   tableMode?: 'default' | 'proctor';
   dedupeLogicalAssignments?: boolean;
   headerActions?: React.ReactNode;
+  showFilters?: boolean;
+  filterResultLabel?: (visible: number, total: number) => string;
+  filterEmptyLabel?: string;
+};
+
+const ROLE_FILTER_QUERY_PLACEHOLDER = 'Search course name, code, room, center, proctor, schedule';
+
+export const AdvancedScheduleFilters = ({
+  filters,
+  resultSummary,
+  fields,
+  badges,
+}: {
+  filters: UseAssignmentScheduleFiltersResult;
+  resultSummary: string;
+  fields?: UseAssignmentScheduleFiltersResult['fields'];
+  badges?: UseAssignmentScheduleFiltersResult['badges'];
+}) => {
+  const visibleFields = fields ?? filters.fields.filter((field) => field.key !== 'semester');
+  const visibleBadges = badges ?? filters.badges.filter((badge) => badge.key !== 'semester');
+
+  return <div className="space-y-2">
+    <ScheduleFilterToolbar
+      query={filters.state.query}
+      onQueryChange={filters.setters.setQuery}
+      queryPlaceholder={ROLE_FILTER_QUERY_PLACEHOLDER}
+      activeCount={visibleBadges.length}
+      resultSummary={resultSummary}
+      startDate={filters.state.startDate}
+      endDate={filters.state.endDate}
+      onStartDateChange={filters.setters.setStartDate}
+      onEndDateChange={filters.setters.setEndDate}
+      examDate={filters.state.examDate}
+      onExamDateChange={filters.setters.setExamDate}
+      onReset={filters.reset}
+      fields={visibleFields}
+    />
+    <ActiveFilterBadges badges={visibleBadges} onClearAll={filters.reset} />
+  </div>;
 };
 
 const getAssignmentTime = (assignment: ScheduleAssignment) => {
@@ -37,29 +83,83 @@ const getAssignmentTime = (assignment: ScheduleAssignment) => {
   return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY;
 };
 
-const sortAssignments = (assignments: ScheduleAssignment[]) => [...assignments].sort((a, b) => getAssignmentTime(a) - getAssignmentTime(b));
+const sortAssignments = <T extends ScheduleAssignment>(assignments: T[]) => [...assignments].sort((a, b) => getAssignmentTime(a) - getAssignmentTime(b));
 const logicalAssignmentKey = (assignment: ScheduleAssignment) => `${assignment.examId}:${assignment.timeSlotId}`;
 
-const dedupeLogicalAssignments = (assignments: ScheduleAssignment[]) => {
-  const unique = new Map<string, ScheduleAssignment>();
+const groupLogicalAssignments = (assignments: ScheduleAssignment[]): LogicalScheduleAssignment[] => {
+  const groups = new Map<string, ScheduleAssignment[]>();
   for (const assignment of assignments) {
     const key = logicalAssignmentKey(assignment);
-    if (!unique.has(key)) {
-      unique.set(key, assignment);
-    }
+    const group = groups.get(key) ?? [];
+    group.push(assignment);
+    groups.set(key, group);
   }
-  return Array.from(unique.values());
+  return Array.from(groups.values()).map((group) => ({
+    ...group[0],
+    logicalAssignments: sortAssignments(group),
+  }));
 };
+
+const getLogicalFilterOverrides = (
+  assignment: LogicalScheduleAssignment,
+  searchIndex: UseAssignmentScheduleFiltersResult['searchIndex']
+) => {
+  const rows = assignment.logicalAssignments;
+  if (!rows || rows.length <= 1) return undefined;
+
+  return {
+    roomIds: uniqueValues(rows.map((row) => row.roomId)),
+    centerIds: uniqueValues(rows.map((row) => row.room?.center?.id)),
+    proctorIds: uniqueValues(rows.map((row) => row.proctorId)),
+    searchIndex: buildMultiEntitySearchIndex(rows.map((row) => searchIndex(row))),
+  };
+};
+
+const getLogicalRows = (assignment: LogicalScheduleAssignment | null) => assignment?.logicalAssignments ?? (assignment ? [assignment] : []);
+const uniqueValues = (values: Array<string | null | undefined>) => [...new Set(values.filter(Boolean) as string[])];
 
 const courseTitle = (assignment: ScheduleAssignment) => assignment.exam?.courseOffering?.course?.title ?? 'Exam';
 const courseCode = (assignment: ScheduleAssignment) => assignment.exam?.courseOffering?.course?.code ?? 'Course TBD';
 const roomName = (assignment: ScheduleAssignment) => assignment.room?.name ?? 'Room TBD';
 const centerName = (assignment: ScheduleAssignment) => assignment.room?.center?.name ?? 'Center TBD';
 const proctorName = (assignment: ScheduleAssignment) => assignment.proctor?.user?.name ?? 'Proctor TBD';
+const roomSummary = (assignment: LogicalScheduleAssignment) => {
+  const rooms = uniqueValues(getLogicalRows(assignment).map((row) => row.room?.name));
+  if (rooms.length <= 1) return rooms[0] ?? 'Room TBD';
+  return `${rooms.length} rooms`;
+};
+const centerSummary = (assignment: LogicalScheduleAssignment) => {
+  const centers = uniqueValues(getLogicalRows(assignment).map((row) => row.room?.center?.name));
+  if (centers.length <= 1) return centers[0] ?? 'Center TBD';
+  return `${centers.length} centers`;
+};
+const proctorSummary = (assignment: LogicalScheduleAssignment) => {
+  const proctors = uniqueValues(getLogicalRows(assignment).map((row) => row.proctor?.user?.name));
+  if (proctors.length <= 1) return proctors[0] ?? 'Proctor TBD';
+  return `${proctors.length} proctors`;
+};
 const studentCount = (assignment: ScheduleAssignment) => assignment.exam?.courseOffering?.registrations?.length ?? assignment.exam?.courseOffering?.expectedStudents ?? 0;
 const durationLabel = (assignment: ScheduleAssignment) => {
   const duration = assignment.exam?.duration ?? assignment.timeSlot?.duration;
   return duration ? `${duration} min` : 'Duration TBD';
+};
+
+const assignmentStatus = (assignment: ScheduleAssignment) => assignment.exam?.status ?? (assignment.schedule?.isFinal ? 'SCHEDULED' : 'DRAFT');
+
+const assignmentStatusTone = (status: string) => {
+  if (status === 'COMPLETED') return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300';
+  if (status === 'CANCELLED') return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300';
+  if (status === 'IN_PROGRESS') return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-300';
+  return 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300';
+};
+
+const AssignmentStatusBadge = ({ assignment }: { assignment: ScheduleAssignment }) => {
+  const status = assignmentStatus(assignment);
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide', assignmentStatusTone(status))}>
+      {status.replaceAll('_', ' ')}
+    </span>
+  );
 };
 
 const dateKey = (assignment: ScheduleAssignment) => {
@@ -70,25 +170,8 @@ const dateKey = (assignment: ScheduleAssignment) => {
   return date.toISOString().slice(0, 10);
 };
 
-const assignmentSearchIndex = (assignment: ScheduleAssignment) => [
-  courseTitle(assignment),
-  courseCode(assignment),
-  formatUtcDate(assignment.timeSlot?.date ?? assignment.timeSlot?.startTime),
-  formatUtcTime(assignment.timeSlot?.startTime),
-  roomName(assignment),
-  centerName(assignment),
-  proctorName(assignment),
-  assignment.schedule?.name,
-].filter(Boolean).join(' ').toLowerCase();
-
-const filterAssignments = (assignments: ScheduleAssignment[], query: string) => {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return assignments;
-  return assignments.filter((assignment) => assignmentSearchIndex(assignment).includes(normalized));
-};
-
 const flattenPublishedSchedules = (schedules: Schedule[]) => sortAssignments(
-  dedupeLogicalAssignments(
+  groupLogicalAssignments(
     schedules
     .filter((schedule) => schedule.isFinal)
     .flatMap((schedule) =>
@@ -195,9 +278,9 @@ const ScheduleTable = ({
   secondaryLabel,
   mode = 'default',
 }: {
-  assignments: ScheduleAssignment[];
-  onSelect: (assignment: ScheduleAssignment) => void;
-  secondaryLabel?: (assignment: ScheduleAssignment) => string;
+  assignments: LogicalScheduleAssignment[];
+  onSelect: (assignment: LogicalScheduleAssignment) => void;
+  secondaryLabel?: (assignment: LogicalScheduleAssignment) => string;
   mode?: 'default' | 'proctor';
 }) => (
   <div className="overflow-x-auto rounded-none border border-zinc-200/70 dark:border-zinc-800/80">
@@ -211,6 +294,7 @@ const ScheduleTable = ({
           <th className="px-4 py-3 font-semibold">Room</th>
           <th className="px-4 py-3 font-semibold">Center</th>
           <th className="px-4 py-3 font-semibold">{mode === 'proctor' ? 'Student Count' : 'Proctor'}</th>
+          <th className="px-4 py-3 font-semibold">Status</th>
           <th className="px-4 py-3 font-semibold">Duration</th>
         </tr>
       </thead>
@@ -218,6 +302,7 @@ const ScheduleTable = ({
         {assignments.map((assignment) => (
           <tr
             key={assignment.id}
+            data-assignment-id={assignment.id}
             onClick={() => onSelect(assignment)}
             className="cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
           >
@@ -228,9 +313,10 @@ const ScheduleTable = ({
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{courseCode(assignment)}</td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{formatUtcDate(assignment.timeSlot?.date ?? assignment.timeSlot?.startTime)}</td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{formatUtcTime(assignment.timeSlot?.startTime)}</td>
-            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{roomName(assignment)}</td>
-            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{centerName(assignment)}</td>
-            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{mode === 'proctor' ? studentCount(assignment) : proctorName(assignment)}</td>
+            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{roomSummary(assignment)}</td>
+            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{centerSummary(assignment)}</td>
+            <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{mode === 'proctor' ? studentCount(assignment) : proctorSummary(assignment)}</td>
+            <td className="px-4 py-3"><AssignmentStatusBadge assignment={assignment} /></td>
             <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">{durationLabel(assignment)}</td>
           </tr>
         ))}
@@ -239,9 +325,9 @@ const ScheduleTable = ({
   </div>
 );
 
-const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignments: ScheduleAssignment[]; onSelect: (assignment: ScheduleAssignment) => void; compact?: boolean }) => {
+const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignments: LogicalScheduleAssignment[]; onSelect: (assignment: LogicalScheduleAssignment) => void; compact?: boolean }) => {
   const assignmentsByDay = React.useMemo(() => {
-    const groups = new Map<string, ScheduleAssignment[]>();
+    const groups = new Map<string, LogicalScheduleAssignment[]>();
     for (const assignment of assignments) {
       const key = dateKey(assignment);
       if (!key || key === 'unscheduled') continue;
@@ -280,7 +366,7 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
   const canGoNext = monthIndex >= 0 && monthIndex < monthsOfYear.length - 1;
 
   const daysInMonth = React.useMemo(() => {
-    if (!effectiveMonth) return [] as Array<{ key: string; items: ScheduleAssignment[] }>;
+    if (!effectiveMonth) return [] as Array<{ key: string; items: LogicalScheduleAssignment[] }>;
     const [yearStr, monthStr] = effectiveMonth.split('-');
     const year = Number(yearStr);
     const monthIdx = Number(monthStr) - 1;
@@ -292,12 +378,12 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
   }, [effectiveMonth, assignmentsByDay]);
 
   type CalendarRow =
-    | { kind: 'day'; key: string; items: ScheduleAssignment[] }
+    | { kind: 'day'; key: string; items: LogicalScheduleAssignment[] }
     | { kind: 'empty'; startKey: string; endKey: string; count: number };
 
   const calendarRows = React.useMemo<CalendarRow[]>(() => {
     const rows: CalendarRow[] = [];
-    let buffer: Array<{ key: string; items: ScheduleAssignment[] }> = [];
+    let buffer: Array<{ key: string; items: LogicalScheduleAssignment[] }> = [];
 
     const flush = () => {
       if (buffer.length === 0) return;
@@ -460,6 +546,7 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
                           return (
                             <button
                               key={assignment.id}
+                              data-assignment-id={assignment.id}
                               type="button"
                               onClick={() => onSelect(assignment)}
                               className={cn(
@@ -477,7 +564,10 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
                                   </span>
                                   <h3 className="mt-2 line-clamp-2 text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-100">{title}</h3>
                                 </div>
-                                <Badge variant="secondary">{formatUtcTime(assignment.timeSlot?.startTime)}</Badge>
+                                <div className="flex flex-col items-end gap-2">
+                                  <Badge variant="secondary">{formatUtcTime(assignment.timeSlot?.startTime)}</Badge>
+                                  <AssignmentStatusBadge assignment={assignment} />
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
@@ -489,15 +579,15 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
                               <div className="rounded-xl border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
                                 <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
                                   <DoorOpen className="size-3.5 text-zinc-500 dark:text-zinc-400" />
-                                  <span className="truncate font-medium">{roomName(assignment)}</span>
+                                  <span className="truncate font-medium">{roomSummary(assignment)}</span>
                                   <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
                                     <MapPin className="size-3" />
-                                    <span className="truncate">{centerName(assignment)}</span>
+                                    <span className="truncate">{centerSummary(assignment)}</span>
                                   </span>
                                 </div>
                                 <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
                                   <UserCheck className="size-3.5 text-zinc-500 dark:text-zinc-400" />
-                                  <span className="truncate">{proctorName(assignment)}</span>
+                                  <span className="truncate">{proctorSummary(assignment)}</span>
                                 </div>
                               </div>
                             </button>
@@ -516,7 +606,7 @@ const ScheduleCalendar = ({ assignments, onSelect, compact = false }: { assignme
   );
 };
 
-const DetailSheet = ({ assignment, onOpenChange }: { assignment: ScheduleAssignment | null; onOpenChange: (open: boolean) => void }) => (
+const DetailSheet = ({ assignment, onOpenChange }: { assignment: LogicalScheduleAssignment | null; onOpenChange: (open: boolean) => void }) => (
   <Sheet open={Boolean(assignment)} onOpenChange={onOpenChange}>
     <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
       <SheetHeader>
@@ -533,12 +623,33 @@ const DetailSheet = ({ assignment, onOpenChange }: { assignment: ScheduleAssignm
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailItem label="Date" value={formatUtcDate(assignment.timeSlot?.date ?? assignment.timeSlot?.startTime)} />
             <DetailItem label="Time slot" value={`${formatUtcTime(assignment.timeSlot?.startTime)} - ${formatUtcTime(assignment.timeSlot?.endTime)}`} />
-            <DetailItem label="Room" value={roomName(assignment)} />
-            <DetailItem label="Center" value={centerName(assignment)} />
-            <DetailItem label="Proctor" value={proctorName(assignment)} />
+            <DetailItem label="Rooms" value={roomSummary(assignment)} />
+            <DetailItem label="Centers" value={centerSummary(assignment)} />
+            <DetailItem label="Proctors" value={proctorSummary(assignment)} />
             <DetailItem label="Students" value={`${studentCount(assignment)} students`} />
+            <DetailItem label="Status" value={assignmentStatus(assignment).replaceAll('_', ' ')} />
             <DetailItem label="Duration" value={durationLabel(assignment)} />
           </div>
+          {getLogicalRows(assignment).length > 1 && (
+            <div className="rounded-none border border-zinc-200/70 bg-white dark:border-zinc-800/70 dark:bg-zinc-950">
+              <div className="border-b border-zinc-100 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                Room assignments
+              </div>
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {getLogicalRows(assignment).map((row) => (
+                  <div key={row.id} className="grid gap-1 px-4 py-3 text-sm sm:grid-cols-[1fr_1fr]">
+                    <div>
+                      <p className="font-semibold text-zinc-950 dark:text-zinc-50">{roomName(row)}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{centerName(row)} · Capacity {row.room?.capacity ?? 'TBD'}</p>
+                    </div>
+                    <div className="text-zinc-600 dark:text-zinc-300 sm:text-right">
+                      {proctorName(row)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </SheetContent>
@@ -572,15 +683,44 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
   tableMode = 'default',
   dedupeLogicalAssignments: shouldDedupeLogicalAssignments = false,
   headerActions,
+  showFilters = false,
+  filterResultLabel,
+  filterEmptyLabel,
 }) => {
   const [viewMode, setViewMode] = React.useState<ViewMode>('table');
-  const [selectedAssignment, setSelectedAssignment] = React.useState<ScheduleAssignment | null>(null);
-  const sortedAssignments = React.useMemo(
-    () => sortAssignments(shouldDedupeLogicalAssignments ? dedupeLogicalAssignments(assignments) : assignments),
+  const [selectedAssignment, setSelectedAssignment] = React.useState<LogicalScheduleAssignment | null>(null);
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    if (!showFilters) return;
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [showFilters]);
+
+  const filters = useAssignmentScheduleFilters(assignments, nowMs, {
+    searchDebounceMs: showFilters ? 250 : 0,
+    statusOptions: PUBLISHED_ASSIGNMENT_STATUS_OPTIONS,
+    includePhaseFilter: false,
+  });
+  const { compare, matches, searchIndex } = filters;
+
+  const processedBase = React.useMemo(
+    () => shouldDedupeLogicalAssignments ? groupLogicalAssignments(assignments) : assignments,
     [assignments, shouldDedupeLogicalAssignments]
   );
 
+  const visibleAssignments = React.useMemo(() => {
+    if (!showFilters) return sortAssignments(processedBase);
+    return processedBase
+      .filter((assignment) => matches(assignment, getLogicalFilterOverrides(assignment, searchIndex)))
+      .sort(compare);
+  }, [compare, matches, processedBase, searchIndex, showFilters]);
+
   if (loading) return <ScheduleSkeleton />;
+
+  const defaultResultLabel = (visible: number, total: number) =>
+    `Showing ${visible} of ${total} exam${total === 1 ? '' : 's'}`;
+  const resultSummary = (filterResultLabel ?? defaultResultLabel)(visibleAssignments.length, processedBase.length);
 
   return (
     <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
@@ -598,15 +738,22 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
           <ToggleButton active={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} icon={CalendarDays}>Calendar</ToggleButton>
         </div>
       </CardHeader>
+      {showFilters ? (
+        <div className="border-b border-zinc-100 p-5 dark:border-zinc-800/70">
+          <AdvancedScheduleFilters filters={filters} resultSummary={resultSummary} />
+        </div>
+      ) : null}
       <CardContent className="p-5">
         {error ? (
           <p className="py-8 text-center text-sm text-rose-600 dark:text-rose-300">{errorLabel}</p>
-        ) : sortedAssignments.length === 0 ? (
-          <EmptyState label={emptyLabel} />
+        ) : visibleAssignments.length === 0 ? (
+          showFilters && filters.hasActiveFilters
+            ? <EmptyState label={filterEmptyLabel ?? 'No exams match the current filters.'} />
+            : <EmptyState label={emptyLabel} />
         ) : viewMode === 'table' ? (
-          <ScheduleTable assignments={sortedAssignments} onSelect={setSelectedAssignment} secondaryLabel={secondaryLabel} mode={tableMode} />
+          <ScheduleTable assignments={visibleAssignments} onSelect={setSelectedAssignment} secondaryLabel={secondaryLabel} mode={tableMode} />
         ) : (
-          <ScheduleCalendar assignments={sortedAssignments} onSelect={setSelectedAssignment} />
+          <ScheduleCalendar assignments={visibleAssignments} onSelect={setSelectedAssignment} />
         )}
       </CardContent>
       <DetailSheet assignment={selectedAssignment} onOpenChange={(open) => !open && setSelectedAssignment(null)} />
@@ -614,15 +761,33 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
   );
 };
 
-export const FullPublishedScheduleSection: React.FC<{ portal?: 'student' | 'proctor' }> = ({ portal = 'student' }) => {
+export const FullPublishedScheduleSection: React.FC<{ portal?: 'student' | 'proctor'; showAdvancedFilters?: boolean }> = ({
+  portal = 'student',
+}) => {
   const [open, setOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<ViewMode>('table');
-  const [query, setQuery] = React.useState('');
-  const [selectedAssignment, setSelectedAssignment] = React.useState<ScheduleAssignment | null>(null);
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  const [selectedAssignment, setSelectedAssignment] = React.useState<LogicalScheduleAssignment | null>(null);
   const schedulesQuery = usePublishedSchedulesForRole();
   const allAssignments = React.useMemo(() => flattenPublishedSchedules(schedulesQuery.data ?? []), [schedulesQuery.data]);
-  const visibleAssignments = React.useMemo(() => filterAssignments(allAssignments, query), [allAssignments, query]);
+  const filters = useAssignmentScheduleFilters(allAssignments, nowMs, {
+    searchDebounceMs: 250,
+    statusOptions: PUBLISHED_ASSIGNMENT_STATUS_OPTIONS,
+    includePhaseFilter: false,
+  });
+  const { compare, matches, searchIndex } = filters;
+  const visibleAssignments = React.useMemo(
+    () => allAssignments
+      .filter((assignment) => matches(assignment, getLogicalFilterOverrides(assignment as LogicalScheduleAssignment, searchIndex)))
+      .sort(compare),
+    [allAssignments, compare, matches, searchIndex]
+  );
   const { download, isDownloading } = useSchedulePdfDownload();
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const handleDownloadFull = () =>
     download(() => downloadFullPublishedSchedulePdf(portal), {
@@ -632,38 +797,35 @@ export const FullPublishedScheduleSection: React.FC<{ portal?: 'student' | 'proc
     });
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
-        <CardHeader className="border-b border-zinc-100 dark:border-zinc-800/70">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                <CalendarDays className="size-4 text-zinc-400" />
-                Full Published Schedule
-              </CardTitle>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Read-only view of the official exam timetable</p>
-            </div>
-            <CollapsibleTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-                {open ? 'Hide full schedule' : 'Show full schedule'}
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-        </CardHeader>
-        <CollapsibleContent>
-          <CardContent className="space-y-4 p-5">
+    <div className="space-y-4">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-800/70">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="relative max-w-xl flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search by course, date, or center"
-                  className="pl-8"
-                />
+              <div>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  <CalendarDays className="size-4 text-zinc-400" />
+                  Full Published Schedule
+                </CardTitle>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Read-only view of the official exam timetable</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+                  {open ? 'Hide full schedule' : 'Show full schedule'}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <div className="border-b border-zinc-100 p-5 dark:border-zinc-800/70">
+              <AdvancedScheduleFilters
+                filters={filters}
+                resultSummary={`Showing ${visibleAssignments.length} of ${allAssignments.length} published ${portal === 'proctor' ? 'assignment' : 'exam'}${allAssignments.length === 1 ? '' : 's'}`}
+              />
+            </div>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex flex-wrap justify-end gap-2">
                 <DownloadPdfButton
                   onClick={handleDownloadFull}
                   loading={isDownloading}
@@ -673,24 +835,24 @@ export const FullPublishedScheduleSection: React.FC<{ portal?: 'student' | 'proc
                 <ToggleButton active={viewMode === 'table'} onClick={() => setViewMode('table')} icon={List}>Compact table</ToggleButton>
                 <ToggleButton active={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} icon={CalendarDays}>Calendar</ToggleButton>
               </div>
-            </div>
-            {schedulesQuery.isLoading ? (
-              <div className="space-y-3">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
-            ) : schedulesQuery.isError ? (
-              <p className="py-8 text-center text-sm text-rose-600 dark:text-rose-300">Unable to load the full published schedule.</p>
-            ) : allAssignments.length === 0 ? (
-              <EmptyState label="No published schedule exists yet." />
-            ) : visibleAssignments.length === 0 ? (
-              <EmptyState label="No published exams match your search." />
-            ) : viewMode === 'table' ? (
-              <ScheduleTable assignments={visibleAssignments} onSelect={setSelectedAssignment} secondaryLabel={(assignment) => assignment.schedule?.name ?? 'Published schedule'} />
-            ) : (
-              <ScheduleCalendar assignments={visibleAssignments} onSelect={setSelectedAssignment} compact />
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
+              {schedulesQuery.isLoading ? (
+                <div className="space-y-3">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
+              ) : schedulesQuery.isError ? (
+                <p className="py-8 text-center text-sm text-rose-600 dark:text-rose-300">Unable to load the full published schedule.</p>
+              ) : allAssignments.length === 0 ? (
+                <EmptyState label="No published schedule exists yet." />
+              ) : visibleAssignments.length === 0 ? (
+                <EmptyState label={`No published ${portal === 'proctor' ? 'assignments' : 'exams'} match the current filters.`} />
+              ) : viewMode === 'table' ? (
+                <ScheduleTable assignments={visibleAssignments} onSelect={setSelectedAssignment} secondaryLabel={(assignment) => assignment.schedule?.name ?? 'Published schedule'} />
+              ) : (
+                <ScheduleCalendar assignments={visibleAssignments} onSelect={setSelectedAssignment} compact />
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
       <DetailSheet assignment={selectedAssignment} onOpenChange={(nextOpen) => !nextOpen && setSelectedAssignment(null)} />
-    </Collapsible>
+    </div>
   );
 };

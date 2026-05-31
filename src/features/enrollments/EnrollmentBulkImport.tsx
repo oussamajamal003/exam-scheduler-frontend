@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "../../components/ui/table";
 import { cn } from "../../lib/utils";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 import type { BulkEnrollmentRow, CreateEnrollmentDto, Enrollment } from "../../schemas/enrollment";
 import type { Student } from "../../schemas/student";
 import type { CourseOffering } from "../../schemas/courseOffering";
@@ -217,6 +218,15 @@ export function EnrollmentBulkImport({
     () => parsedRows.filter((r) => r.status === "invalid"),
     [parsedRows]
   );
+  const {
+    scrollRef,
+    onScroll,
+    virtualRows,
+    topPadding,
+    bottomPadding,
+    isVirtualized,
+    containerClassName,
+  } = useVirtualRows(parsedRows, { estimateRowHeight: 72, threshold: 80 });
 
   const handleConfirm = async () => {
     if (validRows.length === 0) return;
@@ -333,7 +343,7 @@ export function EnrollmentBulkImport({
             </div>
           </div>
 
-          <div className="max-h-85 overflow-y-auto overflow-x-auto rounded-none border border-zinc-200/80">
+          <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto rounded-none border border-zinc-200/80", containerClassName || "max-h-85 overflow-y-auto")}>
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b border-zinc-200/60 bg-zinc-50/40">
@@ -352,7 +362,12 @@ export function EnrollmentBulkImport({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {parsedRows.map((row) => (
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={4} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: row }) => (
                   <TableRow
                     key={row.rowNumber}
                     className={cn(
@@ -403,6 +418,11 @@ export function EnrollmentBulkImport({
                     </TableCell>
                   </TableRow>
                 ))}
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={4} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>

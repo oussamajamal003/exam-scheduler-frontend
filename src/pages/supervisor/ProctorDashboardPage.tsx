@@ -179,6 +179,29 @@ export const ProctorDashboardPage: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  const assignments = React.useMemo(() => (data?.assignments ?? [])
+    .filter((assignment) => assignment.schedule?.isFinal !== false)
+    .sort((a, b) => (getAssignmentTime(a) ?? Number.MAX_SAFE_INTEGER) - (getAssignmentTime(b) ?? Number.MAX_SAFE_INTEGER)), [data?.assignments]);
+  const upcomingAssignments = assignments.filter((assignment) => {
+    const time = getAssignmentTime(assignment);
+    return time != null && time >= nowMs;
+  });
+  const todayAssignments = assignments.filter((assignment) => isSameLocalDay(getAssignmentTime(assignment), nowMs));
+  const { start, end } = getWeekRange(nowMs);
+  const examsThisWeek = upcomingAssignments.filter((assignment) => {
+    const time = getAssignmentTime(assignment);
+    return time != null && time >= start && time < end;
+  }).length;
+  const workloadByDay = buildWorkloadByDay(assignments);
+  const busiestDay = getBusiestDay(workloadByDay);
+  const balance = getWorkloadBalance(workloadByDay, data?.profile.maxExamsPerDay);
+  const nextAssignment = upcomingAssignments[0] ?? data?.nextAssignment ?? null;
+  const assignmentsByDay = groupCount(assignments, formatDayLabel);
+  const workloadTrend = groupCount(upcomingAssignments, formatWeekLabel);
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+  const hasPublishedAssignments = assignments.length > 0;
+
   if (dashboardQuery.isLoading) return <DashboardSkeleton />;
 
   if (dashboardQuery.isError) {
@@ -194,29 +217,6 @@ export const ProctorDashboardPage: React.FC = () => {
   }
 
   if (!data) return null;
-
-  const assignments = data.assignments
-    .filter((assignment) => assignment.schedule?.isFinal !== false)
-    .sort((a, b) => (getAssignmentTime(a) ?? Number.MAX_SAFE_INTEGER) - (getAssignmentTime(b) ?? Number.MAX_SAFE_INTEGER));
-  const upcomingAssignments = assignments.filter((assignment) => {
-    const time = getAssignmentTime(assignment);
-    return time != null && time >= nowMs;
-  });
-  const todayAssignments = assignments.filter((assignment) => isSameLocalDay(getAssignmentTime(assignment), nowMs));
-  const { start, end } = getWeekRange(nowMs);
-  const examsThisWeek = upcomingAssignments.filter((assignment) => {
-    const time = getAssignmentTime(assignment);
-    return time != null && time >= start && time < end;
-  }).length;
-  const workloadByDay = buildWorkloadByDay(assignments);
-  const busiestDay = getBusiestDay(workloadByDay);
-  const balance = getWorkloadBalance(workloadByDay, data.profile.maxExamsPerDay);
-  const nextAssignment = upcomingAssignments[0] ?? data.nextAssignment ?? null;
-  const assignmentsByDay = groupCount(assignments, formatDayLabel);
-  const workloadTrend = groupCount(upcomingAssignments, formatWeekLabel);
-  const notifications = notificationsQuery.data?.notifications ?? [];
-  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
-  const hasPublishedAssignments = assignments.length > 0;
 
   return (
     <div className="space-y-6 p-5 sm:p-6 lg:p-8">
@@ -326,49 +326,47 @@ export const ProctorDashboardPage: React.FC = () => {
             <RealBarChart title="Workload Trend" icon={Sparkles} data={workloadTrend} tone="sky" emptyLabel="No upcoming workload trend yet" />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+          <div className="space-y-4">
             <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
               <CardHeader className="border-b border-zinc-100 pb-3 dark:border-zinc-800/70">
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                   <UserCheck className="size-4 text-zinc-400" />
-                  Upcoming Published Duties
+                  Full Published Schedule
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 p-5">
-                {upcomingAssignments.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No upcoming duties remain in your published schedules.</p>
-                ) : (
-                  upcomingAssignments.slice(0, 6).map((assignment) => (
-                    <div key={assignment.id} className="grid gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40 md:grid-cols-[1.3fr_1fr_0.7fr]">
-                      <div>
-                        <p className="font-semibold text-zinc-950 dark:text-zinc-50">{getDutyLabel(assignment)}</p>
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{formatTimeSlotLabel(assignment.timeSlot)}</p>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        <MapPin className="size-4 text-zinc-400" />
-                        <span>{assignment.room?.center?.name ?? 'Center TBD'} • {assignment.room?.name ?? 'Room TBD'}</span>
-                      </div>
-                      <div className="flex items-center justify-start md:justify-end">
-                        <Badge>{getStudentCount(assignment)} students</Badge>
-                      </div>
+                {assignments.map((assignment) => (
+                  <div key={assignment.id} className="grid gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40 md:grid-cols-[1.3fr_1fr_0.7fr]">
+                    <div>
+                      <p className="font-semibold text-zinc-950 dark:text-zinc-50">{getDutyLabel(assignment)}</p>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{formatTimeSlotLabel(assignment.timeSlot)}</p>
                     </div>
-                  ))
-                )}
+                    <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                      <MapPin className="size-4 text-zinc-400" />
+                      <span>{assignment.room?.center?.name ?? 'Center TBD'} • {assignment.room?.name ?? 'Room TBD'}</span>
+                    </div>
+                    <div className="flex items-center justify-start md:justify-end">
+                      <Badge>{getStudentCount(assignment)} students</Badge>
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
-            <DashboardNotificationsPanel
-              notifications={notifications}
-              unreadCount={unreadCount}
-              isLoading={notificationsQuery.isLoading}
-              isError={notificationsQuery.isError}
-              emptyLabel="No proctor updates available yet."
-              errorLabel="Unable to load notifications."
-              markReadPending={markRead.isPending}
-              markAllPending={markAllRead.isPending}
-              onMarkRead={(id) => markRead.mutate(id)}
-              onMarkAllRead={() => markAllRead.mutate()}
-            />
+            <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+              <DashboardNotificationsPanel
+                notifications={notifications}
+                unreadCount={unreadCount}
+                isLoading={notificationsQuery.isLoading}
+                isError={notificationsQuery.isError}
+                emptyLabel="No proctor updates available yet."
+                errorLabel="Unable to load notifications."
+                markReadPending={markRead.isPending}
+                markAllPending={markAllRead.isPending}
+                onMarkRead={(id) => markRead.mutate(id)}
+                onMarkAllRead={() => markAllRead.mutate()}
+              />
+            </div>
           </div>
         </>
       )}

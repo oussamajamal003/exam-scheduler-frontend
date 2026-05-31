@@ -1,10 +1,12 @@
-﻿import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
 import { TimeSlotList } from "../../features/timeslots/TimeSlotList";
 import { TimeSlotForm } from "../../forms/timeSlots/TimeSlotForm";
 import {
   useCreateTimeSlot,
   useDeleteTimeSlot,
-  useTimeSlots,
+  useTimeSlotsPage,
   useUpdateTimeSlot,
 } from "../../hooks/timeSlots/useTimeSlots";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -15,9 +17,11 @@ import { TimeSlot, TimeSlotFormValues } from "../../schemas/timeSlot";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
-import { CalendarCheck, Clock, ListChecks, Plus, RefreshCw, Search, TrendingUp } from "lucide-react";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
+import { CalendarCheck, ChevronLeft, ChevronRight, Clock, ListChecks, Plus, RefreshCw, Search, TrendingUp } from "lucide-react";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -29,24 +33,45 @@ const dateKey = (slot: TimeSlot) => {
   return d.toISOString().slice(0, 10);
 };
 
-const formatDateForSearch = (value?: string) => {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }).toLowerCase();
-};
-
-const formatTimeForSearch = (value?: string) => {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
-};
+const PAGE_SIZE = 50;
 
 export function TimeSlotsPage() {
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { filters, setFilter } = usePersistentFilters('timeslots', { search: '' });
+  const search = filters.search;
+  const setSearch = (value: string) => setFilter('search', value);
   const deferredSearch = useDeferredValue(search.trim());
-  const { data: timeSlots = [], isLoading, isFetching, isError, error, refetch } = useTimeSlots();
+
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  // Reset to page 1 whenever the search term changes
+  useEffect(() => {
+    if (currentPage !== 1) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("page");
+      setSearchParams(nextParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearch]);
+
+  const timeSlotsQuery = useTimeSlotsPage({ page: currentPage, pageSize: PAGE_SIZE, search: deferredSearch });
+  const timeSlots = useMemo(() => timeSlotsQuery.data?.data ?? [], [timeSlotsQuery.data]);
+  const slotsMeta = timeSlotsQuery.data?.meta;
+  const totalSlots = slotsMeta?.total ?? 0;
+  const totalPages = slotsMeta?.totalPages ?? 1;
+  const isLoading = timeSlotsQuery.isLoading;
+  const isFetching = timeSlotsQuery.isFetching;
+  const isError = timeSlotsQuery.isError;
+  const error = timeSlotsQuery.error;
+  const refetch = timeSlotsQuery.refetch;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<TimeSlot | null>(null);
   const [deletingSlot, setDeletingSlot] = useState<TimeSlot | null>(null);
@@ -54,6 +79,7 @@ export function TimeSlotsPage() {
   const createMutation = useCreateTimeSlot();
   const updateMutation = useUpdateTimeSlot();
   const deleteMutation = useDeleteTimeSlot();
+  const bulkDelete = useBulkDelete({ entityName: "time slot", entityNamePlural: "time slots", deleteItem: (id) => deleteMutation.mutateAsync(id) });
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
@@ -108,22 +134,8 @@ export function TimeSlotsPage() {
     refetch();
   };
 
-  const filteredSlots = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
-    if (!term) return timeSlots;
-    return timeSlots.filter((s) => {
-      const haystack = [
-        formatDateForSearch(s.date ?? s.startTime),
-        dateKey(s),
-        formatTimeForSearch(s.startTime),
-        formatTimeForSearch(s.endTime),
-      ].filter(Boolean).join(" ");
-      return haystack.includes(term);
-    });
-  }, [deferredSearch, timeSlots]);
-
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
@@ -132,15 +144,15 @@ export function TimeSlotsPage() {
     let todayCount = 0;
     for (const slot of timeSlots) {
       if (dateKey(slot) === today) todayCount += 1;
-      if ((slot.assignments?.length ?? slot.assignmentsCount ?? 0) > 0) used += 1;
+      if ((slot.assignmentsCount ?? 0) > 0) used += 1;
     }
     return {
-      total: timeSlots.length,
+      total: totalSlots,
       today: todayCount,
       used,
       available: timeSlots.length - used,
     };
-  }, [timeSlots]);
+  }, [timeSlots, totalSlots]);
 
   const pageErrorMessage = getApiErrorMessage(error, "Failed to load time slots.");
   const showPageLoading = useDelayedLoading(isLoading, 1000);
@@ -205,7 +217,7 @@ export function TimeSlotsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by date or time"
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
@@ -275,15 +287,57 @@ export function TimeSlotsPage() {
 
       {/* List */}
       <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={timeSlots.length} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
         <TimeSlotList
-          timeSlots={filteredSlots}
+          timeSlots={timeSlots}
           isLoading={showTableLoading}
-          isDeleting={deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
           search={search}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(timeSlots, checked)}
           onEditTimeSlot={openEditModal}
           onDeleteTimeSlot={handleDelete}
           onAddTimeSlot={openCreateModal}
         />
+        {totalPages > 1 && (
+          <div className="mt-3 flex items-center justify-between gap-3 border border-zinc-200/60 bg-white px-4 py-3 text-xs text-zinc-600 sm:px-6">
+            <p>
+              Showing{" "}
+              <span className="font-semibold text-zinc-900">
+                {totalSlots === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}
+              </span>
+              –
+              <span className="font-semibold text-zinc-900">
+                {Math.min(totalSlots, currentPage * PAGE_SIZE)}
+              </span>{" "}
+              of <span className="font-semibold text-zinc-900">{totalSlots}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="font-semibold text-zinc-900">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <DeleteConfirmModal
@@ -303,6 +357,16 @@ export function TimeSlotsPage() {
         }
         onCancel={closeDeleteModal}
         onConfirm={confirmDelete}
+      />
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Selected Time Slots"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected time slot${bulkDelete.selectedCount === 1 ? "" : "s"} and may affect linked assignments.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
       />
 
       <Dialog open={isFormOpen} onOpenChange={(open) => (open ? setIsFormOpen(true) : closeFormModal())}>

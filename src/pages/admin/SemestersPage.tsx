@@ -1,10 +1,13 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import { SemesterList } from "../../features/semesters/SemesterList";
 import { SemesterForm } from "../../forms/semesters/SemesterForm";
 import {
   useCreateSemester,
   useDeleteSemester,
-  useSemesters,
+  useSemestersPage,
   useUpdateSemester,
 } from "../../hooks/semesters/useSemesters";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -15,14 +18,46 @@ import { Semester, SemesterFormValues } from "../../schemas/semester";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
 import { Calendar, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
 
 export function SemestersPage() {
-  const [search, setSearch] = useState("");
+  const PAGE_SIZE = 50;
+  const { filters, setFilter } = usePersistentFilters('semesters', { search: '' });
+  const search = filters.search;
+  const [silentSearch, setSilentSearch] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hlId = params.get('semesterId') ?? params.get('id');
+    const hl = params.get('_hl');
+    return (hlId && hl) ? hl : '';
+  });
+  const setSearch = (value: string) => {
+    if (value && silentSearch) setSilentSearch('');
+    setFilter('search', value);
+  };
   const deferredSearch = useDeferredValue(search.trim());
-  const { data: semesters = [], isLoading, isFetching, isError, error, refetch } = useSemesters();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+  const semestersQuery = useSemestersPage({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: deferredSearch || silentSearch,
+  });
+  const semesters = useMemo(() => semestersQuery.data?.data ?? [], [semestersQuery.data]);
+  const semestersMeta = semestersQuery.data?.meta;
+  const totalSemesters = semestersMeta?.total ?? semesters.length;
+  const totalPages = semestersMeta?.totalPages ?? 1;
+  const { isLoading, isFetching, isError, error, refetch } = semestersQuery;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
   const [deletingSemester, setDeletingSemester] = useState<Semester | null>(null);
@@ -30,8 +65,19 @@ export function SemestersPage() {
   const createMutation = useCreateSemester();
   const updateMutation = useUpdateSemester();
   const deleteMutation = useDeleteSemester();
+  const bulkDelete = useBulkDelete({ entityName: "semester", entityNamePlural: "semesters", deleteItem: (id) => deleteMutation.mutateAsync(id) });
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  const highlightedSemesterId = searchParams.get("semesterId") ?? searchParams.get("id");
+  const _hlSemesterParam = searchParams.get('_hl');
+  useEffect(() => {
+    if (highlightedSemesterId && _hlSemesterParam) setSilentSearch(_hlSemesterParam);
+    else if (!highlightedSemesterId) setSilentSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedSemesterId, _hlSemesterParam]);
+
+  useHighlightRow("data-semester-id", highlightedSemesterId, semesters.length);
 
   const openCreateModal = () => {
     setEditingSemester(null);
@@ -85,16 +131,8 @@ export function SemestersPage() {
     deleteMutation.mutate(deletingSemester.id, { onSuccess: closeDeleteModal });
   };
 
-  const filteredSemesters = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
-    if (!term) return semesters;
-    return semesters.filter((s) =>
-      [s?.name, s?.academicYear].filter(Boolean).some((v) => String(v).toLowerCase().includes(term))
-    );
-  }, [deferredSearch, semesters]);
-
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
@@ -170,7 +208,7 @@ export function SemestersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or year"
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
@@ -182,7 +220,7 @@ export function SemestersPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total Semesters</p>
-                <p className="text-3xl font-bold text-zinc-950 mt-2">{semesters.length}</p>
+                <p className="text-3xl font-bold text-zinc-950 mt-2">{totalSemesters}</p>
                 <p className="text-xs text-zinc-500 mt-2">All defined terms</p>
               </div>
               <div className="p-2 rounded-none bg-blue-50">
@@ -240,14 +278,25 @@ export function SemestersPage() {
 
       {/* Semesters List */}
       <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={totalSemesters} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
         <SemesterList
-          semesters={filteredSemesters}
+          semesters={semesters}
           isLoading={showTableLoading}
-          isDeleting={deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
           search={search}
+          pagination={{
+            page: currentPage,
+            pageCount: totalPages,
+            totalCount: totalSemesters,
+            onPageChange: setPage,
+          }}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(semesters, checked)}
           onEditSemester={openEditModal}
           onDeleteSemester={handleDelete}
           onAddSemester={openCreateModal}
+          highlightedSemesterId={highlightedSemesterId}
         />
       </div>
 
@@ -268,6 +317,16 @@ export function SemestersPage() {
         }
         onCancel={closeDeleteModal}
         onConfirm={confirmDelete}
+      />
+
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Selected Semesters"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected semester${bulkDelete.selectedCount === 1 ? "" : "s"} and may affect linked course offerings.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
       />
 
       <Dialog open={isFormOpen} onOpenChange={(open) => (open ? setIsFormOpen(true) : closeFormModal())}>

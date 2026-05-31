@@ -1,4 +1,14 @@
-import { ClipboardList, Edit2, Eye, Layers, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Edit2,
+  Eye,
+  Layers,
+  Trash2,
+  Users,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,7 +26,9 @@ import {
 } from "../../components/ui/table";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
+import { RowSelectCheckbox } from "../../components/shared/BulkTableActions";
 import { cn } from "../../lib/utils";
+import { useVirtualRows } from "../../hooks/common/useVirtualRows";
 import type { CourseOffering, OfferingStatus } from "../../schemas/courseOffering";
 
 interface CourseOfferingListProps {
@@ -24,10 +36,22 @@ interface CourseOfferingListProps {
   isLoading?: boolean;
   isDeleting?: boolean;
   search?: string;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (id: string, checked: boolean) => void;
+  onToggleAll?: (checked: boolean) => void;
   onCreateOffering: () => void;
   onEditOffering: (offering: CourseOffering) => void;
   onViewOffering: (offering: CourseOffering) => void;
   onDeleteOffering: (offering: CourseOffering) => void;
+  highlightedOfferingId?: string | null;
+  /** Optional server-driven pagination. When provided, internal client paging is bypassed. */
+  pagination?: {
+    page: number; // 1-based
+    pageCount: number;
+    pageSize: number;
+    totalCount: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 const statusBadge = (status?: OfferingStatus) => {
@@ -48,12 +72,48 @@ export function CourseOfferingList({
   isLoading,
   isDeleting,
   search,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
   onCreateOffering,
   onEditOffering,
   onViewOffering,
   onDeleteOffering,
+  highlightedOfferingId,
+  pagination,
 }: CourseOfferingListProps) {
-  const rows = Array.isArray(offerings) ? offerings : [];
+  const rows = useMemo(
+    () => (Array.isArray(offerings) ? offerings : []),
+    [offerings]
+  );
+  const selectedCount = rows.filter((offering) => selectedIds?.has(offering.id)).length;
+  const isAllSelected = rows.length > 0 && selectedCount === rows.length;
+
+  const isServerPaged = Boolean(pagination);
+  const CLIENT_PAGE_SIZE = 50;
+  const [clientPage, setClientPage] = useState(0);
+  const clientPageCount = Math.max(1, Math.ceil(rows.length / CLIENT_PAGE_SIZE));
+  const safeClientPage = Math.min(clientPage, clientPageCount - 1);
+  const clientPagedRows = useMemo(
+    () => rows.slice(safeClientPage * CLIENT_PAGE_SIZE, safeClientPage * CLIENT_PAGE_SIZE + CLIENT_PAGE_SIZE),
+    [rows, safeClientPage]
+  );
+  const pagedRows = isServerPaged ? rows : clientPagedRows;
+  const totalCount = pagination?.totalCount ?? rows.length;
+  const pageSize = pagination?.pageSize ?? CLIENT_PAGE_SIZE;
+  const pageCount = pagination?.pageCount ?? clientPageCount;
+  const currentPage = pagination ? pagination.page : safeClientPage + 1;
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(totalCount, currentPage * pageSize);
+  const showPagination = isServerPaged ? pageCount > 1 : rows.length > CLIENT_PAGE_SIZE;
+  const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName, scrollToIndex } = useVirtualRows(pagedRows, { estimateRowHeight: 92 });
+  const targetOfferingIndex = useMemo(
+    () => pagedRows.findIndex((o) => o.id === highlightedOfferingId),
+    [pagedRows, highlightedOfferingId]
+  );
+  useEffect(() => {
+    if (targetOfferingIndex >= 0) scrollToIndex(targetOfferingIndex);
+  }, [targetOfferingIndex, scrollToIndex]);
 
   return (
     <Card className="overflow-hidden rounded-none border border-zinc-200/80 bg-white/90 shadow-lg shadow-zinc-200/40">
@@ -75,17 +135,22 @@ export function CourseOfferingList({
               Total Offerings
             </p>
             <p className="mt-1 text-3xl font-bold tracking-tight text-zinc-950">
-              {rows.length}
+              {totalCount}
             </p>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div ref={scrollRef} onScroll={onScroll} className={cn("overflow-x-auto", containerClassName)}>
           <Table className="min-w-full">
             <TableHeader>
               <TableRow className="border-b border-zinc-200/60 bg-zinc-50/40 hover:bg-transparent">
+                {onToggleSelected && onToggleAll && (
+                  <TableHead className="w-10 px-4 py-4 sm:px-6">
+                    <RowSelectCheckbox label="Select all course offerings" checked={isAllSelected} indeterminate={selectedCount > 0 && !isAllSelected} disabled={isDeleting || rows.length === 0} onChange={onToggleAll} />
+                  </TableHead>
+                )}
                 <TableHead className="px-4 py-4 text-xs font-bold uppercase tracking-[0.12em] text-zinc-600 sm:px-6">
                   Course
                 </TableHead>
@@ -127,13 +192,13 @@ export function CourseOfferingList({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="p-0">
-                    <TableSkeletonRows columns={12} rows={rows.length > 0 ? rows.length : 10} />
+                  <TableCell colSpan={onToggleSelected ? 13 : 12} className="p-0">
+                    <TableSkeletonRows columns={onToggleSelected ? 13 : 12} rows={rows.length > 0 ? rows.length : 10} />
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="p-0">
+                  <TableCell colSpan={onToggleSelected ? 13 : 12} className="p-0">
                     {search?.trim() ? (
                       <EmptyState
                         icon={Layers}
@@ -154,7 +219,13 @@ export function CourseOfferingList({
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((offering, index) => (
+                <>
+                {isVirtualized && topPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 13 : 12} style={{ height: topPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                {virtualRows.map(({ item: offering, index }) => (
                   (() => {
                     const registrationCount =
                       offering.enrollments?.length ??
@@ -166,11 +237,27 @@ export function CourseOfferingList({
                     return (
                   <TableRow
                     key={offering.id}
+                    data-course-offering-id={offering.id}
                     className={cn(
-                      "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                      index === rows.length - 1 && "border-b-0"
+                      "cursor-pointer border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60 focus-visible:bg-zinc-50/60 focus-visible:outline-none",
+                      index === pagedRows.length - 1 && "border-b-0"
                     )}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Open details for ${offering.course?.title ?? offering.course?.name ?? offering.course?.code ?? "course offering"}`}
+                    onClick={() => onViewOffering(offering)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onViewOffering(offering);
+                      }
+                    }}
                   >
+                    {onToggleSelected && (
+                      <TableCell className="px-4 py-4 sm:px-6" onClick={(event) => event.stopPropagation()}>
+                        <RowSelectCheckbox label={`Select ${offering.course?.code ?? "course offering"}`} checked={selectedIds?.has(offering.id) ?? false} disabled={isDeleting} onChange={(checked) => onToggleSelected(offering.id, checked)} />
+                      </TableCell>
+                    )}
                     <TableCell className="px-4 py-4 sm:px-6">
                       <div className="font-semibold text-zinc-950">
                         {offering.course?.title ?? offering.course?.name ?? "Untitled course"}
@@ -185,7 +272,7 @@ export function CourseOfferingList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
-                      {offering.course?.credits ?? "—"}
+                      {offering.credits ?? "—"}
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
                       {offering.instructor ?? "Unassigned"}
@@ -193,7 +280,13 @@ export function CourseOfferingList({
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
                       <div className="flex flex-col">
                         <span className="font-medium">{offering.day ?? "—"}</span>
-                        <span className="text-xs text-zinc-500">{offering.time ?? ""}</span>
+                        {(offering.time || offering.endTime) && (
+                          <span className="text-xs text-zinc-500">
+                            {offering.time && offering.endTime
+                              ? `${offering.time} - ${offering.endTime}`
+                              : offering.time ?? offering.endTime ?? ""}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-zinc-700 sm:px-6">
@@ -235,7 +328,7 @@ export function CourseOfferingList({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-right sm:px-6">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -270,10 +363,55 @@ export function CourseOfferingList({
                     );
                   })()
                 ))
+                }
+                {isVirtualized && bottomPadding > 0 && (
+                  <TableRow aria-hidden="true">
+                    <TableCell colSpan={onToggleSelected ? 13 : 12} style={{ height: bottomPadding, padding: 0 }} />
+                  </TableRow>
+                )}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
+        {showPagination && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-200/60 bg-zinc-50/40 px-4 py-3 text-xs text-zinc-600 sm:px-6">
+            <p>
+              Showing <span className="font-semibold text-zinc-900">{rangeStart}</span>–
+              <span className="font-semibold text-zinc-900">{rangeEnd}</span> of
+              <span className="font-semibold text-zinc-900"> {totalCount}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => {
+                  if (pagination) pagination.onPageChange(Math.max(1, currentPage - 1));
+                  else setClientPage((p) => Math.max(0, p - 1));
+                }}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="font-semibold text-zinc-900">
+                Page {currentPage} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= pageCount}
+                onClick={() => {
+                  if (pagination) pagination.onPageChange(Math.min(pageCount, currentPage + 1));
+                  else setClientPage((p) => Math.min(clientPageCount - 1, p + 1));
+                }}
+                className="h-8 rounded-none px-2"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

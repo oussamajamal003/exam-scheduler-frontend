@@ -73,6 +73,53 @@ export const getStudents = async (): Promise<Student[]> => {
   return (response.data?.data?.data ?? []).map(mapBackendStudent);
 };
 
+export type StudentPageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedStudents = { data: Student[]; meta: StudentPageMeta };
+
+const readStudentMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): StudentPageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const getStudentsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  programId,
+  departmentId,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  programId?: string;
+  departmentId?: string;
+} = {}): Promise<PagedStudents> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedStudentsPayload>>("/students", {
+    params: {
+      page,
+      limit: pageSize,
+      search: search?.trim() ? search.trim() : undefined,
+      programId: programId || undefined,
+      departmentId: departmentId || undefined,
+    },
+  });
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapBackendStudent),
+    meta: readStudentMeta(payload?.meta, page, pageSize),
+  };
+};
+
 export const getStudent = async (id: string): Promise<Student> => {
   const response = await axiosClient.get<ApiEnvelope<BackendStudent>>(`/students/${id}`);
   if (!response.data?.data) {

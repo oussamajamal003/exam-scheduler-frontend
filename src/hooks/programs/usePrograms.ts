@@ -1,13 +1,38 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createProgram, fetchPrograms, updateProgram, deleteProgram } from '@/api/program.api';
+import { createProgram, fetchPrograms, fetchProgramsPage, updateProgram, deleteProgram } from '@/api/program.api';
 import { CreateProgramDto, UpdateProgramDto } from '@/schemas/program';
 import { useToast } from '@/components/ui/toast';
 import { getSmartErrorDescription } from '@/lib/apiError';
+import { invalidateScheduleQuerySync } from '@/lib/scheduleQuerySync';
 
 export const usePrograms = (search = '') => {
   return useQuery({
     queryKey: ['programs', search],
     queryFn: () => fetchPrograms(search),
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+};
+
+export const useProgramsPage = ({
+  page = 1,
+  pageSize = 50,
+  search = '',
+  departmentId,
+  enabled = true,
+}: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  departmentId?: string;
+  enabled?: boolean;
+} = {}) => {
+  return useQuery({
+    queryKey: ['programs', 'page', { page, pageSize, search, departmentId: departmentId ?? null }],
+    queryFn: () => fetchProgramsPage({ page, pageSize, search, departmentId }),
+    enabled,
+    staleTime: 2 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 };
@@ -18,9 +43,14 @@ export const useCreateProgram = () => {
 
   return useMutation({
     mutationFn: (data: CreateProgramDto) => createProgram(data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['programs'] });
-      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includePrograms: true,
+        includeDepartments: true,
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: 'success',
         title: 'Program Added',
@@ -43,9 +73,14 @@ export const useUpdateProgram = () => {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProgramDto }) => updateProgram({ id, data }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['programs'] });
-      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    onSuccess: async (data) => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includePrograms: true,
+        includeDepartments: true,
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: 'success',
         title: 'Program Updated',
@@ -68,9 +103,14 @@ export const useDeleteProgram = () => {
 
   return useMutation({
     mutationFn: (id: string) => deleteProgram(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['programs'] });
-      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    onSuccess: async () => {
+      await invalidateScheduleQuerySync(queryClient, {
+        includePrograms: true,
+        includeDepartments: true,
+        includeCourses: true,
+        includeCourseOfferings: true,
+        includeEnrollments: true,
+      });
       addToast({
         type: 'success',
         title: 'Program Deleted',

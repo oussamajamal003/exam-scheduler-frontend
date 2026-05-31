@@ -153,6 +153,24 @@ export const StudentDashboardPage: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  const publishedAssignments = React.useMemo(() => uniqueAssignmentsByExam(data?.assignments ?? []), [data?.assignments]);
+  const upcomingAssignments = publishedAssignments.filter((assignment) => {
+    const time = getExamTime(assignment);
+    return time != null && time >= nowMs;
+  });
+  const nextAssignment = upcomingAssignments[0] ?? null;
+  const { start, end } = getWeekRange(nowMs);
+  const examsThisWeek = upcomingAssignments.filter((assignment) => {
+    const time = getExamTime(assignment);
+    return time != null && time >= start && time < end;
+  }).length;
+  const examsByDay = groupCount(publishedAssignments, formatDayLabel);
+  const examsByWeek = groupCount(upcomingAssignments, formatWeekLabel);
+  const courseLoad = groupCount(data?.courses ?? [], (courseOffering) => courseOffering.semester?.name ?? 'Unassigned');
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+  const hasPublishedSchedule = publishedAssignments.length > 0;
+
   if (dashboardQuery.isLoading) return <DashboardSkeleton />;
 
   if (dashboardQuery.isError) {
@@ -168,24 +186,6 @@ export const StudentDashboardPage: React.FC = () => {
   }
 
   if (!data) return null;
-
-  const publishedAssignments = uniqueAssignmentsByExam(data.assignments);
-  const upcomingAssignments = publishedAssignments.filter((assignment) => {
-    const time = getExamTime(assignment);
-    return time != null && time >= nowMs;
-  });
-  const nextAssignment = upcomingAssignments[0] ?? null;
-  const { start, end } = getWeekRange(nowMs);
-  const examsThisWeek = upcomingAssignments.filter((assignment) => {
-    const time = getExamTime(assignment);
-    return time != null && time >= start && time < end;
-  }).length;
-  const examsByDay = groupCount(publishedAssignments, formatDayLabel);
-  const examsByWeek = groupCount(upcomingAssignments, formatWeekLabel);
-  const courseLoad = groupCount(data.courses, (courseOffering) => courseOffering.semester?.name ?? 'Unassigned');
-  const notifications = notificationsQuery.data?.notifications ?? [];
-  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
-  const hasPublishedSchedule = publishedAssignments.length > 0;
 
   return (
     <div className="space-y-6 p-5 sm:p-6 lg:p-8">
@@ -312,10 +312,10 @@ export const StudentDashboardPage: React.FC = () => {
 
           <Card className="rounded-none border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950">
             <CardHeader>
-              <CardTitle className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Upcoming Exams Timeline</CardTitle>
+              <CardTitle className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Full Published Schedule</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {(upcomingAssignments.length > 0 ? upcomingAssignments : publishedAssignments).slice(0, 6).map((assignment) => (
+            <CardContent className="space-y-4">
+              {publishedAssignments.map((assignment) => (
                 <div key={assignment.id} className="grid gap-3 rounded-none border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800/70 dark:bg-zinc-900/40 md:grid-cols-[1.3fr_1fr_1fr]">
                   <div>
                     <p className="font-semibold text-zinc-950 dark:text-zinc-50">{getCourseTitle(assignment)}</p>

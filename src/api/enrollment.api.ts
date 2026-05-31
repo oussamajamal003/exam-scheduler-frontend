@@ -1,6 +1,7 @@
 import { axiosClient } from "./axiosclient";
 import type {
   CreateEnrollmentDto,
+  EnrollmentDepartment,
   Enrollment,
   EnrollmentCourseOffering,
   EnrollmentStudent,
@@ -29,7 +30,7 @@ type BackendEnrollment = {
     fullName?: string | null;
     universityId?: string;
     user?: { id?: string; name?: string; email?: string } | null;
-    program?: { id?: string; name?: string; code?: string } | null;
+    program?: { id?: string; name?: string; code?: string; department?: BackendDepartment | null } | null;
   } | null;
   courseOffering?: {
     id?: string;
@@ -40,13 +41,50 @@ type BackendEnrollment = {
       name?: string;
       code?: string;
       title?: string;
-      program?: { id?: string; name?: string; code?: string } | null;
+      program?: { id?: string; name?: string; code?: string; department?: BackendDepartment | null } | null;
     } | null;
-    program?: { id?: string; name?: string; code?: string } | null;
+    program?: { id?: string; name?: string; code?: string; department?: BackendDepartment | null } | null;
     semester?: { id?: string; name?: string } | null;
   } | null;
-  program?: { id?: string; name?: string; code?: string } | null;
+  program?: { id?: string; name?: string; code?: string; department?: BackendDepartment | null } | null;
   semester?: { id?: string; name?: string } | null;
+};
+
+type BackendDepartment = {
+  id?: string;
+  name?: string;
+  code?: string;
+};
+
+type EnrollmentFilterOptionsPayload = {
+  students?: BackendEnrollment["student"][];
+  courseOfferings?: BackendEnrollment["courseOffering"][];
+  departments?: BackendDepartment[];
+};
+
+export type EnrollmentFilterOptions = {
+  students: EnrollmentStudent[];
+  courseOfferings: EnrollmentCourseOffering[];
+  departments: EnrollmentDepartment[];
+};
+
+export type EnrollmentListParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  semesterId?: string;
+  courseOfferingId?: string;
+  studentId?: string;
+  departmentId?: string;
+};
+
+const mapDepartment = (department?: BackendDepartment | null): EnrollmentDepartment | null => {
+  if (!department?.id) return null;
+  return {
+    id: department.id,
+    name: department.name ?? "Department",
+    code: department.code,
+  };
 };
 
 const mapStudent = (s?: BackendEnrollment["student"]): EnrollmentStudent | null => {
@@ -59,7 +97,7 @@ const mapStudent = (s?: BackendEnrollment["student"]): EnrollmentStudent | null 
       ? { id: s.user.id, name: s.user.name, email: s.user.email }
       : null,
     program: s.program?.id
-      ? { id: s.program.id, name: s.program.name ?? "", code: s.program.code }
+      ? { id: s.program.id, name: s.program.name ?? "", code: s.program.code, department: mapDepartment(s.program.department) }
       : null,
   };
 };
@@ -84,12 +122,13 @@ const mapOffering = (
                 id: program.id,
                 name: program.name ?? "",
                 code: program.code,
+                department: mapDepartment(program.department),
               }
             : null,
         }
       : null,
     program: program?.id
-      ? { id: program.id, name: program.name ?? "", code: program.code }
+      ? { id: program.id, name: program.name ?? "", code: program.code, department: mapDepartment(program.department) }
       : null,
     semester: o.semester?.id
       ? { id: o.semester.id, name: o.semester.name ?? "" }
@@ -105,7 +144,7 @@ const mapEnrollment = (e: BackendEnrollment): Enrollment => ({
   student: mapStudent(e.student),
   courseOffering: mapOffering(e.courseOffering),
   program: e.program?.id
-    ? { id: e.program.id, name: e.program.name ?? "", code: e.program.code }
+    ? { id: e.program.id, name: e.program.name ?? "", code: e.program.code, department: mapDepartment(e.program.department) }
     : mapOffering(e.courseOffering)?.program ?? null,
   semester: e.semester?.id
     ? { id: e.semester.id, name: e.semester.name ?? "" }
@@ -114,12 +153,89 @@ const mapEnrollment = (e: BackendEnrollment): Enrollment => ({
 
 // ===== Public API =====
 
-export const fetchEnrollments = async (search = ""): Promise<Enrollment[]> => {
+export const fetchEnrollments = async (
+  options: Pick<EnrollmentListParams, "search" | "semesterId" | "courseOfferingId" | "studentId" | "departmentId"> | string = ""
+): Promise<Enrollment[]> => {
+  const { search = "", semesterId, courseOfferingId, studentId, departmentId } =
+    typeof options === "string" ? { search: options } : options;
   const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendEnrollment>>>(
     "/enrollments",
-    { params: { limit: 5000, search: search || undefined } }
+    {
+      params: {
+        limit: 5000,
+        search: search || undefined,
+        semesterId: semesterId || undefined,
+        courseOfferingId: courseOfferingId || undefined,
+        studentId: studentId || undefined,
+        departmentId: departmentId || undefined,
+      },
+    }
   );
   return (response.data?.data?.data ?? []).map(mapEnrollment);
+};
+
+export type PageMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PagedResult<T> = { data: T[]; meta: PageMeta };
+
+const readMeta = (meta: unknown, fallbackPage: number, fallbackSize: number): PageMeta => {
+  const m = (meta && typeof meta === "object" ? meta : {}) as Record<string, unknown>;
+  const total = Number(m.total ?? m.totalCount ?? 0) || 0;
+  const limit = Number(m.limit ?? m.pageSize ?? fallbackSize) || fallbackSize;
+  const page = Number(m.page ?? fallbackPage) || fallbackPage;
+  const totalPages = Number(m.totalPages ?? Math.ceil(total / Math.max(limit, 1))) || 1;
+  return { total, page, pageSize: limit, totalPages };
+};
+
+export const fetchEnrollmentsPage = async ({
+  page = 1,
+  pageSize = 50,
+  search,
+  semesterId,
+  courseOfferingId,
+  studentId,
+  departmentId,
+}: EnrollmentListParams = {}): Promise<PagedResult<Enrollment>> => {
+  const response = await axiosClient.get<ApiEnvelope<PaginatedResponse<BackendEnrollment>>>(
+    "/enrollments",
+    {
+      params: {
+        page,
+        limit: pageSize,
+        search: search?.trim() ? search.trim() : undefined,
+        semesterId: semesterId || undefined,
+        courseOfferingId: courseOfferingId || undefined,
+        studentId: studentId || undefined,
+        departmentId: departmentId || undefined,
+      },
+    }
+  );
+  const payload = response.data?.data;
+  return {
+    data: (payload?.data ?? []).map(mapEnrollment),
+    meta: readMeta(payload?.meta, page, pageSize),
+  };
+};
+
+export const fetchEnrollmentFilterOptions = async ({
+  semesterId,
+}: {
+  semesterId?: string;
+} = {}): Promise<EnrollmentFilterOptions> => {
+  const response = await axiosClient.get<ApiEnvelope<EnrollmentFilterOptionsPayload>>("/enrollments/filters", {
+    params: { semesterId: semesterId || undefined },
+  });
+  const payload = response.data?.data ?? {};
+  return {
+    students: (payload.students ?? []).map(mapStudent).filter((student): student is EnrollmentStudent => Boolean(student?.id)),
+    courseOfferings: (payload.courseOfferings ?? []).map(mapOffering).filter((offering): offering is EnrollmentCourseOffering => Boolean(offering?.id)),
+    departments: (payload.departments ?? []).map(mapDepartment).filter((department): department is EnrollmentDepartment => Boolean(department?.id)),
+  };
 };
 
 export const createEnrollment = async (

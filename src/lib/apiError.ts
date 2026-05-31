@@ -27,9 +27,29 @@ export const isAuthExpiredError = (error: unknown) => {
   return message.includes("invalid or expired token");
 };
 
+const normalizeKnownApiMessage = (message?: string) => {
+  if (!message) return message;
+
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("user with this email already exists") ||
+    normalized.includes("a record with this email already exists") ||
+    normalized === "email already exists."
+  ) {
+    return "Email already exists.";
+  }
+  if (normalized.includes("center name") && normalized.includes("already exists")) {
+    return "Center name already exists.";
+  }
+
+  return message;
+};
+
 export const getApiErrorMessage = (error: unknown, fallback = "Something went wrong") => {
   const apiError = error as ApiErrorLike | undefined;
-  return apiError?.response?.data?.message ?? apiError?.message ?? fallback;
+  return normalizeKnownApiMessage(apiError?.response?.data?.message)
+    ?? normalizeKnownApiMessage(apiError?.message)
+    ?? fallback;
 };
 
 type ValidationIssue = {
@@ -58,7 +78,9 @@ export const getSmartErrorDescription = (error: unknown, fallback = "Something w
     if (messages.length > 0) return messages.join('\n');
   }
 
-  return apiError?.response?.data?.message ?? apiError?.message ?? fallback;
+  return normalizeKnownApiMessage(apiError?.response?.data?.message)
+    ?? normalizeKnownApiMessage(apiError?.message)
+    ?? fallback;
 };
 
 export const getApiValidationMessages = (error: unknown): string[] => {

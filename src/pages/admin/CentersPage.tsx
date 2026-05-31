@@ -1,9 +1,12 @@
-﻿import { useDeferredValue, useMemo, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePersistentFilters } from "../../hooks/common/usePersistentFilters";
+import { useHighlightRow } from "../../hooks/common/useHighlightRow";
 import { CenterList } from "../../features/centers/CenterList";
 import { CenterForm } from "../../forms/centers/CenterForm";
 import { CenterDetailDialog } from "../../features/centers/CenterDetailDialog";
 import {
-  useCenters,
+  useCentersPage,
   useCreateCenter,
   useDeleteCenter,
   useUpdateCenter,
@@ -16,14 +19,54 @@ import { Center, CenterFormValues } from "../../schemas/center";
 import { getApiErrorMessage, getApiValidationErrors } from "../../lib/apiError";
 import { PageSpinner } from "../../components/shared/PageSpinner";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
+import { BulkDeleteToolbar } from "../../components/shared/BulkTableActions";
 import { StickyActionBar } from "../../components/common/StickyActionBar";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
+import { useBulkDelete } from "../../hooks/common/useBulkDelete";
 import { Building, CheckCircle2, DoorOpen, Plus, RefreshCw, Search, Users } from "lucide-react";
 
 export function CentersPage() {
-  const [search, setSearch] = useState("");
+  const getCenterSubmitValidationMessages = (error: unknown) => {
+    const baseErrors = getApiValidationErrors(error);
+    const message = getApiErrorMessage(error, "").toLowerCase();
+    if (!baseErrors.name && message.includes("center name already exists")) {
+      return { ...baseErrors, name: ["Center name already exists."] };
+    }
+    return baseErrors;
+  };
+
+  const PAGE_SIZE = 50;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { filters, setFilter } = usePersistentFilters('centers', { search: '' });
+  const search = filters.search;
+  const [silentSearch, setSilentSearch] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hlId = params.get('centerId') ?? params.get('id');
+    const hl = params.get('_hl');
+    return (hlId && hl) ? hl : '';
+  });
+  const setSearch = (value: string) => {
+    if (value && silentSearch) setSilentSearch('');
+    setFilter('search', value);
+  };
   const deferredSearch = useDeferredValue(search.trim());
-  const { data: centers = [], isLoading, isFetching, isError, error, refetch } = useCenters();
+  const pageParam = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const setPage = (next: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next <= 1) nextParams.delete("page");
+    else nextParams.set("page", String(next));
+    setSearchParams(nextParams, { replace: true });
+  };
+  const centersQuery = useCentersPage({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: deferredSearch || silentSearch,
+  });
+  const centers = useMemo(() => centersQuery.data?.data ?? [], [centersQuery.data]);
+  const centersMeta = centersQuery.data?.meta;
+  const totalCenters = centersMeta?.total ?? centers.length;
+  const totalPages = centersMeta?.totalPages ?? 1;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCenter, setEditingCenter] = useState<Center | null>(null);
   const [deletingCenter, setDeletingCenter] = useState<Center | null>(null);
@@ -32,8 +75,44 @@ export function CentersPage() {
   const createMutation = useCreateCenter();
   const updateMutation = useUpdateCenter();
   const deleteMutation = useDeleteCenter();
+  const bulkDelete = useBulkDelete({ entityName: "center", entityNamePlural: "centers", deleteItem: (id) => deleteMutation.mutateAsync(id) });
+  const submitError = createMutation.isError
+    ? createMutation.error
+    : updateMutation.isError
+      ? updateMutation.error
+      : undefined;
+  const submitValidationMessages = useMemo(
+    () => (submitError ? getCenterSubmitValidationMessages(submitError) : undefined),
+    [submitError]
+  );
+  const submitErrorMessage = useMemo(() => {
+    if (!submitError) return undefined;
+    if (submitValidationMessages?.name?.length) {
+      return submitValidationMessages.name[0];
+    }
+    return getApiErrorMessage(submitError, "An error occurred while saving.");
+  }, [submitError, submitValidationMessages]);
+  const clearSubmitErrors = () => {
+    createMutation.reset();
+    updateMutation.reset();
+  };
+
+  useEffect(() => {
+    if (currentPage !== 1) setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearch]);
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  const highlightedCenterId = searchParams.get("centerId") ?? searchParams.get("id");
+  const _hlCenterParam = searchParams.get('_hl');
+  useEffect(() => {
+    if (highlightedCenterId && _hlCenterParam) setSilentSearch(_hlCenterParam);
+    else if (!highlightedCenterId) setSilentSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedCenterId, _hlCenterParam]);
+
+  useHighlightRow("data-center-id", highlightedCenterId, centers.length);
 
   const openCreateModal = () => {
     setEditingCenter(null);
@@ -96,7 +175,7 @@ export function CentersPage() {
   };
 
   const handleRefresh = () => {
-    refetch();
+    centersQuery.refetch();
   };
 
   const confirmDelete = () => {
@@ -104,16 +183,10 @@ export function CentersPage() {
     deleteMutation.mutate(deletingCenter.id, { onSuccess: closeDeleteModal });
   };
 
-  const filteredCenters = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
-    if (!term) return centers;
-    return centers.filter((c) =>
-      [c?.name, c?.location, c?.code].filter(Boolean).some((v) => String(v).toLowerCase().includes(term))
-    );
-  }, [deferredSearch, centers]);
+  const filteredCenters = centers;
 
   const isSearching = search.trim() !== deferredSearch;
-  const isTableLoading = isSearching || isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isTableLoading = isSearching || centersQuery.isFetching || createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || bulkDelete.isDeleting;
   const showTableLoading = useDelayedLoading(isTableLoading);
 
   const stats = useMemo(() => {
@@ -125,11 +198,11 @@ export function CentersPage() {
       totalSupervisors += c?.supervisors?.length ?? c?.supervisorsCount ?? 0;
       if (c?.isActive !== false) active += 1;
     }
-    return { total: centers.length, totalRooms, totalSupervisors, active };
-  }, [centers]);
+    return { total: totalCenters, totalRooms, totalSupervisors, active };
+  }, [centers, totalCenters]);
 
-  const pageErrorMessage = getApiErrorMessage(error, "Failed to load centers.");
-  const showPageLoading = useDelayedLoading(isLoading, 1000);
+  const pageErrorMessage = getApiErrorMessage(centersQuery.error, "Failed to load centers.");
+  const showPageLoading = useDelayedLoading(centersQuery.isLoading, 1000);
 
   if (showPageLoading) {
     return (
@@ -139,12 +212,12 @@ export function CentersPage() {
     );
   }
 
-  if (isError) {
+  if (centersQuery.isError) {
     return (
       <div className="p-6">
         <Card className="p-6 space-y-3 rounded-none border-destructive/30 bg-destructive/5">
           <p className="text-sm text-red-600">{pageErrorMessage}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
+          <Button onClick={() => centersQuery.refetch()}>Retry</Button>
         </Card>
       </div>
     );
@@ -171,7 +244,7 @@ export function CentersPage() {
       <StickyActionBar className="flex flex-col gap-3 sm:flex-row">
         <Button
           onClick={openCreateModal}
-          disabled={isFetching || isSaving}
+          disabled={centersQuery.isFetching || isSaving}
           className="inline-flex h-10 items-center gap-2 rounded-none border border-zinc-950 bg-zinc-950 font-semibold text-white shadow-sm transition-all hover:bg-zinc-900 active:scale-95"
         >
           <Plus className="size-4" />
@@ -182,7 +255,7 @@ export function CentersPage() {
           onClick={handleRefresh}
           className="h-10 rounded-none border-zinc-200 text-zinc-950 font-semibold hover:bg-zinc-50 active:scale-95 transition-all inline-flex items-center gap-2"
         >
-          <RefreshCw className={`size-4 transition-transform ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-4 transition-transform ${centersQuery.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
         <div className="relative sm:ml-auto sm:w-72">
@@ -191,7 +264,7 @@ export function CentersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or location"
-            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white"
+            className="h-10 rounded-none border-zinc-200 bg-transparent pl-9 text-sm hover:border-zinc-300 focus-visible:border-zinc-400 focus-visible:ring-zinc-300/50 group-data-[stuck=true]:bg-white dark:border-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:bg-zinc-900/70 dark:focus-visible:border-zinc-700 dark:focus-visible:ring-zinc-700/70 dark:group-data-[stuck=true]:bg-zinc-950/70"
           />
         </div>
       </StickyActionBar>
@@ -261,15 +334,27 @@ export function CentersPage() {
 
       {/* List */}
       <div className="mb-8">
+        <BulkDeleteToolbar selectedCount={bulkDelete.selectedCount} totalCount={filteredCenters.length} isDeleting={bulkDelete.isDeleting || deleteMutation.isPending} onClear={bulkDelete.clearSelection} onDelete={() => bulkDelete.setIsConfirmOpen(true)} />
         <CenterList
           centers={filteredCenters}
           isLoading={showTableLoading}
           search={search}
-          isDeleting={deleteMutation.isPending}
+          isDeleting={deleteMutation.isPending || bulkDelete.isDeleting}
+          selectedIds={bulkDelete.selectedIds}
+          onToggleSelected={bulkDelete.toggleSelected}
+          onToggleAll={(checked) => bulkDelete.toggleAll(filteredCenters, checked)}
           onEditCenter={openEditModal}
           onDeleteCenter={handleDelete}
           onViewCenter={setViewingCenter}
           onAddCenter={openCreateModal}
+          highlightedCenterId={highlightedCenterId}
+          pagination={{
+            page: currentPage,
+            pageCount: totalPages,
+            pageSize: PAGE_SIZE,
+            totalCount: totalCenters,
+            onPageChange: setPage,
+          }}
         />
       </div>
 
@@ -292,6 +377,16 @@ export function CentersPage() {
         onConfirm={confirmDelete}
       />
 
+      <DeleteConfirmModal
+        open={bulkDelete.isConfirmOpen}
+        title="Delete Selected Centers"
+        description={`This will permanently delete ${bulkDelete.selectedCount} selected center${bulkDelete.selectedCount === 1 ? "" : "s"} and may affect linked rooms and supervisors.`}
+        confirmLabel="Bulk Delete"
+        isLoading={bulkDelete.isDeleting}
+        onCancel={() => bulkDelete.setIsConfirmOpen(false)}
+        onConfirm={bulkDelete.confirmDelete}
+      />
+
       <Dialog open={isFormOpen} onOpenChange={(open) => (open ? setIsFormOpen(true) : closeFormModal())}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -303,19 +398,9 @@ export function CentersPage() {
               center={editingCenter}
               onSubmit={handleSubmit}
               isLoading={isSaving}
-              submitErrorMessage={
-                createMutation.isError || updateMutation.isError
-                  ? getApiErrorMessage(
-                      createMutation.error || updateMutation.error,
-                      "An error occurred while saving."
-                    )
-                  : undefined
-              }
-              submitValidationMessages={
-                createMutation.isError || updateMutation.isError
-                  ? getApiValidationErrors(createMutation.error || updateMutation.error)
-                  : undefined
-              }
+              submitErrorMessage={submitErrorMessage}
+              submitValidationMessages={submitValidationMessages}
+              onClearSubmitError={clearSubmitErrors}
             />
           </div>
         </DialogContent>
