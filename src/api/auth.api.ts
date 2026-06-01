@@ -40,7 +40,7 @@ const unwrapResponseData = <T>(responseData: ApiEnvelope<T> | T): T => {
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await axiosClient.get<ApiEnvelope<User>>('/auth/');
+  const response = await axiosClient.get<ApiEnvelope<User>>('/auth/me');
   return unwrapResponseData(response.data);
 };
 

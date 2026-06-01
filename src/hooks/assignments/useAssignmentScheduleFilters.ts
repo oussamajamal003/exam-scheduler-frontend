@@ -66,6 +66,7 @@ export type AssignmentScheduleFiltersOptions = {
   statusOptions?: ScheduleFilterOption[];
   includePhaseFilter?: boolean;
   searchDebounceMs?: number;
+  initialQuery?: string;
 };
 
 export type AssignmentScheduleFilterBadge = {
@@ -175,8 +176,9 @@ export function useAssignmentScheduleFilters(
   const statusOptions = pageOptions.statusOptions ?? STATUS_OPTIONS;
   const includePhaseFilter = pageOptions.includePhaseFilter ?? true;
   const searchDebounceMs = pageOptions.searchDebounceMs ?? 0;
+  const initialQuery = pageOptions.initialQuery ?? "";
 
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState(initialQuery);
   const [semester, setSemester] = React.useState(ALL);
   const [course, setCourse] = React.useState(ALL);
   const [center, setCenter] = React.useState(ALL);

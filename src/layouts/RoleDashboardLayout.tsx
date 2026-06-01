@@ -14,7 +14,6 @@ import {
   X,
   Search,
   Sparkles,
-  Trash2,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -38,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import {
   CommandSearch,
   CommandSearchTrigger,
@@ -47,11 +47,9 @@ import {
 } from '@/components/admin/CommandSearch';
 import type { User } from '@/api/auth.api';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
-import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
 import { useLogout } from '@/hooks/auth/useLogout';
 import { useRoleNotifications } from '@/hooks/roleNotifications/useRoleNotifications';
 import { cn } from '@/lib/utils';
-import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 
 export type RoleNavItem = {
@@ -316,7 +314,6 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const location = useLocation();
   const { t } = useTranslation(['common', 'nav']);
   const logoutMutation = useLogout();
-  const deleteAccountMutation = useDeleteAccount();
   const { data } = useCurrentUser();
   const currentUser = data as User | undefined;
   const isStudentPortal = roleName.toLowerCase() === 'student';
@@ -329,7 +326,6 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
   const unreadNotifications = notificationQuery.data?.unreadCount ?? 0;
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem(storageKey) === 'true');
@@ -739,28 +735,6 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
           </main>
         </div>
 
-        <DeleteConfirmModal
-          open={isDeleteModalOpen}
-          title={t('common:deleteAccount.title')}
-          description={t('common:deleteAccount.description')}
-          confirmLabel={t('common:deleteAccount.confirm')}
-          isLoading={deleteAccountMutation.isPending}
-          errorMessage={deleteAccountMutation.isError ? t('common:deleteAccount.error') : undefined}
-          onCancel={() => {
-            if (!deleteAccountMutation.isPending) {
-              setIsDeleteModalOpen(false);
-            }
-          }}
-          onConfirm={() => {
-            deleteAccountMutation.mutate(undefined, {
-              onSuccess: () => {
-                setIsDeleteModalOpen(false);
-                setIsProfileDialogOpen(false);
-              },
-            });
-          }}
-        />
-
         <CommandSearch
           open={isCommandOpen}
           onOpenChange={setIsCommandOpen}
@@ -834,31 +808,6 @@ export const RoleDashboardLayout: React.FC<RoleDashboardLayoutProps> = ({
                       </Badge>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border border-rose-200/80 bg-rose-50/80 py-0 shadow-none ring-0 dark:border-rose-900/70 dark:bg-rose-950/25">
-                <CardContent className="space-y-4 p-4">
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-rose-700 dark:text-rose-300">
-                      <Trash2 className="size-3.5" />
-                      Danger Zone
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Delete Account</p>
-                    <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-                      Permanently remove this account from the system. This action cannot be undone.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => setIsDeleteModalOpen(true)}
-                    className="h-10 rounded-xl px-4 font-semibold"
-                  >
-                    <Trash2 className="mr-2 size-4" />
-                    Delete Account
-                  </Button>
                 </CardContent>
               </Card>
             </div>

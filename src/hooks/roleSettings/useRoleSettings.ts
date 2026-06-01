@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   changeRolePassword,
   fetchRoleSettings,
+  fetchRoleProfile,
   updateRoleSettings,
+  updateRoleProfile,
   type ChangePasswordDto,
   type RolePortal,
+  type ProfileDetails,
   type UpdateNotificationPreferencesDto,
 } from '@/api/roleSettings.api';
+import { authStorageKeys } from '@/api/axiosclient';
 import { useToast } from '@/components/ui/toast';
 import { getSmartErrorDescription } from '@/lib/apiError';
 
@@ -19,6 +23,12 @@ export const useRoleSettings = (portal: RolePortal) =>
   useQuery({
     queryKey: roleSettingsKeys.detail(portal),
     queryFn: () => fetchRoleSettings(portal),
+  });
+
+export const useRoleProfile = (portal: RolePortal) =>
+  useQuery({
+    queryKey: [...roleSettingsKeys.detail(portal), 'profile'] as const,
+    queryFn: () => fetchRoleProfile(portal),
   });
 
 export const useUpdateRoleSettings = (portal: RolePortal) => {
@@ -35,6 +45,28 @@ export const useUpdateRoleSettings = (portal: RolePortal) => {
       addToast({
         type: 'error',
         title: 'Could not save preferences',
+        description: getSmartErrorDescription(error, 'Update failed. Please try again.'),
+      });
+    },
+  });
+};
+
+export const useUpdateRoleProfile = (portal: RolePortal) => {
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+
+  return useMutation({
+    mutationFn: (data: { name?: string; email?: string }) => updateRoleProfile({ portal, data }),
+    onSuccess: (profile: ProfileDetails) => {
+      queryClient.setQueryData([...roleSettingsKeys.detail(portal), 'profile'] as const, profile);
+      queryClient.setQueryData(['currentUser'], profile);
+      localStorage.setItem(authStorageKeys.authUser, JSON.stringify(profile));
+      addToast({ type: 'success', title: 'Profile updated', description: 'Your account details were saved.' });
+    },
+    onError: (error: unknown) => {
+      addToast({
+        type: 'error',
+        title: 'Could not save profile',
         description: getSmartErrorDescription(error, 'Update failed. Please try again.'),
       });
     },

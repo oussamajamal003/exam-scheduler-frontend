@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
 import { useHighlightRow } from '@/hooks/common/useHighlightRow';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 import type { StudentCourseDashboardItem } from '@/api/roleDashboard.api';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +85,10 @@ export const StudentCoursesPage: React.FC = () => {
   const dashboardQuery = useStudentDashboard();
   const courses = dashboardQuery.data?.courses ?? [];
   const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
+  const [silentSearch, setSilentSearch] = React.useState<string>(() => {
+    const hl = new URLSearchParams(window.location.search).get('_hl');
+    return normalizeCommandSearchText(hl);
+  });
 
   const resolvedHighlightId = React.useMemo(() => {
     const courseId = searchParams.get('courseId') ?? searchParams.get('offeringId');
@@ -93,7 +98,29 @@ export const StudentCoursesPage: React.FC = () => {
     // Match by base course id (what CommandSearch sends)
     return courses.find((co) => co.course?.id === courseId)?.id ?? null;
   }, [courses, searchParams]);
+  React.useEffect(() => {
+    const hl = searchParams.get('_hl');
+    if (resolvedHighlightId && hl) setSilentSearch(normalizeCommandSearchText(hl));
+    else if (!resolvedHighlightId) setSilentSearch('');
+  }, [resolvedHighlightId, searchParams]);
   useHighlightRow('data-course-offering-id', resolvedHighlightId, courses.length);
+
+  const filteredCourses = React.useMemo(() => {
+    const term = silentSearch.trim().toLowerCase();
+    if (!term) return courses;
+    return courses.filter((courseOffering) =>
+      [
+        courseOffering.course?.code,
+        courseOffering.course?.title,
+        courseOffering.course?.name,
+        courseOffering.instructor,
+        courseOffering.semester?.name,
+        courseOffering.section,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term))
+    );
+  }, [courses, silentSearch]);
 
   if (dashboardQuery.isLoading) return <CourseSkeleton />;
 
@@ -185,7 +212,7 @@ export const StudentCoursesPage: React.FC = () => {
             <p className="py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">No registered courses found.</p>
           ) : viewMode === 'cards' ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {courses.map((courseOffering) => <CourseCard key={courseOffering.registrationId} courseOffering={courseOffering} />)}
+              {filteredCourses.map((courseOffering) => <CourseCard key={courseOffering.registrationId} courseOffering={courseOffering} />)}
             </div>
           ) : (
             <Table>
@@ -200,7 +227,7 @@ export const StudentCoursesPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {courses.map((courseOffering) => {
+                {filteredCourses.map((courseOffering) => {
                   const examStatus = getExamStatus(courseOffering);
                   return (
                     <TableRow key={courseOffering.registrationId} data-course-offering-id={courseOffering.id} className="border-zinc-200/70 dark:border-zinc-800/70">

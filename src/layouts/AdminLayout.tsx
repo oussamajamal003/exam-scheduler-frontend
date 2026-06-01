@@ -55,6 +55,7 @@ import { useLogout } from '@/hooks/auth/useLogout';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useDeleteAccount } from '@/hooks/auth/useDeleteAccount';
 import { useSemesters } from '@/hooks/semesters/useSemesters';
+import { useAdminProfileListener } from '@/hooks/adminSettings/useAdminProfileSync';
 
 import { DeleteConfirmModal } from '@/components/shared/DeleteConfirmModal';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
@@ -297,6 +298,9 @@ export const AdminLayout: React.FC = () => {
   const deleteAccountMutation = useDeleteAccount();
   const { data } = useCurrentUser();
   const currentUser = data as User | undefined;
+  
+  // Listen for profile updates from settings
+  const profileUpdate = useAdminProfileListener();
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
@@ -354,8 +358,9 @@ export const AdminLayout: React.FC = () => {
 
   const tokenPayload = getTokenPayload();
 
-  const userName = currentUser?.name ?? tokenPayload?.name ?? 'Admin User';
-  const userEmail = currentUser?.email ?? tokenPayload?.email ?? 'admin@example.com';
+  // Use profile update if available, otherwise fall back to currentUser or token payload
+  const userName = profileUpdate?.name ?? currentUser?.name ?? tokenPayload?.name ?? 'Admin User';
+  const userEmail = profileUpdate?.email ?? currentUser?.email ?? tokenPayload?.email ?? 'admin@example.com';
   const userRole = formatRole(currentUser?.role ?? tokenPayload?.role);
   const userInitials = getInitials(userName);
 

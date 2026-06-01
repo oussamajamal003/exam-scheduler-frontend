@@ -44,5 +44,136 @@
     "admin": "Search across the workspace...",
     "student": "Search schedules, courses, exams...",
     "proctor": "Search schedules, students, assignments..."
+  },
+  "adminSettings": {
+    "title": "Settings & Configuration",
+    "description": "Manage your admin account, user accounts, scheduling rules, notifications, and demo data from one place.",
+    "header": "System Management Center",
+    "tabs": {
+      "account": "Account",
+      "accounts": "User Accounts",
+      "scheduling": "Scheduling Rules",
+      "data": "Demo Data"
+    },
+    "account": {
+      "title": "Personal Information",
+      "personalInfo": {
+        "title": "Personal Information",
+        "fullName": "Full name",
+        "email": "Email",
+        "saveChanges": "Save changes"
+      },
+      "changePassword": {
+        "title": "Change Password",
+        "currentPassword": "Current Password",
+        "newPassword": "New Password",
+        "confirmPassword": "Confirm Password",
+        "requirements": "Password requirements",
+        "updateButton": "Update password"
+      },
+      "passwordRules": {
+        "minLength": "At least 8 characters",
+        "casing": "Uppercase and lowercase letters",
+        "number": "At least one number",
+        "special": "At least one special character"
+      },
+      "passwordErrors": {
+        "sameAsCurrent": "New password must be different from the current password.",
+        "mismatch": "Password confirmation does not match.",
+        "doesNotMeetRules": "New password does not meet all rules."
+      }
+    },
+    "userAccounts": {
+      "title": "User Account Management",
+      "search": "Search by name, email, or ID",
+      "filter": "Filter by role",
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "reference": "Reference",
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "error": "Unable to load accounts.",
+      "noAccounts": "No accounts match the current filters.",
+      "previous": "Previous",
+      "next": "Next",
+      "pagination": "Page {{page}} of {{total}} · {{count}} accounts",
+      "filters": {
+        "allRoles": "All Roles",
+        "students": "Students",
+        "proctors": "Proctors"
+      },
+      "roles": {
+        "student": "Student",
+        "proctor": "Proctor",
+        "admin": "Admin"
+      },
+      "department": "Department",
+      "maxExamsPerDay": "Max Exams / Day",
+      "editDialog": {
+        "title": "Edit account",
+        "description": "Update the account details for {{name}}."
+      },
+      "deleteDialog": {
+        "title": "Delete account",
+        "description": "This permanently removes {{name}}'s account and its linked {{role}} record.",
+        "warning": "Accounts that still hold schedule assignments cannot be deleted until those assignments are removed.",
+        "confirmButton": "Delete account"
+      }
+    },
+    "demoData": {
+      "title": "Constraint Scheduling Demo Dataset",
+      "description": "Generate persistent feasible datasets A, B, and C. Regeneration preserves existing schedules, and Clear Demo Data removes the selected demo dataset only when an admin explicitly confirms it.",
+      "cleanSchedulePath": "Clean schedule path",
+      "cleanSchedulePathDesc": "Each dataset is sized to remain feasible for the Hybrid Constraint-Based Scheduling Algorithm.",
+      "relationalCoverage": "Relational coverage",
+      "relationalCoverageDesc": "Students connect to registrations, offerings, exams, schedules, assignments, and the calendar view.",
+      "persistentDemoData": "Persistent demo data",
+      "persistentDemoDataDesc": "Datasets stay in the database across refreshes and restarts until an admin explicitly clears demo data.",
+      "safeCleanup": "Safe cleanup",
+      "safeCleanupDesc": "Clear Demo Data removes the selected demo dataset, its schedules, assignments, and related demo entities without touching manually created records outside that dataset.",
+      "datasetChoice": "Dataset Choice",
+      "chooseDataset": "Choose between dataset A, B, C, or the FEIT Real Data before generation.",
+      "generateDataset": "Generate",
+      "datasetA": "Dataset A",
+      "datasetACaption": "Balanced baseline",
+      "datasetADetail": "18 offerings, 4 centers, 10 rooms, and a fully feasible balanced scheduling workload.",
+      "datasetB": "Dataset B",
+      "datasetBCaption": "Scaled 40+ offerings",
+      "datasetBDetail": "44 offerings with more students, more campuses, more proctors, and a wider feasible time-slot grid.",
+      "datasetC": "Dataset C",
+      "datasetCCaption": "Largest 55+ offerings",
+      "datasetCDetail": "60 offerings with the highest realistic scale, expanded rooms, centers, enrollments, and proctor coverage.",
+      "datasetREAL": "Real Data",
+      "datasetREALCaption": "FEIT Spring 2026",
+      "datasetREALDetail": "Real FEIT Spring 2026 course offerings: 35 offerings (29 producing exams), real instructors, sections, lecture day/time, BME / CCE / CS / EE programs, 4 FEIT centers, and 12 rooms. PROJECT and LAB-only offerings keep their CourseOffering but do NOT generate exams or join scheduling.",
+      "clearDemoData": "Clear Demo Data",
+      "clearDatasetChoice": "Dataset To Clear",
+      "clearDatasetWarning": "Delete the related schedule first from Schedule Versions. After that, the dataset can be removed together with its assignments, enrollments, rooms, proctors, time slots, and related demo-generated records.",
+      "datasetReady": "ready",
+      "lastGeneratedDataset": "Last Generated Dataset",
+      "allPersistedDemoData": "All Persisted Demo Data",
+      "departments": "Departments",
+      "programs": "Programs",
+      "semesters": "Semesters",
+      "courses": "Courses",
+      "courseOfferings": "Course Offerings",
+      "registrations": "Registrations",
+      "offerings": "Offerings",
+      "enrollments": "Enrollments",
+      "students": "Students",
+      "centers": "Centers",
+      "rooms": "Rooms",
+      "proctors": "Proctors",
+      "timeSlots": "Time Slots",
+      "exams": "Exams",
+      "schedules": "Schedules",
+      "ready": "ready",
+      "confirmClearTitle": "Clear Demo Data",
+      "confirmClearDescription": "Are you sure you want to permanently remove the {{dataset}} dataset and all its associated data including schedules, assignments, enrollments, rooms, proctors, time slots, and related entities?",
+      "clearWarning": "This action cannot be undone. Ensure you have deleted related schedules from Schedule Versions before proceeding.",
+      "confirmClearButton": "Confirm & Clear"
+    }
   }
 }

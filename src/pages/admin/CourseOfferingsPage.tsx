@@ -51,6 +51,7 @@ import type {
   CourseOffering,
   CreateCourseOfferingDto,
 } from "../../schemas/courseOffering";
+import { normalizeCommandSearchText } from "../../lib/searchText";
 
 const ALL_SEMESTERS = "__all_semesters__";
 const normalizeFilterSearch = (value: string) => value.trim().toLowerCase();
@@ -70,9 +71,7 @@ export function CourseOfferingsPage() {
   const searchTerm = filters.search;
   const [silentSearch, setSilentSearch] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
-    const hlId = params.get('offeringId') ?? params.get('id');
-    const hl = params.get('_hl');
-    return (hlId && hl) ? hl : '';
+    return normalizeCommandSearchText(params.get('_hl'));
   });
   const setSearchTerm = (value: string) => {
     if (value && silentSearch) setSilentSearch('');
@@ -97,6 +96,7 @@ export function CourseOfferingsPage() {
   );
   const selectedSemesterId = selectedSemester?.id ?? "";
   const selectedDepartmentId = selectedDepartment?.id ?? "";
+  const commandSearchText = normalizeCommandSearchText(searchParams.get('_hl'));
 
   // URL-synced server page (1-based)
   const pageParam = Number(searchParams.get("page") ?? "1");
@@ -128,7 +128,7 @@ export function CourseOfferingsPage() {
   const offeringsQuery = useCourseOfferingsPage({
     page: currentPage,
     pageSize: PAGE_SIZE,
-    search: deferredSearchTerm || silentSearch,
+    search: commandSearchText || deferredSearchTerm || silentSearch,
     semesterId: selectedSemesterId || undefined,
     departmentId: selectedDepartmentId || undefined,
   });
@@ -138,12 +138,11 @@ export function CourseOfferingsPage() {
   const totalPages = offeringsMeta?.totalPages ?? 1;
 
   const highlightedOfferingId = searchParams.get("offeringId") ?? searchParams.get("id");
-  const _hlOfferingParam = searchParams.get('_hl');
   useEffect(() => {
-    if (highlightedOfferingId && _hlOfferingParam) setSilentSearch(_hlOfferingParam);
+    if (highlightedOfferingId && commandSearchText) setSilentSearch(commandSearchText);
     else if (!highlightedOfferingId) setSilentSearch('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlightedOfferingId, _hlOfferingParam]);
+  }, [highlightedOfferingId, commandSearchText]);
   useHighlightRow("data-course-offering-id", highlightedOfferingId, offerings.length);
 
   const [editingOffering, setEditingOffering] = useState<CourseOffering | null>(null);

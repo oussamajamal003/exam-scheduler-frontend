@@ -21,7 +21,7 @@ export const LoginForm: React.FC = () => {
 
   return (
     <AuthCard>
-      <AuthHeader title="Smart Exam Scheduler" subtitle="Welcome back. Please enter your details." />
+      <AuthHeader title="Smart SIS" subtitle="Exam Operations, Scheduling & Optimization Platform" />
 
       <form onSubmit={handleSubmit((data) => login(data))} className="space-y-5" noValidate>
         {error && (
@@ -50,7 +50,7 @@ export const LoginForm: React.FC = () => {
           />
         </div>
 
-        <Button type="submit" disabled={isPending} className="auth-login-button h-11 w-full !bg-zinc-950 !text-white font-semibold shadow-sm transition-all hover:!bg-zinc-800 disabled:opacity-60 dark:!bg-zinc-950 dark:!text-white dark:hover:!bg-zinc-900">
+        <Button type="submit" disabled={isPending} className="auth-login-button h-11 w-full bg-zinc-950! text-white! font-semibold shadow-sm transition-all hover:bg-zinc-800! disabled:opacity-60 dark:bg-zinc-950! dark:text-white! dark:hover:bg-zinc-900!">
           {isPending ? 'Authenticating...' : 'Sign In'}
         </Button>
       </form>

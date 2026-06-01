@@ -105,10 +105,13 @@ export const useUpdateSchedule = () => {
       updateSchedule({ id, data }),
     onSuccess: async (schedule) => {
       await invalidateScheduleQuerySync(queryClient, {
-        includeAssignments: false,
+        includeAssignments: true,
+        includeDashboards: true,
         includeNotifications: false,
+        includeSearch: true,
       });
       queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(schedule.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.analysis(schedule.id) });
       addToast({
         type: "success",
         title: "Schedule Updated",

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { env } from '@/config/env';
 
 const TOKEN_STORAGE_KEY = 'token';
 const TOKEN_EXPIRES_AT_STORAGE_KEY = 'token_expires_at';
@@ -27,7 +28,7 @@ export const clearStoredAuthSession = () => {
 };
 
 export const axiosClient = axios.create({
-  baseURL: '/api',
+  baseURL: env.API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

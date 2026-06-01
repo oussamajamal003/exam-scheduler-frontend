@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 import { useGlobalSearch } from '@/hooks/search/useGlobalSearch';
 import { useValidateRecentItems } from '@/hooks/search/useValidateRecentItems';
 import type {
@@ -162,8 +163,10 @@ const resolveSearchTarget = (result: SearchResult) => {
     case 'proctor-dashboard':
       return '/proctor/dashboard';
     case 'course-offering':
-      return buildTargetWithParams(`/course-offerings/${result.id}`, {
+      return buildTargetWithParams('/course-offerings', {
+        offeringId: result.id,
         semesterId: typeof result.metadata?.semesterId === 'string' ? result.metadata.semesterId : undefined,
+        _hl: normalizeCommandSearchText(result.title),
       });
     case 'student':
       return result.href.startsWith('/proctor/')
@@ -173,28 +176,28 @@ const resolveSearchTarget = (result: SearchResult) => {
       return buildTargetWithParams('/proctors', { proctorId: result.id, _hl: result.title });
     case 'schedule':
       if (result.href.startsWith('/student/')) {
-        return buildTargetWithParams('/student/schedule', { scheduleId: result.id });
+        return buildTargetWithParams('/student/schedule', { scheduleId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
       if (result.href.startsWith('/proctor/')) {
-        return buildTargetWithParams('/proctor/schedule', { scheduleId: result.id });
+        return buildTargetWithParams('/proctor/schedule', { scheduleId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
-      return buildTargetWithParams('/scheduling', { scheduleId: result.id, view: 'table' });
+      return buildTargetWithParams('/scheduling', { scheduleId: result.id, view: 'table', _hl: normalizeCommandSearchText(result.title) });
     case 'course':
       if (result.href.startsWith('/student/')) {
-        return buildTargetWithParams('/student/courses', { courseId: result.id });
+        return buildTargetWithParams('/student/courses', { courseId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
       if (result.href.startsWith('/proctor/')) {
-        return buildTargetWithParams('/proctor/schedule', { courseId: result.id });
+        return buildTargetWithParams('/proctor/schedule', { courseId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
-      return buildTargetWithParams('/courses', { courseId: result.id, _hl: result.title });
+      return buildTargetWithParams('/courses', { courseId: result.id, _hl: normalizeCommandSearchText(result.title) });
     case 'exam':
       if (result.href.startsWith('/student/')) {
-        return buildTargetWithParams('/student/schedule', { examId: result.id });
+        return buildTargetWithParams('/student/schedule', { examId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
       if (result.href.startsWith('/proctor/')) {
-        return buildTargetWithParams('/proctor/schedule', { assignmentId: result.id });
+        return buildTargetWithParams('/proctor/schedule', { assignmentId: result.id, _hl: normalizeCommandSearchText(result.title) });
       }
-      return buildTargetWithParams('/scheduling', { examId: result.id, view: 'table' });
+      return buildTargetWithParams('/scheduling', { examId: result.id, view: 'table', _hl: normalizeCommandSearchText(result.title) });
     case 'room':
       if (result.href.startsWith('/student/')) {
         return buildTargetWithParams('/student/schedule', { roomId: result.id });
@@ -239,7 +242,17 @@ export const CommandSearch: React.FC<Props> = ({
   const listRef = React.useRef<HTMLDivElement>(null);
 
   const { data, isFetching, isError, isDebouncing, enabled } = useGlobalSearch(query);
-  const { isValid: isRecentItemValid } = useValidateRecentItems(recent);
+  const { isValid: isRecentItemValid, validationMap } = useValidateRecentItems(recent);
+
+  // Automatically remove invalid items from recent list to keep history clean
+  React.useEffect(() => {
+    const invalidItems = recent.filter((item) => validationMap[`${item.type}-${item.id}`] === false);
+    if (invalidItems.length > 0) {
+      const cleaned = recent.filter((item) => validationMap[`${item.type}-${item.id}`] !== false);
+      setRecent(cleaned);
+      localStorage.setItem(recentStorageKey, JSON.stringify(cleaned));
+    }
+  }, [validationMap, recent, recentStorageKey]);
 
   // Reset state every time the palette opens, refocus input.
   React.useEffect(() => {

@@ -13,6 +13,15 @@ export type NotificationPreferences = {
   updatedAt: string;
 };
 
+export type ProfileDetails = {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type UpdateNotificationPreferencesDto = Partial<Pick<NotificationPreferences,
   | 'schedulePublishedNotifications'
   | 'examAssignmentUpdates'
@@ -49,6 +58,11 @@ export const fetchRoleSettings = async (portal: RolePortal): Promise<Notificatio
   return unwrap(response.data, 'Settings');
 };
 
+export const fetchRoleProfile = async (portal: RolePortal): Promise<ProfileDetails> => {
+  const response = await axiosClient.get<ApiEnvelope<ProfileDetails>>(`/${portal}/settings/profile`);
+  return unwrap(response.data, 'Profile');
+};
+
 export const updateRoleSettings = async ({
   portal,
   data,
@@ -58,6 +72,17 @@ export const updateRoleSettings = async ({
 }): Promise<NotificationPreferences> => {
   const response = await axiosClient.patch<ApiEnvelope<NotificationPreferences>>(`/${portal}/settings`, data);
   return unwrap(response.data, 'Update settings');
+};
+
+export const updateRoleProfile = async ({
+  portal,
+  data,
+}: {
+  portal: RolePortal;
+  data: { name?: string; email?: string };
+}): Promise<ProfileDetails> => {
+  const response = await axiosClient.patch<ApiEnvelope<ProfileDetails>>(`/${portal}/settings/profile`, data);
+  return unwrap(response.data, 'Update profile');
 };
 
 export const changeRolePassword = async ({

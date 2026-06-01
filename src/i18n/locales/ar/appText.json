@@ -1,7 +1,7 @@
 {
   "__lexicon": {
-    "Smart Exam Scheduler": "مُجدوِل الامتحانات الذكي",
-    "SIS Exam Operations": "عمليات امتحانات نظام معلومات الطلاب",
+    "Smart SIS": "Smart SIS",
+    "Exam Operations, Scheduling & Optimization Platform": "منصة عمليات الامتحانات والجدولة والتحسين",
     "Dashboard": "لوحة التحكم",
     "Admin Dashboard": "لوحة تحكم المسؤول",
     "Student Dashboard": "لوحة تحكم الطالب",
@@ -315,7 +315,6 @@
     "Search...": "بحث...",
     "Page": "صفحة",
     "of": "من",
-    "Welcome back. Please enter your details.": "مرحباً بعودتك. يرجى إدخال بياناتك.",
     "Sign In": "تسجيل الدخول",
     "Authenticating...": "جارٍ التحقق...",
     "Invalid email or password. Please try again.": "البريد الإلكتروني أو كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى.",

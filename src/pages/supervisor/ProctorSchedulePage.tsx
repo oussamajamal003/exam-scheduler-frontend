@@ -6,11 +6,13 @@ import { useProctorDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
 import { useSchedulePdfDownload } from '@/hooks/schedulePdf/useSchedulePdfDownload';
 import { downloadProctorSchedulePdf } from '@/api/schedulePdf.api';
 import { useHighlightRow } from '@/hooks/common/useHighlightRow';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 
 export const ProctorSchedulePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const dashboardQuery = useProctorDashboard();
   const assignments = dashboardQuery.data?.assignments ?? [];
+  const commandSearchText = normalizeCommandSearchText(searchParams.get('_hl'));
 
   const resolvedHighlightId = React.useMemo(() => {
     const assignmentId = searchParams.get('assignmentId') ?? searchParams.get('examId');
@@ -67,6 +69,7 @@ export const ProctorSchedulePage: React.FC = () => {
         secondaryLabel={(assignment) => `${assignment.exam?.courseOffering?.registrations?.length ?? 0} related students`}
         tableMode="proctor"
         showFilters
+        initialQuery={commandSearchText}
         filterResultLabel={(visible, total) => `Showing ${visible} of ${total} assignment${total === 1 ? '' : 's'}`}
         filterEmptyLabel="No published assignments match the current filters."
         headerActions={(

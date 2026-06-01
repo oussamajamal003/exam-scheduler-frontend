@@ -15,6 +15,7 @@ import { downloadFullPublishedSchedulePdf } from '@/api/schedulePdf.api';
 import { DownloadPdfButton } from '@/components/roleSchedule/DownloadPdfButton';
 import { formatUtcDate, formatUtcTime } from '@/lib/dateTime';
 import { buildMultiEntitySearchIndex } from '@/lib/smartSearch';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 import { cn } from '@/lib/utils';
 import type { Schedule, ScheduleAssignment } from '@/schemas/schedule';
 
@@ -39,6 +40,7 @@ type RoleScheduleViewProps = {
   showFilters?: boolean;
   filterResultLabel?: (visible: number, total: number) => string;
   filterEmptyLabel?: string;
+  initialQuery?: string;
 };
 
 const ROLE_FILTER_QUERY_PLACEHOLDER = 'Search course name, code, room, center, proctor, schedule';
@@ -686,6 +688,7 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
   showFilters = false,
   filterResultLabel,
   filterEmptyLabel,
+  initialQuery = '',
 }) => {
   const [viewMode, setViewMode] = React.useState<ViewMode>('table');
   const [selectedAssignment, setSelectedAssignment] = React.useState<LogicalScheduleAssignment | null>(null);
@@ -701,6 +704,7 @@ export const RoleScheduleView: React.FC<RoleScheduleViewProps> = ({
     searchDebounceMs: showFilters ? 250 : 0,
     statusOptions: PUBLISHED_ASSIGNMENT_STATUS_OPTIONS,
     includePhaseFilter: false,
+    initialQuery: normalizeCommandSearchText(initialQuery),
   });
   const { compare, matches, searchIndex } = filters;
 

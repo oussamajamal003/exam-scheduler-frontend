@@ -44,5 +44,136 @@
     "admin": "Rechercher dans l'espace de travail...",
     "student": "Rechercher des horaires, des cours, des examens...",
     "proctor": "Rechercher des horaires, des étudiants, des affectations..."
+  },
+  "adminSettings": {
+    "title": "Paramètres et configuration",
+    "description": "Gérez votre compte administrateur, les comptes utilisateur, les règles de planification, les notifications et les données de démonstration à partir d'un seul endroit.",
+    "header": "Centre de gestion du système",
+    "tabs": {
+      "account": "Compte",
+      "accounts": "Comptes utilisateur",
+      "scheduling": "Règles de planification",
+      "data": "Données de démonstration"
+    },
+    "account": {
+      "title": "Informations personnelles",
+      "personalInfo": {
+        "title": "Informations personnelles",
+        "fullName": "Nom complet",
+        "email": "Courriel",
+        "saveChanges": "Enregistrer les modifications"
+      },
+      "changePassword": {
+        "title": "Changer le mot de passe",
+        "currentPassword": "Mot de passe actuel",
+        "newPassword": "Nouveau mot de passe",
+        "confirmPassword": "Confirmer le mot de passe",
+        "requirements": "Exigences en matière de mot de passe",
+        "updateButton": "Mettre à jour le mot de passe"
+      },
+      "passwordRules": {
+        "minLength": "Au moins 8 caractères",
+        "casing": "Lettres majuscules et minuscules",
+        "number": "Au moins un chiffre",
+        "special": "Au moins un caractère spécial"
+      },
+      "passwordErrors": {
+        "sameAsCurrent": "Le nouveau mot de passe doit être différent du mot de passe actuel.",
+        "mismatch": "La confirmation du mot de passe ne correspond pas.",
+        "doesNotMeetRules": "Le nouveau mot de passe ne respecte pas toutes les règles."
+      }
+    },
+    "userAccounts": {
+      "title": "Gestion des comptes utilisateur",
+      "search": "Rechercher par nom, e-mail ou ID",
+      "filter": "Filtrer par rôle",
+      "name": "Nom",
+      "email": "E-mail",
+      "role": "Rôle",
+      "reference": "Référence",
+      "actions": "Actions",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "error": "Impossible de charger les comptes.",
+      "noAccounts": "Aucun compte ne correspond aux filtres actuels.",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "pagination": "Page {{page}} sur {{total}} · {{count}} comptes",
+      "filters": {
+        "allRoles": "Tous les rôles",
+        "students": "Étudiants",
+        "proctors": "Surveillants"
+      },
+      "roles": {
+        "student": "Étudiant",
+        "proctor": "Surveillant",
+        "admin": "Administrateur"
+      },
+      "department": "Département",
+      "maxExamsPerDay": "Max d'examens/jour",
+      "editDialog": {
+        "title": "Modifier le compte",
+        "description": "Mettre à jour les détails du compte pour {{name}}."
+      },
+      "deleteDialog": {
+        "title": "Supprimer le compte",
+        "description": "Cela supprimera définitivement le compte de {{name}} et son enregistrement {{role}} lié.",
+        "warning": "Les comptes qui conservent des assignations d'horaire ne peuvent pas être supprimés tant que ces assignations ne sont pas supprimées.",
+        "confirmButton": "Supprimer le compte"
+      }
+    },
+    "demoData": {
+      "title": "Ensemble de données de démonstration de planification par contraintes",
+      "description": "Générez des ensembles de données A, B et C persistants et réalisables. La régénération préserve les horaires existants, et Effacer les données de démonstration supprime l'ensemble de données de démonstration sélectionné uniquement lorsqu'un administrateur le confirme explicitement.",
+      "cleanSchedulePath": "Chemin d'horaire propre",
+      "cleanSchedulePathDesc": "Chaque ensemble de données est dimensionné pour rester réalisable pour l'algorithme de planification hybride basé sur les contraintes.",
+      "relationalCoverage": "Couverture relationnelle",
+      "relationalCoverageDesc": "Les étudiants se connectent aux enregistrements, aux offres, aux examens, aux horaires, aux affectations et à la vue du calendrier.",
+      "persistentDemoData": "Données de démonstration persistantes",
+      "persistentDemoDataDesc": "Les ensembles de données restent dans la base de données entre les actualisations et les redémarrages jusqu'à ce qu'un administrateur efface explicitement les données de démonstration.",
+      "safeCleanup": "Nettoyage sécurisé",
+      "safeCleanupDesc": "Effacer les données de démonstration supprime l'ensemble de données de démonstration sélectionné, ses horaires, affectations et entités de démonstration connexes sans affecter les enregistrements créés manuellement en dehors de cet ensemble de données.",
+      "datasetChoice": "Choix de l'ensemble de données",
+      "chooseDataset": "Choisissez entre l'ensemble de données A, B, C ou les données réelles FEIT avant la génération.",
+      "generateDataset": "Générer",
+      "datasetA": "Ensemble de données A",
+      "datasetACaption": "Base de référence équilibrée",
+      "datasetADetail": "18 offres, 4 centres, 10 salles, et une charge de travail de planification équilibrée et entièrement réalisable.",
+      "datasetB": "Ensemble de données B",
+      "datasetBCaption": "Échelle 40+ offres",
+      "datasetBDetail": "44 offres avec plus d'étudiants, plus de campus, plus de surveillants et une grille de créneaux horaires plus large et réalisable.",
+      "datasetC": "Ensemble de données C",
+      "datasetCCaption": "Échelle maximale 55+ offres",
+      "datasetCDetail": "60 offres à l'échelle réaliste la plus élevée, salles, centres, inscriptions et couverture de surveillants étendus.",
+      "datasetREAL": "Données réelles",
+      "datasetREALCaption": "FEIT Printemps 2026",
+      "datasetREALDetail": "Offres de cours réelles FEIT Printemps 2026 : 35 offres (29 produisant des examens), instructeurs réels, sections, jour/heure du cours, programmes BME / CCE / CS / EE, 4 centres FEIT et 12 salles. Les offres basées sur les PROJETS et LABORATOIRES conservent leur CourseOffering mais ne GÉNÈRENT PAS d'examens ou ne rejoignent PAS la planification.",
+      "clearDemoData": "Effacer les données de démonstration",
+      "clearDatasetChoice": "Ensemble de données à effacer",
+      "clearDatasetWarning": "Supprimez d'abord l'horaire associé des versions d'horaire. Après cela, l'ensemble de données peut être supprimé avec ses affectations, inscriptions, salles, surveillants, créneaux horaires et enregistrements de démonstration connexes.",
+      "datasetReady": "prêt",
+      "lastGeneratedDataset": "Dernier ensemble de données généré",
+      "allPersistedDemoData": "Toutes les données de démonstration persistantes",
+      "departments": "Départements",
+      "programs": "Programmes",
+      "semesters": "Semestres",
+      "courses": "Cours",
+      "courseOfferings": "Offres de cours",
+      "registrations": "Enregistrements",
+      "offerings": "Offres",
+      "enrollments": "Inscriptions",
+      "students": "Étudiants",
+      "centers": "Centres",
+      "rooms": "Salles",
+      "proctors": "Surveillants",
+      "timeSlots": "Créneaux horaires",
+      "exams": "Examens",
+      "schedules": "Horaires",
+      "ready": "prêt",
+      "confirmClearTitle": "Effacer les données de démonstration",
+      "confirmClearDescription": "Êtes-vous sûr de vouloir supprimer définitivement l'ensemble de données {{dataset}} et toutes ses données associées, y compris les horaires, les affectations, les inscriptions, les salles, les surveillants, les créneaux horaires et les entités connexes ?",
+      "clearWarning": "Cette action ne peut pas être annulée. Assurez-vous d'avoir supprimé les horaires connexes des versions d'horaire avant de continuer.",
+      "confirmClearButton": "Confirmer et effacer"
+    }
   }
 }

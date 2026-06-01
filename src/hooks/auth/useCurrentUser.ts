@@ -18,11 +18,6 @@ const getStoredUser = (): User | undefined => {
 };
 
 const resolveCurrentUser = async (): Promise<User> => {
-  const storedUser = getStoredUser();
-  if (storedUser) {
-    return storedUser;
-  }
-
   const user = await getCurrentUser();
   localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
   return user;
@@ -34,7 +29,7 @@ export const useCurrentUser = () => {
     queryFn: resolveCurrentUser,
     enabled: Boolean(localStorage.getItem('token')),
     retry: false,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // Always check if there's a cached version but don't prevent refetching
   });
 };
 

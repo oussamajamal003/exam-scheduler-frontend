@@ -11,6 +11,7 @@ import { useProctorDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
 import { useHighlightRow } from '@/hooks/common/useHighlightRow';
 import { formatTimeSlotLabel, formatUtcDate, formatUtcTime } from '@/lib/dateTime';
 import { buildSearchIndex, matchesSmartSearch } from '@/lib/smartSearch';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 import type { ScheduleAssignment, ScheduleRegistration } from '@/schemas/schedule';
 
 const STUDENT_STATUS_OPTIONS = [
@@ -183,6 +184,7 @@ export const ProctorStudentsPage: React.FC = () => {
   const [endDate, setEndDate] = React.useState('');
   const [status, setStatus] = React.useState('all');
   const [sort, setSort] = React.useState<StudentSort>('date-asc');
+  const commandSearchText = normalizeCommandSearchText(searchParams.get('_hl'));
 
   React.useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -195,6 +197,17 @@ export const ProctorStudentsPage: React.FC = () => {
   const highlightedStudentId = searchParams.get('studentId');
   const totalRows = React.useMemo(() => groups.reduce((sum, g) => sum + g.rows.length, 0), [groups]);
   useHighlightRow('data-student-id', highlightedStudentId, totalRows);
+
+  React.useEffect(() => {
+    if (highlightedStudentId && commandSearchText) {
+      setQuery(commandSearchText);
+      return;
+    }
+
+    if (!highlightedStudentId) {
+      setQuery('');
+    }
+  }, [commandSearchText, highlightedStudentId]);
 
   // ── Derived selector options from real data ─────────────────────────────────
   const courseOptions = React.useMemo(() => {

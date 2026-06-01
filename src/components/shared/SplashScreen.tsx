@@ -6,8 +6,8 @@ type SplashScreenProps = {
 };
 
 export function SplashScreen({
-  title = "SIS Exam Operations",
-  subtitle = "Syncing student records, rooms, proctors and exam windows",
+  title = "Smart SIS",
+  subtitle = "Exam Operations, Scheduling & Optimization Platform",
 }: SplashScreenProps) {
   const metrics = [
     { label: 'Students', value: '2.4k', icon: Users, tone: 'text-cyan-200' },

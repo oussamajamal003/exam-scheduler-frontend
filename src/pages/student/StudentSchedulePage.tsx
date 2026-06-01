@@ -6,11 +6,13 @@ import { useStudentDashboard } from '@/hooks/roleDashboards/useRoleDashboards';
 import { useSchedulePdfDownload } from '@/hooks/schedulePdf/useSchedulePdfDownload';
 import { downloadStudentSchedulePdf } from '@/api/schedulePdf.api';
 import { useHighlightRow } from '@/hooks/common/useHighlightRow';
+import { normalizeCommandSearchText } from '@/lib/searchText';
 
 export const StudentSchedulePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const dashboardQuery = useStudentDashboard();
   const assignments = dashboardQuery.data?.assignments ?? [];
+  const commandSearchText = normalizeCommandSearchText(searchParams.get('_hl'));
 
   const resolvedHighlightId = React.useMemo(() => {
     const assignmentId = searchParams.get('assignmentId');
@@ -66,6 +68,7 @@ export const StudentSchedulePage: React.FC = () => {
         emptyLabel="No published exam schedule available yet."
         errorLabel="Unable to load your published exam schedule."
         showFilters
+        initialQuery={commandSearchText}
         filterResultLabel={(visible, total) => `Showing ${visible} of ${total} exam${total === 1 ? '' : 's'}`}
         filterEmptyLabel="No published exams match the current filters."
         headerActions={(

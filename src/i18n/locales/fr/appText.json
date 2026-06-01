@@ -1,7 +1,7 @@
 {
   "__lexicon": {
-    "Smart Exam Scheduler": "Planificateur d'examens intelligent",
-    "SIS Exam Operations": "Opérations d'examens SIS",
+    "Smart SIS": "Smart SIS",
+    "Exam Operations, Scheduling & Optimization Platform": "Plateforme d'opérations, de planification et d'optimisation des examens",
     "Dashboard": "Tableau de bord",
     "Admin Dashboard": "Tableau de bord administrateur",
     "Student Dashboard": "Tableau de bord étudiant",
@@ -315,7 +315,6 @@
     "Search...": "Rechercher...",
     "Page": "Page",
     "of": "sur",
-    "Welcome back. Please enter your details.": "Bon retour. Veuillez saisir vos informations.",
     "Sign In": "Se connecter",
     "Authenticating...": "Authentification...",
     "Invalid email or password. Please try again.": "E-mail ou mot de passe invalide. Veuillez réessayer.",

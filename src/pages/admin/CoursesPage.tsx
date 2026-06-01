@@ -25,6 +25,7 @@ import { useDepartments } from "../../hooks/departments/useDepartments";
 import { useSemesters } from "../../hooks/semesters/useSemesters";
 import { useDelayedLoading } from "../../hooks/common/useDelayedLoading";
 import { useBulkDelete } from "../../hooks/common/useBulkDelete";
+import { normalizeCommandSearchText } from "../../lib/searchText";
 
 const normalizeFilterSearch = (value: string) => value.trim().toLowerCase();
 const formatDepartmentLabel = (department: { name?: string; code?: string | null }) =>
@@ -39,17 +40,19 @@ export function CoursesPage() {
   const setSearch = (value: string) => setFilter('search', value);
   const selectedDepartmentId = filters.departmentId;
   const deferredSearch = useDeferredValue(search.trim());
+  const [searchParams] = useSearchParams();
+  const highlightedCourseId = searchParams.get("courseId") ?? searchParams.get("id");
+  const commandSearchText = normalizeCommandSearchText(searchParams.get('_hl'));
+  const effectiveDepartmentId = commandSearchText ? undefined : (selectedDepartmentId || undefined);
   const departmentsQuery = useDepartments();
   const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
-  const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses({ departmentId: selectedDepartmentId || undefined });
+  const { data: courses = [], isLoading, isFetching, isError, error, refetch } = useCourses({ departmentId: effectiveDepartmentId });
   const programsQuery = usePrograms();
   const semestersQuery = useSemesters();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [detailCourse, setDetailCourse] = useState<Course | null>(null);
   const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
-  const [searchParams] = useSearchParams();
-  const highlightedCourseId = searchParams.get("courseId") ?? searchParams.get("id");
 
   useHighlightRow("data-course-id", highlightedCourseId, courses.length);
 
@@ -131,14 +134,14 @@ export function CoursesPage() {
   };
 
   const filteredCourses = useMemo(() => {
-    const term = deferredSearch.toLowerCase();
+    const term = (commandSearchText || deferredSearch).toLowerCase();
     if (!term) return courses;
     return courses.filter((c) =>
-      [c.name, c.code, c.program, c.semester]
+      [c.title, c.name, c.code, c.program, c.semester]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term))
     );
-  }, [deferredSearch, courses]);
+  }, [deferredSearch, courses, commandSearchText]);
 
   const activeFilterBadges = [
     ...(deferredSearch ? [{ key: "search", label: "Search", value: deferredSearch, onRemove: () => setSearch("") }] : []),
@@ -169,7 +172,7 @@ export function CoursesPage() {
     if (!selectedDepartmentId) return;
     if (selectedDepartment) return;
     setFilter('departmentId', '');
-  }, [departmentsQuery.isLoading, selectedDepartment, selectedDepartmentId]);
+  }, [departmentsQuery.isLoading, selectedDepartment, selectedDepartmentId, setFilter]);
 
   if (showPageLoading) {
     return (

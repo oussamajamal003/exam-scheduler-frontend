@@ -122,6 +122,7 @@ import { EmptyState } from "../../components/shared/EmptyState";
 import { DeleteConfirmModal } from "../../components/shared/DeleteConfirmModal";
 import { BulkDeleteToolbar, RowSelectCheckbox } from "../../components/shared/BulkTableActions";
 import { useBulkDelete } from "../../hooks/common/useBulkDelete";
+import { invalidateScheduleQuerySync } from "../../lib/scheduleQuerySync";
 import { ScheduleFilterToolbar } from "../../components/shared/ScheduleFilterToolbar";
 import { ActiveFilterBadges } from "../../components/shared/ActiveFilterBadges";
 import { ALL, useAssignmentScheduleFilters } from "../../hooks/assignments/useAssignmentScheduleFilters";
@@ -232,6 +233,11 @@ const getAutoUnpublishSummary = (schedule?: Schedule | null) => {
     return "Upstream changes invalidated this published schedule.";
   }
   return `Upstream changes invalidated this published schedule: ${reasons.join(", ")}.`;
+};
+
+const isSchedulePublishBlocked = (schedule?: Schedule | null, activeSemesterId?: string) => {
+  const scheduleSemesterId = schedule?.assignments?.[0]?.exam?.courseOffering?.semester?.id;
+  return !!schedule && (!activeSemesterId || !scheduleSemesterId || scheduleSemesterId !== activeSemesterId);
 };
 
 const PRESET_EXAM_PERIODS = ["Midterm", "Final"];
@@ -651,8 +657,7 @@ const ScheduleVersionsTable = memo(({
                               <DropdownMenuSeparator />
                               {!s.isFinal ? (
                                 (() => {
-                                  const sSemesterId = s.assignments?.[0]?.exam?.courseOffering?.semester?.id;
-                                  const sSemesterInactive = !!activeSemesterId && !!sSemesterId && sSemesterId !== activeSemesterId;
+                                  const sSemesterInactive = isSchedulePublishBlocked(s, activeSemesterId);
                                   return (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -2178,15 +2183,15 @@ const GenerateScheduleDialog = ({
                       <QualityMetricCard label="Proctor Balance" value={getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance") : undefined} />
                       <QualityMetricCard label="Student Spacing" value={getQualityMetric(validationResult, optimizationResult, "studentSpacing")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "studentSpacing") : undefined} />
                       <QualityMetricCard label="Exam Distribution" value={getQualityMetric(validationResult, optimizationResult, "examDistribution")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "examDistribution") : undefined} />
-                      <QualityMetricCard label="Preferred Spacing" value={getQualityMetric(validationResult, optimizationResult, "preferredSpacing")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "preferredSpacing") : undefined} />
+                      <QualityMetricCard label="Spacing Balance" value={getQualityMetric(validationResult, optimizationResult, "spacingBalance")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "spacingBalance") : undefined} />
                     </div>
                     {(() => {
                       const rm = getQualityMetric(validationResult, optimizationResult, "roomUtilization");
                       const pb = getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance");
                       const ss = getQualityMetric(validationResult, optimizationResult, "studentSpacing");
                       const ed = getQualityMetric(validationResult, optimizationResult, "examDistribution");
-                      const ps = getQualityMetric(validationResult, optimizationResult, "preferredSpacing");
-                      const computedTotal = Math.round(rm * 0.25 + pb * 0.25 + ss * 0.20 + ed * 0.15 + ps * 0.15);
+                      const sb = getQualityMetric(validationResult, optimizationResult, "spacingBalance");
+                      const computedTotal = Math.round(rm * 0.25 + pb * 0.25 + ss * 0.20 + ed * 0.15 + sb * 0.15);
                       return (
                         <div className="rounded-none border border-zinc-200/80 bg-zinc-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
                           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Weighted Score Breakdown</p>
@@ -2196,7 +2201,7 @@ const GenerateScheduleDialog = ({
                               ["Proctor ×25%", pb * 0.25],
                               ["Spacing ×20%", ss * 0.20],
                               ["Distribution ×15%", ed * 0.15],
-                              ["Pref. Spacing ×15%", ps * 0.15],
+                              ["Spacing Balance ×15%", sb * 0.15],
                             ] as [string, number][]).map(([lbl, contribution]) => (
                               <div key={lbl} className="flex items-baseline justify-between gap-1 text-[11px]">
                                 <span className="text-zinc-500 dark:text-zinc-400">{lbl}</span>
@@ -4207,6 +4212,18 @@ export function SchedulesPage() {
   });
   const search = filters.state.query;
   const setSearch = filters.setters.setQuery;
+  const commandSearchText = searchParams.get('_hl');
+
+  useEffect(() => {
+    if (routeScheduleId && commandSearchText) {
+      setSearch(commandSearchText);
+      return;
+    }
+
+    if (!routeScheduleId) {
+      setSearch('');
+    }
+  }, [commandSearchText, routeScheduleId, setSearch]);
 
   const [debouncedAssignmentSearch, setDebouncedAssignmentSearch] = useState(filters.state.query);
   useEffect(() => {
@@ -4463,10 +4480,17 @@ export function SchedulesPage() {
   };
 
   const handleAssignmentChanged = (scheduleId: string) => {
+    void invalidateScheduleQuerySync(queryClient, {
+      includeAssignments: true,
+      includeDashboards: true,
+      includeNotifications: true,
+      includeSearch: true,
+    });
     void queryClient.invalidateQueries({ queryKey: scheduleAssignmentKeys.schedule(scheduleId) });
     void queryClient.invalidateQueries({ queryKey: scheduleKeys.lists });
     if (scheduleId === effectiveId) {
       void queryClient.invalidateQueries({ queryKey: scheduleKeys.detail(scheduleId) });
+      void queryClient.invalidateQueries({ queryKey: scheduleKeys.analysis(scheduleId) });
     }
   };
 
@@ -4598,8 +4622,7 @@ export function SchedulesPage() {
           <Tooltip>
             <TooltipTrigger asChild>
               {(() => {
-                const scheduleSemesterId = schedule?.assignments?.[0]?.exam?.courseOffering?.semester?.id;
-                const semesterInactive = !!schedule && !!activeSemesterId && !!scheduleSemesterId && scheduleSemesterId !== activeSemesterId;
+                const semesterInactive = isSchedulePublishBlocked(schedule, activeSemesterId);
                 return (
                   <span className="inline-flex">
                     <Button
@@ -4625,8 +4648,7 @@ export function SchedulesPage() {
               })()}
             </TooltipTrigger>
             {(() => {
-              const scheduleSemesterId = schedule?.assignments?.[0]?.exam?.courseOffering?.semester?.id;
-              const semesterInactive = !!schedule && !schedule.isFinal && !!activeSemesterId && !!scheduleSemesterId && scheduleSemesterId !== activeSemesterId;
+              const semesterInactive = !!schedule && !schedule.isFinal && isSchedulePublishBlocked(schedule, activeSemesterId);
               return semesterInactive ? (
                 <TooltipContent side="bottom" className="text-xs bg-zinc-950 text-white rounded-none border-0">
                   Semester inactive

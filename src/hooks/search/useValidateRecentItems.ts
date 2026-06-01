@@ -122,93 +122,54 @@ async function validateSingleItem(item: SearchResult): Promise<boolean> {
   }
 }
 
-// Validation functions for each entity type
-async function validateCourseOffering(id: string): Promise<boolean> {
+// Validation functions for each entity type using a shared helper that ignores 404 errors in console/interceptors
+async function checkExists(path: string): Promise<boolean> {
   try {
-    const response = await axiosClient.get(`/course-offerings/${id}`);
+    const response = await axiosClient.get(path, {
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+    });
     return response.status === 200 && !!response.data?.data;
   } catch {
     return false;
   }
+}
+
+async function validateCourseOffering(id: string): Promise<boolean> {
+  return checkExists(`/course-offerings/${id}`);
 }
 
 async function validateStudent(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/students/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/students/${id}`);
 }
 
 async function validateProctor(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/proctors/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/proctors/${id}`);
 }
 
 async function validateSemester(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/semesters/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/semesters/${id}`);
 }
 
 async function validateCourse(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/courses/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/courses/${id}`);
 }
 
 async function validateRoom(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/rooms/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/rooms/${id}`);
 }
 
 async function validateCenter(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/centers/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/centers/${id}`);
 }
 
 async function validateDepartment(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/departments/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/departments/${id}`);
 }
 
 async function validateSchedule(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/schedules/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/schedules/${id}`);
 }
 
 async function validateExam(id: string): Promise<boolean> {
-  try {
-    const response = await axiosClient.get(`/exams/${id}`);
-    return response.status === 200 && !!response.data?.data;
-  } catch {
-    return false;
-  }
+  return checkExists(`/exams/${id}`);
 }

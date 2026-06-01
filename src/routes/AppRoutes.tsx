@@ -40,6 +40,21 @@ const Lazy = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<LazyFallback />}>{children}</Suspense>
 );
 
+const SCROLL_POSITIONS_STORAGE_KEY = 'route-scroll-positions';
+
+const getStoredScrollPositions = () => {
+  try {
+    const raw = sessionStorage.getItem(SCROLL_POSITIONS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const setStoredScrollPositions = (positions: Record<string, number>) => {
+  sessionStorage.setItem(SCROLL_POSITIONS_STORAGE_KEY, JSON.stringify(positions));
+};
+
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -56,11 +71,28 @@ const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => {
 };
 
 const ScrollToTop: React.FC = () => {
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const previousPathRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [pathname]);
+    const currentPath = `${location.pathname}${location.search}${location.hash}`;
+    const previousPath = previousPathRef.current;
+
+    if (previousPath && previousPath !== currentPath) {
+      const positions = getStoredScrollPositions();
+      positions[previousPath] = window.scrollY;
+      setStoredScrollPositions(positions);
+    }
+
+    previousPathRef.current = currentPath;
+
+    const positions = getStoredScrollPositions();
+    const savedPosition = positions[currentPath] ?? 0;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: savedPosition, behavior: 'auto' });
+    });
+  }, [location.pathname, location.search, location.hash]);
 
   return null;
 };
