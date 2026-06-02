@@ -31,7 +31,6 @@ import {
   Trash2,
   UserCheck,
   Users,
-  Wand2,
   Wrench,
   X,
 } from "lucide-react";
@@ -40,7 +39,6 @@ import {
   useDeleteSchedule,
   useGenerateSchedule,
   usePrepareScheduling,
-  useOptimizeScheduling,
   usePublishSchedule,
   useUnpublishSchedule,
   useSchedule,
@@ -135,7 +133,7 @@ import { downloadAdminSchedulePdf } from "../../api/schedulePdf.api";
 import { Download } from "lucide-react";
 import { getApiErrorMessage, isAuthExpiredError } from "../../lib/apiError";
 import { formatTimeSlotLabel } from "../../lib/dateTime";
-import { getScheduleAssignmentCount } from "../../lib/scheduleCounts";
+import { getScheduleAssignmentCount, getLogicalAssignmentCount } from "../../lib/scheduleCounts";
 import { cn } from "../../lib/utils";
 import { buildSearchIndex } from "../../lib/smartSearch";
 
@@ -956,7 +954,7 @@ const StatCard = ({
   );
 };
  
-// -------------------- Generate dialog — pipeline: prepare → validate → build draft → evaluate → optimize → re-evaluate → confirm → generate --------------------
+// -------------------- Generate dialog — pipeline: load → validate → sort → filter → choose → reserve → optimize → confirm → generate --------------------
 
 type SemesterOption = {
   id: string;
@@ -966,11 +964,11 @@ type SemesterOption = {
   endDate?: string | null;
 };
 
-type PipelinePhase = "idle" | "preparing" | "validating" | "building-draft" | "evaluating" | "optimizing" | "re-evaluating" | "confirming" | "ready" | "failed" | "generating";
+type PipelinePhase = "idle" | "preparing" | "validating" | "sorting" | "filtering" | "choosing" | "reserving" | "optimizing" | "confirming" | "ready" | "failed" | "generating" | "generated";
 type PipelineStepStatus = "idle" | "active" | "complete" | "blocked";
 
 type PipelineStep = {
-  key: "prepare" | "validate" | "build-draft" | "evaluate" | "optimize" | "re-evaluate" | "confirm" | "generate";
+  key: "prepare" | "validate" | "sort" | "filter" | "choose" | "reserve" | "optimize" | "confirm" | "generate";
   label: string;
   description: string;
   status: PipelineStepStatus;
@@ -984,209 +982,58 @@ const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "descriptio
   },
   {
     key: "validate",
-    label: "Candidate Selection",
-    description: "Checking resource candidates...",
+    label: "Validation",
+    description: "Validating resources and feasibility...",
   },
   {
-    key: "build-draft",
-    label: "Build Draft",
-    description: "Building feasible assignments...",
+    key: "sort",
+    label: "Exam Sorting",
+    description: "Ordering the hardest exams first...",
   },
   {
-    key: "evaluate",
-    label: "Constraint Evaluation",
-    description: "Evaluating schedule constraints...",
+    key: "filter",
+    label: "Candidate Filtering",
+    description: "Rejecting invalid room, slot, and proctor combinations...",
+  },
+  {
+    key: "choose",
+    label: "Choose Best Valid Candidate",
+    description: "Selecting the best valid assignment in memory...",
+  },
+  {
+    key: "reserve",
+    label: "Reserve Best Valid Candidate",
+    description: "Reserving students, rooms, and proctors for future exams...",
   },
   {
     key: "optimize",
-    label: "Optimization",
-    description: "Optimizing soft constraints...",
-  },
-  {
-    key: "re-evaluate",
-    label: "Re-evaluate",
-    description: "Re-evaluating optimized schedule...",
+    label: "Lightweight Optimization Pass",
+    description: "Applying a bounded refinement pass over the draft...",
   },
   {
     key: "confirm",
-    label: "Confirm",
-    description: "Confirming valid draft...",
+    label: "Final Validation",
+    description: "Confirming the full draft is conflict-free before save...",
   },
   {
     key: "generate",
-    label: "Saving Schedule",
-    description: "Saving final conflict-free schedule...",
+    label: "Save Schedule",
+    description: "Persisting the finalized schedule...",
   },
 ];
 
 const PREPARE_STAGE_DELAY_MS = 3000;
 const VALIDATE_STAGE_DELAY_MS = 3000;
-const EVALUATE_STAGE_DELAY_MS = 6000;
-const OPTIMIZE_STAGE_DELAY_MS = 6000;
-const RE_EVALUATE_STAGE_DELAY_MS = 6000;
-const CONFIRM_STAGE_DELAY_MS = 6000;
+const SORT_STAGE_DELAY_MS = 4000;
+const FILTER_STAGE_DELAY_MS = 4000;
+const CHOOSE_STAGE_DELAY_MS = 4000;
+const RESERVE_STAGE_DELAY_MS = 4000;
+const OPTIMIZE_STAGE_DELAY_MS = 5000;
+const CONFIRM_STAGE_DELAY_MS = 1500;
 const DIALOG_CLOSE_SETTLE_DELAY_MS = 360;
 
 const GENERATION_BLOCKED_MESSAGE = "Schedule generation is currently blocked.";
 const GENERATION_BLOCKED_DETAIL_FALLBACK = "No valid draft schedule can be generated with the current data and available resources. Review rooms, proctors, time slots, and semester dates, then try again.";
-
-const getMetricNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
-const formatScore = (value: unknown) => `${Math.round(getMetricNumber(value))}%`;
-const getOptimizationBeforeScore = (
-  evaluationResult: ValidateSchedulingResult | undefined,
-  optimizationResult: ValidateSchedulingResult | undefined,
-) => getMetricNumber(
-  optimizationResult?.optimization?.beforeScore
-    ?? evaluationResult?.quality?.originalScore
-    ?? evaluationResult?.quality?.optimizedScore
-    ?? evaluationResult?.metrics?.qualityScore,
-);
-const getOptimizationAfterScore = (optimizationResult: ValidateSchedulingResult | undefined) =>
-  getMetricNumber(
-    optimizationResult?.optimization?.afterScore
-      ?? optimizationResult?.quality?.optimizedScore
-      ?? optimizationResult?.metrics?.qualityScore,
-  );
-const getDisplayedImprovementScore = (beforeScore: number, afterScore: number) => {
-  return Math.round(afterScore) - Math.round(beforeScore);
-};
-const getQualityMetric = (
-  evaluationResult: ValidateSchedulingResult | undefined,
-  optimizationResult: ValidateSchedulingResult | undefined,
-  key: string,
-) => getMetricNumber(
-  optimizationResult?.optimization?.qualityMetrics?.[key]
-    ?? optimizationResult?.quality?.qualityMetrics?.[key]
-    ?? evaluationResult?.quality?.qualityMetrics?.[key],
-);
-const getBeforeQualityMetric = (
-  evaluationResult: ValidateSchedulingResult | undefined,
-  optimizationResult: ValidateSchedulingResult | undefined,
-  key: string,
-) => getMetricNumber(
-  optimizationResult?.optimization?.beforeQualityMetrics?.[key]
-    ?? evaluationResult?.quality?.qualityMetrics?.[key],
-);
-const PRIMARY_QUALITY_AREAS = [
-  "roomUtilization",
-  "proctorWorkloadBalance",
-  "studentSpacing",
-  "examDistribution",
-] as const;
-type QualityStatus = "excellent" | "strong" | "needs-tuning" | "weak" | "critical";
-const formatQualityArea = (area: string) => area
-  .replace(/([A-Z])/g, " $1")
-  .replace(/^./, (char) => char.toUpperCase());
-const getQualityStatus = (value: number): QualityStatus => {
-  if (value >= 85) return "excellent";
-  if (value >= 70) return "strong";
-  if (value >= 55) return "needs-tuning";
-  if (value >= 35) return "weak";
-  return "critical";
-};
-const deriveWeakAreas = (
-  evaluationResult: ValidateSchedulingResult | undefined,
-  optimizationResult: ValidateSchedulingResult | undefined,
-) => {
-  const fallbackWeakAreas =
-    optimizationResult?.optimization?.weakAreas
-    ?? optimizationResult?.quality?.weakAreas
-    ?? evaluationResult?.quality?.weakAreas
-    ?? [];
-
-  const beforeQualityMetrics = optimizationResult?.optimization?.beforeQualityMetrics;
-
-  const derived = PRIMARY_QUALITY_AREAS
-    .map((area) => ({
-      area,
-      score: getMetricNumber(
-        beforeQualityMetrics?.[area]
-          ?? evaluationResult?.quality?.qualityMetrics?.[area]
-      ),
-    }))
-    .filter((item) => {
-      const status = getQualityStatus(item.score);
-      return status === "critical" || status === "weak" || status === "needs-tuning";
-    })
-    .sort((left, right) => left.score - right.score);
-
-  return derived.length > 0 ? derived : fallbackWeakAreas;
-};
-const getQualityDescriptor = (value: number) => {
-  const status = getQualityStatus(value);
-  if (status === "excellent") return "Excellent";
-  if (status === "strong") return "Strong";
-  if (status === "needs-tuning") return "Needs tuning";
-  if (status === "weak") return "Weak";
-  return "Critical";
-};
-const getQualityTone = (value: number) => {
-  const status = getQualityStatus(value);
-  if (status === "excellent") {
-    return {
-      shell: "border-emerald-200/80 bg-linear-to-br from-emerald-50 via-white to-emerald-100/70",
-      badge: "border-emerald-200 bg-white text-emerald-700",
-      score: "text-emerald-950",
-      track: "bg-emerald-100",
-      fill: "bg-linear-to-r from-emerald-500 to-emerald-400",
-      glow: "shadow-[0_18px_40px_-24px_rgba(16,185,129,0.7)]",
-    };
-  }
-  if (status === "strong") {
-    return {
-      shell: "border-sky-200/80 bg-linear-to-br from-sky-50 via-white to-indigo-50",
-      badge: "border-sky-200 bg-white text-sky-700",
-      score: "text-sky-950",
-      track: "bg-sky-100",
-      fill: "bg-linear-to-r from-sky-500 to-indigo-500",
-      glow: "shadow-[0_18px_40px_-24px_rgba(59,130,246,0.55)]",
-    };
-  }
-  if (status === "needs-tuning") {
-    return {
-      shell: "border-amber-200/80 bg-linear-to-br from-amber-50 via-white to-orange-50",
-      badge: "border-amber-200 bg-white text-amber-700",
-      score: "text-amber-950",
-      track: "bg-amber-100",
-      fill: "bg-linear-to-r from-amber-400 to-orange-400",
-      glow: "shadow-[0_18px_40px_-24px_rgba(245,158,11,0.55)]",
-    };
-  }
-  if (status === "weak") {
-    return {
-      shell: "border-orange-200/80 bg-linear-to-br from-orange-50 via-white to-rose-50",
-      badge: "border-orange-200 bg-white text-orange-700",
-      score: "text-orange-950",
-      track: "bg-orange-100",
-      fill: "bg-linear-to-r from-orange-500 to-rose-500",
-      glow: "shadow-[0_18px_40px_-24px_rgba(249,115,22,0.55)]",
-    };
-  }
-  return {
-    shell: "border-rose-200/80 bg-linear-to-br from-rose-50 via-white to-pink-50",
-    badge: "border-rose-200 bg-white text-rose-700",
-    score: "text-rose-950",
-    track: "bg-rose-100",
-    fill: "bg-linear-to-r from-rose-500 to-pink-500",
-    glow: "shadow-[0_18px_40px_-24px_rgba(244,63,94,0.55)]",
-  };
-};
-const widthClassForPct = (value: number) => {
-  if (value >= 95) return "w-full";
-  if (value >= 90) return "w-11/12";
-  if (value >= 80) return "w-4/5";
-  if (value >= 75) return "w-3/4";
-  if (value >= 66) return "w-2/3";
-  if (value >= 60) return "w-3/5";
-  if (value >= 50) return "w-1/2";
-  if (value >= 40) return "w-2/5";
-  if (value >= 33) return "w-1/3";
-  if (value >= 25) return "w-1/4";
-  if (value >= 20) return "w-1/5";
-  if (value >= 10) return "w-[10%]";
-  if (value > 0) return "w-[5%]";
-  return "w-0";
-};
 const normalizeBlockingMessage = (message: string | null | undefined) => {
   if (!message) return GENERATION_BLOCKED_DETAIL_FALLBACK;
 
@@ -1238,141 +1085,18 @@ const ResourceStatCard = ({
   </div>
 );
 
-const QualityMetricCard = ({ label, value, beforeValue }: { label: string; value: number; beforeValue?: number }) => (
-  (() => {
-    const tone = getQualityTone(value);
-    const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
-    const descriptor = getQualityDescriptor(value);
-    const delta = beforeValue !== undefined ? Math.round(value) - Math.round(beforeValue) : null;
-
-    return (
-      <div className={cn("rounded-none border px-4 py-4", tone.shell, tone.glow)}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">{label}</p>
-            <p className={cn("mt-2 text-3xl font-bold tabular-nums", tone.score)}>{formatScore(value)}</p>
-          </div>
-          {delta !== null && (
-            <span className={cn(
-              "mt-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
-              delta > 0
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                : delta < 0
-                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
-                  : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-            )}>
-              {delta > 0 ? `+${delta}` : delta === 0 ? "±0" : String(delta)}
-            </span>
-          )}
-        </div>
-        {delta !== null && beforeValue !== undefined && (
-          <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-            Before: {Math.round(beforeValue)}%
-          </p>
-        )}
-        <div className="mt-4 space-y-2">
-          <div className={cn("h-2.5 overflow-hidden rounded-full", tone.track)}>
-            <div className={cn("h-full rounded-full", tone.fill, widthClassForPct(normalizedValue))} />
-          </div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-            <span className={cn("uppercase tracking-wide", tone.score)}>{descriptor}</span>
-            <span className="tabular-nums text-zinc-400 dark:text-zinc-500">{normalizedValue}/100</span>
-          </div>
-        </div>
-      </div>
-    );
-  })()
-);
-
-const ScoreSummaryCard = ({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: string;
-  variant: "draft" | "optimized" | "improvement";
-}) => {
-  const styles = {
-    draft: {
-      shell: "border-zinc-200 bg-linear-to-br from-white via-zinc-50/70 to-zinc-100/70 dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80",
-      eyebrow: "text-zinc-500 dark:text-zinc-400",
-      value: "text-zinc-950 dark:text-zinc-50",
-      caption: "text-zinc-500 dark:text-zinc-400",
-      iconWrap: "bg-white text-zinc-700 border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
-    },
-    optimized: {
-      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.65)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30",
-      eyebrow: "text-emerald-700 dark:text-emerald-300",
-      value: "text-emerald-950 dark:text-emerald-100",
-      caption: "text-emerald-800 dark:text-emerald-300",
-      iconWrap: "bg-white text-emerald-700 border border-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-    },
-    improvement: {
-      shell: "border-zinc-900 bg-linear-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_18px_40px_-24px_rgba(24,24,27,0.8)]",
-      eyebrow: "text-zinc-300",
-      value: "text-white",
-      caption: "text-zinc-300",
-      iconWrap: "bg-white/10 text-white border border-white/10",
-    },
-  }[variant];
-
-  const Icon = variant === "optimized" ? Sparkles : variant === "improvement" ? Wand2 : ShieldCheck;
-
-  return (
-    <div className={cn("rounded-none border px-4 py-4", styles.shell)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={cn("text-[10px] font-semibold uppercase tracking-[0.18em]", styles.eyebrow)}>{label}</p>
-          <p className={cn("mt-2 text-3xl font-bold tabular-nums", styles.value)}>{value}</p>
-        </div>
-        <span className={cn("inline-flex size-10 items-center justify-center rounded-none", styles.iconWrap)}>
-          <Icon className="size-4" />
-        </span>
-      </div>
-    </div>
-  );
-};
-
-const WeakAreaItem = ({ area, score, index }: { area: string; score: number; index: number }) => {
-  const width = Math.max(8, Math.min(100, Math.round(score)));
-  const descriptor = getQualityDescriptor(score);
-  const stripeTone = [
-    "from-amber-400 to-orange-400",
-    "from-rose-400 to-pink-400",
-    "from-sky-400 to-cyan-400",
-    "from-violet-400 to-fuchsia-400",
-  ][index % 4];
-
-  return (
-    <div className="rounded-none border border-zinc-200 bg-zinc-50/80 px-3 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-black/20">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{formatQualityArea(area)}</p>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{descriptor}</p>
-          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Before optimization</p>
-        </div>
-        <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-          {formatScore(score)}
-        </span>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
-        <div className={cn("h-full rounded-full bg-linear-to-r", stripeTone, widthClassForPct(width))} />
-      </div>
-    </div>
-  );
-};
-
 const FinalStatCard = ({
   label,
   value,
   icon: Icon,
   tone,
+  valueClassName,
 }: {
   label: string;
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
-  tone: "neutral" | "success" | "quality";
+  tone: "neutral" | "success" | "info";
+  valueClassName?: string;
 }) => {
   const styles = {
     neutral: {
@@ -1387,7 +1111,7 @@ const FinalStatCard = ({
       value: "text-emerald-950 dark:text-emerald-100",
       icon: "border-emerald-200 bg-white text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
     },
-    quality: {
+    info: {
       shell: "border-sky-200 bg-linear-to-br from-sky-50 via-white to-indigo-50 shadow-[0_18px_40px_-24px_rgba(59,130,246,0.5)] dark:border-sky-900/70 dark:from-sky-950/50 dark:via-zinc-950 dark:to-indigo-950/40 dark:shadow-black/30",
       label: "text-sky-700 dark:text-sky-300",
       value: "text-sky-950 dark:text-sky-100",
@@ -1400,7 +1124,7 @@ const FinalStatCard = ({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={cn("text-[10px] font-semibold uppercase tracking-[0.18em]", styles.label)}>{label}</p>
-          <p className={cn("mt-2 text-3xl font-bold tabular-nums", styles.value)}>{value}</p>
+          <p className={cn("mt-2 text-3xl font-bold tabular-nums", styles.value, valueClassName)}>{value}</p>
         </div>
         <span className={cn("inline-flex size-10 items-center justify-center rounded-none border shadow-sm", styles.icon)}>
           <Icon className="size-4" />
@@ -1449,7 +1173,7 @@ const PipelineLoadingExperience = ({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-2 lg:grid-cols-8">
+      <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-9">
         {steps.map((step) => (
           <div
             key={step.key}
@@ -1496,19 +1220,28 @@ const GenerateScheduleDialog = ({
   const [zeroAssignments, setZeroAssignments] = useState(false);
   const [missingDates, setMissingDates] = useState(false);
   const [generateErrorMessage, setGenerateErrorMessage] = useState<string | null>(null);
+  const [generatedResult, setGeneratedResult] = useState<{
+    raw: { scheduleId?: string; schedule?: { id?: string } };
+    assignments: number;
+    hardViolations: number;
+    generationTime: string;
+  } | null>(null);
   const pipelineTimerIdsRef = useRef<number[]>([]);
+  const closeDialogTimerRef = useRef<number | null>(null);
+  const suppressRouteReopenRef = useRef(false);
   const phaseStartedAtRef = useRef<number | null>(null);
+  const runStartedAtRef = useRef<number | null>(null);
   const generationRequestRef = useRef(false);
+  const generationSavedRef = useRef<string | null>(null);
 
   const prepareMutation = usePrepareScheduling();
   const validateMutation = useValidateSchedulingInput();
-  const optimizeMutation = useOptimizeScheduling();
   const generateMutation = useGenerateSchedule();
+  const queryClient = useQueryClient();
 
   const prepare = prepareMutation.data;
   const validationResult = validateMutation.data;
-  const optimizationResult = optimizeMutation.data;
-  const finalPipelineResult = optimizationResult ?? validationResult;
+  const finalPipelineResult = validationResult;
 
   const effectiveSemesterId = semesterId;
 
@@ -1522,6 +1255,22 @@ const GenerateScheduleDialog = ({
   const setPipelinePhase = (nextPhase: PipelinePhase) => {
     phaseStartedAtRef.current = Date.now();
     setPhase(nextPhase);
+  };
+
+  const clearCloseDialogTimer = () => {
+    if (closeDialogTimerRef.current != null) {
+      window.clearTimeout(closeDialogTimerRef.current);
+      closeDialogTimerRef.current = null;
+    }
+  };
+
+  const markDialogClosing = () => {
+    suppressRouteReopenRef.current = true;
+    clearCloseDialogTimer();
+    closeDialogTimerRef.current = window.setTimeout(() => {
+      suppressRouteReopenRef.current = false;
+      closeDialogTimerRef.current = null;
+    }, DIALOG_CLOSE_SETTLE_DELAY_MS);
   };
 
   const queuePipelineTask = (callback: () => void, delayMs: number) => {
@@ -1546,6 +1295,26 @@ const GenerateScheduleDialog = ({
 
   const resetPipelineClock = () => {};
 
+  const formatGenerationTime = (elapsedMs: number) => {
+    if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0.0s";
+    return `${(elapsedMs / 1000).toFixed(elapsedMs >= 10000 ? 0 : 1)}s`;
+  };
+
+  const completeGeneratedFlow = (resultOverride?: { scheduleId?: string; schedule?: { id?: string } }) => {
+    const result = resultOverride ?? generatedResult?.raw;
+    if (!result) {
+      onOpenChange(false);
+      return;
+    }
+
+    onOpenChange(false);
+    markDialogClosing();
+    window.setTimeout(() => {
+      onGenerated(result);
+      setGeneratedResult(null);
+    }, DIALOG_CLOSE_SETTLE_DELAY_MS);
+  };
+
   // Reset pipeline state whenever the dialog closes
   useEffect(() => {
     if (!open) {
@@ -1559,15 +1328,19 @@ const GenerateScheduleDialog = ({
             setPendingGeneratedName(null);
             setLiveDuplicateName(null);
             setIsCheckingName(false);
+            setGeneratedResult(null);
             phaseStartedAtRef.current = null;
+            runStartedAtRef.current = null;
             setPhase("idle");
             setZeroAssignments(false);
             setMissingDates(false);
             setGenerateErrorMessage(null);
             generationRequestRef.current = false;
+            generationSavedRef.current = null;
+            clearCloseDialogTimer();
+            suppressRouteReopenRef.current = false;
             prepareMutation.reset();
             validateMutation.reset();
-            optimizeMutation.reset();
             generateMutation.reset();
           });
         });
@@ -1579,11 +1352,14 @@ const GenerateScheduleDialog = ({
 
   const handleSemesterChange = (next: string) => {
     clearPipelineTimers();
+    clearCloseDialogTimer();
     resetPipelineClock();
     setSemesterId(next);
     setPendingGeneratedName(null);
     setLiveDuplicateName(null);
+    setGeneratedResult(null);
     phaseStartedAtRef.current = null;
+    runStartedAtRef.current = null;
     setPhase("idle");
     setZeroAssignments(false);
     setMissingDates(false);
@@ -1591,7 +1367,6 @@ const GenerateScheduleDialog = ({
     generationRequestRef.current = false;
     prepareMutation.reset();
     validateMutation.reset();
-    optimizeMutation.reset();
     generateMutation.reset();
   };
 
@@ -1631,14 +1406,15 @@ const GenerateScheduleDialog = ({
     setMissingDates(false);
     setPendingGeneratedName(null);
     setLiveDuplicateName(null);
+    setGeneratedResult(null);
     setPipelinePhase("preparing");
+    runStartedAtRef.current = Date.now();
     setZeroAssignments(false);
     setGenerateErrorMessage(null);
     clearPipelineTimers();
     resetPipelineClock();
     prepareMutation.reset();
     validateMutation.reset();
-    optimizeMutation.reset();
     generateMutation.reset();
     prepareMutation.mutate(
       { semesterId: effectiveSemesterId, startDate, endDate },
@@ -1656,32 +1432,15 @@ const GenerateScheduleDialog = ({
                   }
 
                   waitForMinimumStageTime(VALIDATE_STAGE_DELAY_MS, () => {
-                    setPipelinePhase("building-draft");
-                    optimizeMutation.mutate(
-                      { semesterId: effectiveSemesterId },
-                      {
-                        onSuccess: (optimizedResult) => {
-                          clearPipelineTimers();
-                          if (!optimizedResult.isValid) {
-                            resetPipelineClock();
-                            setPhase("failed");
-                            return;
-                          }
-
-                          queuePipelinePhase("evaluating", 0);
-                          queuePipelinePhase("optimizing", EVALUATE_STAGE_DELAY_MS);
-                          queuePipelinePhase("re-evaluating", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS);
-                          queuePipelinePhase("confirming", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS);
-                          queuePipelinePhase("ready", EVALUATE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + RE_EVALUATE_STAGE_DELAY_MS + CONFIRM_STAGE_DELAY_MS);
-                          resetPipelineClock();
-                        },
-                        onError: () => {
-                          clearPipelineTimers();
-                          resetPipelineClock();
-                          setPhase("failed");
-                        },
-                      }
-                    );
+                    setPipelinePhase("sorting");
+                    clearPipelineTimers();
+                    queuePipelinePhase("filtering", SORT_STAGE_DELAY_MS);
+                    queuePipelinePhase("choosing", SORT_STAGE_DELAY_MS + FILTER_STAGE_DELAY_MS);
+                    queuePipelinePhase("reserving", SORT_STAGE_DELAY_MS + FILTER_STAGE_DELAY_MS + CHOOSE_STAGE_DELAY_MS);
+                    queuePipelinePhase("optimizing", SORT_STAGE_DELAY_MS + FILTER_STAGE_DELAY_MS + CHOOSE_STAGE_DELAY_MS + RESERVE_STAGE_DELAY_MS);
+                    queuePipelinePhase("confirming", SORT_STAGE_DELAY_MS + FILTER_STAGE_DELAY_MS + CHOOSE_STAGE_DELAY_MS + RESERVE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS);
+                    queuePipelinePhase("ready", SORT_STAGE_DELAY_MS + FILTER_STAGE_DELAY_MS + CHOOSE_STAGE_DELAY_MS + RESERVE_STAGE_DELAY_MS + OPTIMIZE_STAGE_DELAY_MS + CONFIRM_STAGE_DELAY_MS);
+                    resetPipelineClock();
                   });
                 },
                 onError: () => {
@@ -1704,7 +1463,7 @@ const GenerateScheduleDialog = ({
 
   /** Step 3: generate */
   const handleGenerate = () => {
-    if (generationRequestRef.current || phase !== "ready" || !effectiveSemesterId || name.trim().length < 3 || isDuplicateName) return;
+    if (generationRequestRef.current || generationSavedRef.current || phase !== "ready" || !effectiveSemesterId || name.trim().length < 3 || isDuplicateName) return;
     generationRequestRef.current = true;
     clearPipelineTimers();
     resetPipelineClock();
@@ -1717,19 +1476,84 @@ const GenerateScheduleDialog = ({
       { scheduleName: name.trim(), semesterId: effectiveSemesterId },
       {
         onSuccess: (result) => {
-          const assignmentCount =
-            (result as { assignmentsCount?: number }).assignmentsCount ?? 0;
+          // Compute assignment count robustly: prefer prisma _count, then
+          // logical unique exam count from returned assignments, then
+          // server-provided assignmentsCount, then validation metrics.
+          const scheduleObj = (result as any)?.schedule as Schedule | undefined;
+          let assignmentCount = 0;
+          if (scheduleObj) {
+            assignmentCount = scheduleObj._count?.assignments ?? 0;
+            if (!assignmentCount && Array.isArray(scheduleObj.assignments)) {
+              assignmentCount = getLogicalAssignmentCount(scheduleObj.assignments as any[]);
+            }
+          }
+          assignmentCount = assignmentCount
+            || (result as any)?.assignmentsCount
+            || finalPipelineResult?.riskAnalysis?.schedulableExamsCount
+            || finalPipelineResult?.metrics?.examsCount
+            || 0;
           if (assignmentCount === 0) {
             setZeroAssignments(true);
             setPendingGeneratedName(null);
             generationRequestRef.current = false;
             setPhase("ready");
           } else {
-            // Do NOT set phase back to "ready" here — that would re-enable the
-            // Generate button while the dialog is still visible. Keep phase at
-            // "generating" so the button stays disabled. The dialog close cleanup
-            // (useEffect on !open) resets phase to "idle" after the animation.
-            onGenerated(result);
+            const hardViolations = 0;
+            const startedAt = runStartedAtRef.current ?? Date.now();
+            const scheduleObj = (result as any)?.schedule as Schedule | undefined;
+            const newId = (result as any)?.scheduleId ?? scheduleObj?.id ?? null;
+            const scheduleName = (result as any)?.scheduleName ?? scheduleObj?.name ?? null;
+
+            // Immediately insert optimistic schedule row into cache so the
+            // Schedule Versions table shows the new item without delay.
+            if (newId) {
+              if (scheduleObj && scheduleObj.id) {
+                try {
+                  queryClient.setQueryData(scheduleKeys.lists, (old: any) => {
+                    if (!old) return old;
+                    const existing = new Set((old.data ?? []).map((s: any) => s.id));
+                    if (existing.has(scheduleObj.id)) return old;
+                    return { ...old, data: [scheduleObj, ...(old.data ?? [])] };
+                  });
+                } catch {
+                  // ignore
+                }
+              } else if (!scheduleObj && newId) {
+                const optimistic = {
+                  id: newId,
+                  name: scheduleName ?? "New schedule",
+                  isFinal: false,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  assignments: [],
+                  _count: { assignments: (result as any)?.assignmentsCount ?? 0 },
+                } as any;
+                try {
+                  queryClient.setQueryData(scheduleKeys.lists, (old: any) => {
+                    if (!old) return old;
+                    const existing = new Set((old.data ?? []).map((s: any) => s.id));
+                    if (existing.has(optimistic.id)) return old;
+                    return { ...old, data: [optimistic, ...(old.data ?? [])] };
+                  });
+                } catch {
+                  // ignore
+                }
+              }
+            }
+
+            generationSavedRef.current = newId;
+            setGeneratedResult({
+              raw: result,
+              assignments: assignmentCount,
+              hardViolations,
+              generationTime: formatGenerationTime(Date.now() - startedAt),
+            });
+            generationRequestRef.current = false;
+            setPipelinePhase("generated");
+            // Auto-close dialog immediately after generation completes.
+            // Pass the raw result so completeGeneratedFlow can proceed without
+            // waiting for the generatedResult state to settle.
+            completeGeneratedFlow(result);
           }
         },
         onError: (error) => {
@@ -1746,13 +1570,14 @@ const GenerateScheduleDialog = ({
 
   const isPreparing = phase === "preparing";
   const isValidating = phase === "validating";
+  const isSorting = phase === "sorting";
+  const isFiltering = phase === "filtering";
+  const isChoosing = phase === "choosing";
+  const isReserving = phase === "reserving";
   const isOptimizing = phase === "optimizing";
   const isGenerating = phase === "generating";
-  const isBuildingDraft = phase === "building-draft";
-  const isEvaluating = phase === "evaluating";
-  const isReEvaluating = phase === "re-evaluating";
   const isConfirming = phase === "confirming";
-  const isRunningChecks = isPreparing || isValidating || isBuildingDraft || isEvaluating || isOptimizing || isReEvaluating || isConfirming;
+  const isRunningChecks = isPreparing || isValidating || isSorting || isFiltering || isChoosing || isReserving || isOptimizing || isConfirming;
   const isBusy = isRunningChecks || isGenerating || isCheckingName;
 
   const hasRun = phase !== "idle";
@@ -1773,41 +1598,33 @@ const GenerateScheduleDialog = ({
       ? "A schedule with this name already exists. Choose a different name."
       : null;
   const hasNameValidationError = Boolean(nameValidationMessage);
-  const canGenerate = Boolean(validationResult?.isValid) && Boolean(optimizationResult?.isValid) && phase === "ready" && name.trim().length >= 3 && !hasNameValidationError && !isBusy && !zeroAssignments;
-  const canRunChecks = Boolean(effectiveSemesterId) && name.trim().length >= 3 && !hasNameValidationError && !isBusy;
-  const beforeScore = getOptimizationBeforeScore(validationResult, optimizationResult);
-  const afterScore = getOptimizationAfterScore(optimizationResult);
-  const improvement = getDisplayedImprovementScore(beforeScore, afterScore);
-  const finalQualityScore = optimizationResult ? afterScore : beforeScore;
-  const assignmentCount = finalPipelineResult?.riskAnalysis?.totalExamsCount ?? finalPipelineResult?.metrics?.examsCount ?? 0;
+  const canGenerate = Boolean(validationResult?.isValid) && phase === "ready" && name.trim().length >= 3 && !hasNameValidationError && !isBusy && !zeroAssignments;
+  const canRunChecks = Boolean(effectiveSemesterId) && name.trim().length >= 3 && !hasNameValidationError && !isBusy && !generatedResult;
+  const plannedAssignmentCount =
+    // prefer validation risk analysis (most accurate)
+    validationResult?.riskAnalysis?.schedulableExamsCount
+    // then validation metrics
+    ?? validationResult?.metrics?.schedulableExamsCount
+    ?? validationResult?.metrics?.examsCount
+    // then prepare data
+    ?? prepare?.examsCount
+    ?? prepare?.activeCourseOfferingsCount
+    // fallback to zero
+    ?? 0;
   const hardViolationCount = finalPipelineResult?.riskAnalysis?.blockingCount ?? finalPipelineResult?.metrics?.blockingIssuesCount ?? 0;
-  const shouldShowQuality = Boolean(optimizationResult?.isValid && finalQualityScore > 0);
-  const weakAreas = useMemo(
-    () => deriveWeakAreas(validationResult, optimizationResult),
-    [validationResult, optimizationResult]
-  );
-  const optimizationChangesApplied = Math.max(
-    optimizationResult?.optimization?.localSearchRepairs?.length ?? 0,
-    improvement > 0 ? 1 : 0,
-  );
-  const optimizationStrategyCount = optimizationResult?.optimization?.attemptedStrategies?.length ?? 0;
-  const blockingResult = !optimizationResult?.isValid && optimizationResult
-    ? optimizationResult
-    : !validationResult?.isValid && validationResult
+  const blockingResult = !validationResult?.isValid && validationResult
       ? validationResult
       : undefined;
   const blockingIssues = getBlockingIssues(blockingResult);
   const blockingSuggestions = getBlockingSuggestions(blockingResult);
   const blockingMessage = generateErrorMessage
     ? normalizeBlockingMessage(generateErrorMessage)
-    : blockingResult?.optimization?.message
-      ? normalizeBlockingMessage(blockingResult.optimization.message)
-      : blockingIssues.length > 0
+    : blockingIssues.length > 0
         ? normalizeBlockingMessage(blockingIssues[0])
         : normalizeBlockingMessage(
-          prepareMutation.error || validateMutation.error || optimizeMutation.error || generateMutation.error
+          prepareMutation.error || validateMutation.error || generateMutation.error
             ? getApiErrorMessage(
-              prepareMutation.error ?? validateMutation.error ?? optimizeMutation.error ?? generateMutation.error,
+              prepareMutation.error ?? validateMutation.error ?? generateMutation.error,
               GENERATION_BLOCKED_DETAIL_FALLBACK,
             )
             : GENERATION_BLOCKED_DETAIL_FALLBACK,
@@ -1816,60 +1633,51 @@ const GenerateScheduleDialog = ({
   const activeStepKey = useMemo<PipelineStep["key"] | null>(() => {
     if (phase === "preparing") return "prepare";
     if (phase === "validating") return "validate";
-    if (phase === "building-draft") return "build-draft";
-    if (phase === "evaluating") return "evaluate";
+    if (phase === "sorting") return "sort";
+    if (phase === "filtering") return "filter";
+    if (phase === "choosing") return "choose";
+    if (phase === "reserving") return "reserve";
     if (phase === "optimizing") return "optimize";
-    if (phase === "re-evaluating") return "re-evaluate";
     if (phase === "confirming") return "confirm";
     if (phase === "generating") return "generate";
     return null;
   }, [phase]);
 
   const steps = useMemo<PipelineStep[]>(() => {
-    const hasPrepared = Boolean(prepare) || phase === "validating" || phase === "building-draft" || phase === "evaluating" || phase === "optimizing" || phase === "re-evaluating" || phase === "confirming" || phase === "ready" || phase === "generating";
-    const hasSuccessfulValidation = Boolean(validationResult?.isValid);
-    const hasSuccessfulOptimization = Boolean(optimizationResult?.isValid);
-    const hasValidation = hasSuccessfulValidation && phase !== "validating";
-    const isBlocked = phase === "failed" || Boolean(missingDates) || Boolean(generateErrorMessage);
-    const hasDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft";
-    const hasEvaluatedDraft = hasSuccessfulValidation && phase !== "validating" && phase !== "building-draft" && phase !== "evaluating";
-    const hasOptimized = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "evaluating";
-    const hasReEvaluated = hasSuccessfulOptimization && phase !== "optimizing" && phase !== "re-evaluating" && phase !== "evaluating";
-    const hasConfirmed = phase === "ready" || phase === "generating" || Boolean(generateErrorMessage);
-    const completionMap: Record<PipelineStep["key"], boolean> = {
-      prepare: hasPrepared,
-      validate: hasValidation,
-      "build-draft": hasDraft,
-      evaluate: hasEvaluatedDraft,
-      optimize: hasOptimized,
-      "re-evaluate": hasReEvaluated,
-      confirm: hasConfirmed,
-      generate: false,
+    const phaseProgressMap: Record<PipelinePhase, { completed: number; active: PipelineStep["key"] | null }> = {
+      idle: { completed: 0, active: null },
+      preparing: { completed: 0, active: "prepare" },
+      validating: { completed: 1, active: "validate" },
+      sorting: { completed: 2, active: "sort" },
+      filtering: { completed: 3, active: "filter" },
+      choosing: { completed: 4, active: "choose" },
+      reserving: { completed: 5, active: "reserve" },
+      optimizing: { completed: 6, active: "optimize" },
+      confirming: { completed: 7, active: "confirm" },
+      ready: { completed: 8, active: null },
+      failed: { completed: 0, active: null },
+      generating: { completed: 8, active: "generate" },
+      generated: { completed: 9, active: null },
     };
-    const lastCompletedIndex = PIPELINE_STEP_META.reduce((lastIndex, step, index) => {
-      return completionMap[step.key] ? index : lastIndex;
-    }, -1);
+    const { completed, active } = phaseProgressMap[phase];
+    const isBlocked = phase === "failed" || Boolean(missingDates) || Boolean(generateErrorMessage);
 
     return PIPELINE_STEP_META.map((step, index) => ({
       ...step,
       status:
-        isBusy && activeStepKey === step.key
+        isBusy && active === step.key
           ? "active"
-          : completionMap[step.key]
+          : index < completed
             ? "complete"
-            : isBlocked && index > lastCompletedIndex
+            : isBlocked && index >= completed
               ? "blocked"
               : "idle",
     }));
   }, [
-    prepare,
-    validationResult,
+    phase,
     missingDates,
     generateErrorMessage,
-    optimizationResult,
-    phase,
     isBusy,
-    activeStepKey,
   ]);
 
   const displayedPipelineSteps = useMemo(
@@ -1878,12 +1686,10 @@ const GenerateScheduleDialog = ({
   );
 
   const visibleStepCount = useMemo(() => {
-    if (activeStepKey) {
-      const stepIndex = PIPELINE_STEP_META.findIndex((step) => step.key === activeStepKey);
-      return stepIndex >= 0 ? stepIndex + 1 : 0;
-    }
-    return steps.filter((step) => step.status === "complete").length;
-  }, [activeStepKey, steps]);
+    const completedSteps = steps.filter((step) => step.status === "complete").length;
+    const hasActiveStep = steps.some((step) => step.status === "active");
+    return completedSteps + (hasActiveStep ? 1 : 0);
+  }, [steps]);
 
   const stepStatusClass = (status: PipelineStepStatus) => {
     if (status === "complete") return "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 text-emerald-700 shadow-[0_18px_36px_-26px_rgba(16,185,129,0.5)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:text-emerald-300 dark:shadow-black/30";
@@ -1900,7 +1706,14 @@ const GenerateScheduleDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!isBusy) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={(next) => {
+      if (isBusy) return;
+      if (!next && generatedResult) {
+        completeGeneratedFlow();
+        return;
+      }
+      onOpenChange(next);
+    }}>
       <DialogContent className="flex! max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-none border-zinc-200/80 bg-white p-0 gap-0 shadow-2xl shadow-zinc-950/15 dark:border-zinc-800/80 dark:bg-zinc-950 dark:shadow-black/50 sm:max-w-3xl">
         {/* Dialog header */}
         <DialogHeader className="border-b border-zinc-200/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.98),rgba(244,244,245,0.92)_42%,rgba(228,228,231,0.82))] px-5 py-4 dark:border-zinc-800/80 dark:bg-[radial-gradient(circle_at_top_left,rgba(39,39,42,0.96),rgba(24,24,27,0.98)_44%,rgba(9,9,11,0.98))] sm:px-6 sm:py-5">
@@ -1921,7 +1734,7 @@ const GenerateScheduleDialog = ({
                       Generate Schedule
                     </DialogTitle>
                     <p className="max-w-2xl text-xs leading-5 text-zinc-600 dark:text-zinc-400 sm:text-sm sm:leading-6">
-                      Smart generation prepares resources, validates feasibility, optimizes quality, and saves only a confirmed schedule.
+                      Smart generation loads resources, builds a single-pass in-memory draft, validates the result, and saves only a confirmed schedule.
                     </p>
                   </div>
                 </div>
@@ -1939,7 +1752,7 @@ const GenerateScheduleDialog = ({
                 <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">End-to-end generation pipeline</p>
               </div>
               <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
-                {visibleStepCount}/8 steps
+                {visibleStepCount}/9 steps
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
@@ -2069,7 +1882,7 @@ const GenerateScheduleDialog = ({
                 ) : (
                   <ShieldCheck className="size-3.5" />
                 )}
-                {isCheckingName ? "Checking name..." : isPreparing ? "Loading Resources..." : isValidating ? "Candidate Selection..." : isBuildingDraft ? "Build Draft..." : isEvaluating ? "Evaluating..." : isOptimizing ? "Optimization..." : isReEvaluating ? "Re-evaluating..." : isConfirming ? "Confirming..." : hasRun ? "Run Again" : "Start"}
+                {isCheckingName ? "Checking name..." : isPreparing ? "Loading Resources..." : isValidating ? "Validation..." : isSorting ? "Exam Sorting..." : isFiltering ? "Candidate Filtering..." : isChoosing ? "Choose Best Valid Candidate..." : isReserving ? "Reserve Best Valid Candidate..." : isOptimizing ? "Lightweight Optimization Pass..." : isConfirming ? "Final Validation..." : hasRun ? "Run Again" : "Start"}
               </Button>
             </div>
 
@@ -2114,124 +1927,20 @@ const GenerateScheduleDialog = ({
                       </span>
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Ready</p>
-                        <p className="mt-1 text-base font-semibold text-emerald-950 dark:text-emerald-100">Ready to generate</p>
+                          <p className="mt-1 text-base font-semibold text-emerald-950 dark:text-emerald-100">Ready to generate</p>
                         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">Feasible draft confirmed</p>
                       </div>
                     </div>
                     <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                      Optimized
+                        Single-pass
                     </span>
                   </div>
                 </div>
-
-                {shouldShowQuality && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-                      <div className="rounded-none border border-zinc-200 bg-linear-to-br from-white via-zinc-50/60 to-zinc-100/70 px-4 py-4 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80 dark:shadow-black/30">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Weak Areas</p>
-                            <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">Priority quality gaps in the evaluated draft</p>
-                          </div>
-                          <span className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
-                            Evaluated Draft
-                          </span>
-                        </div>
-                        {weakAreas.length > 0 ? (
-                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {weakAreas.slice(0, 4).map((area, index) => (
-                              <WeakAreaItem key={`${area.area}-${area.score}`} area={area.area} score={area.score} index={index} />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-4 rounded-none border border-emerald-200 bg-emerald-50/80 px-3 py-3 text-xs text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-                            No weak areas detected in the evaluated draft.
-                          </div>
-                        )}
-                      </div>
-                      <div className="rounded-none border border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-emerald-100/80 px-4 py-4 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.6)] dark:border-emerald-900/70 dark:from-emerald-950/60 dark:via-zinc-950 dark:to-emerald-900/30 dark:shadow-black/30">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Optimization Changes Applied</p>
-                            <p className="mt-1 text-sm font-semibold text-emerald-950 dark:text-emerald-100">Accepted repair actions and re-check summary</p>
-                          </div>
-                          <span className="inline-flex size-10 items-center justify-center rounded-none border border-emerald-200 bg-white text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                            <Sparkles className="size-4" />
-                          </span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
-                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3 dark:border-emerald-900/60 dark:bg-zinc-950/50">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Changes</p>
-                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950 dark:text-emerald-100">{optimizationChangesApplied}</p>
-                          </div>
-                          <div className="rounded-none border border-emerald-200/70 bg-white/80 px-3 py-3 dark:border-emerald-900/60 dark:bg-zinc-950/50">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Strategies</p>
-                            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-950 dark:text-emerald-100">{optimizationStrategyCount}</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex items-center justify-between gap-3 rounded-none border border-emerald-200/70 bg-white/80 px-3 py-2.5 dark:border-emerald-900/60 dark:bg-zinc-950/50">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Search Coverage</p>
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-                            {optimizationStrategyCount} strategies checked
-                          </span>
-                        </div>
-                        <p className="mt-3 text-xs font-medium text-emerald-800 dark:text-emerald-300">Re-evaluated improved score: {formatScore(afterScore)}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                      <QualityMetricCard label="Room Utilization" value={getQualityMetric(validationResult, optimizationResult, "roomUtilization")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "roomUtilization") : undefined} />
-                      <QualityMetricCard label="Proctor Balance" value={getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance") : undefined} />
-                      <QualityMetricCard label="Student Spacing" value={getQualityMetric(validationResult, optimizationResult, "studentSpacing")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "studentSpacing") : undefined} />
-                      <QualityMetricCard label="Exam Distribution" value={getQualityMetric(validationResult, optimizationResult, "examDistribution")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "examDistribution") : undefined} />
-                      <QualityMetricCard label="Spacing Balance" value={getQualityMetric(validationResult, optimizationResult, "spacingBalance")} beforeValue={optimizationResult ? getBeforeQualityMetric(validationResult, optimizationResult, "spacingBalance") : undefined} />
-                    </div>
-                    {(() => {
-                      const rm = getQualityMetric(validationResult, optimizationResult, "roomUtilization");
-                      const pb = getQualityMetric(validationResult, optimizationResult, "proctorWorkloadBalance");
-                      const ss = getQualityMetric(validationResult, optimizationResult, "studentSpacing");
-                      const ed = getQualityMetric(validationResult, optimizationResult, "examDistribution");
-                      const sb = getQualityMetric(validationResult, optimizationResult, "spacingBalance");
-                      const computedTotal = Math.round(rm * 0.25 + pb * 0.25 + ss * 0.20 + ed * 0.15 + sb * 0.15);
-                      return (
-                        <div className="rounded-none border border-zinc-200/80 bg-zinc-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Weighted Score Breakdown</p>
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-1 sm:grid-cols-5">
-                            {([
-                              ["Room ×25%", rm * 0.25],
-                              ["Proctor ×25%", pb * 0.25],
-                              ["Spacing ×20%", ss * 0.20],
-                              ["Distribution ×15%", ed * 0.15],
-                              ["Spacing Balance ×15%", sb * 0.15],
-                            ] as [string, number][]).map(([lbl, contribution]) => (
-                              <div key={lbl} className="flex items-baseline justify-between gap-1 text-[11px]">
-                                <span className="text-zinc-500 dark:text-zinc-400">{lbl}</span>
-                                <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{contribution.toFixed(1)}</span>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="mt-2 flex items-center justify-end gap-2 border-t border-zinc-200/80 pt-2 dark:border-zinc-700">
-                            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Computed total:</span>
-                            <span className="text-[12px] font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{computedTotal}%</span>
-                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">(reported: {formatScore(afterScore)})</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <ScoreSummaryCard label="Before Optimization" value={formatScore(beforeScore)} variant="draft" />
-                      <ScoreSummaryCard label="After Optimization" value={formatScore(afterScore)} variant="optimized" />
-                      <ScoreSummaryCard label="Improvement" value={`${improvement >= 0 ? "+" : ""}${improvement}%`} variant="improvement" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <FinalStatCard label="Assignments" value={assignmentCount} icon={ClipboardList} tone="neutral" />
-                  <FinalStatCard label="Hard Violations" value={hardViolationCount} icon={ShieldCheck} tone={hardViolationCount === 0 ? "success" : "neutral"} />
-                  <FinalStatCard label="Final Quality" value={formatScore(finalQualityScore)} icon={Sparkles} tone="quality" />
-                </div>
+                  {/* no small stat cards in Ready state */}
               </div>
             )}
+
+              {/* generated result summary removed — schedule list updates after dialog close */}
 
             {phase === "failed" && (
               <div className="space-y-3">
@@ -2285,22 +1994,31 @@ const GenerateScheduleDialog = ({
 
         {/* Footer */}
         <DialogFooter className="px-6 py-4 border-t border-zinc-200/70 bg-zinc-50/60 flex sm:items-center gap-3 dark:border-zinc-800/80 dark:bg-zinc-900/70">
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-none h-10 border-zinc-200 font-semibold"
-            onClick={() => onOpenChange(false)}
-            disabled={isBusy}
-          >
-            Cancel
-          </Button>
+          {!generatedResult && (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none h-10 border-zinc-200 font-semibold"
+              onClick={() => {
+                onOpenChange(false);
+              }}
+              disabled={isBusy}
+            >
+              Cancel
+            </Button>
+          )}
           <Button
             type="button"
             className="rounded-none h-10 bg-zinc-950 text-white hover:bg-zinc-900 font-semibold inline-flex items-center gap-2 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
-            disabled={!canGenerate}
-            onClick={handleGenerate}
+            disabled={generatedResult ? false : !canGenerate}
+            onClick={generatedResult ? () => completeGeneratedFlow() : handleGenerate}
           >
-            {isGenerating ? (
+            {generatedResult ? (
+              <>
+                <CheckCircle2 className="size-4" />
+                Close
+              </>
+            ) : isGenerating ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
                 Generating schedule…
@@ -4122,6 +3840,8 @@ export function SchedulesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<Schedule | null>(null);
+  const generateDialogCloseTimerRef = useRef<number | null>(null);
+  const suppressGenerateDialogRouteReopenRef = useRef(false);
 
   // Filter state is declared before the assignment query so active values are passed as server params.
 
@@ -4140,7 +3860,29 @@ export function SchedulesPage() {
 
   useHighlightRow("data-schedule-id", routeScheduleId ?? null, schedules.length);
 
+  const clearGenerateDialogCloseTimer = () => {
+    if (generateDialogCloseTimerRef.current != null) {
+      window.clearTimeout(generateDialogCloseTimerRef.current);
+      generateDialogCloseTimerRef.current = null;
+    }
+  };
+
+  const markGenerateDialogClosing = () => {
+    suppressGenerateDialogRouteReopenRef.current = true;
+    clearGenerateDialogCloseTimer();
+    generateDialogCloseTimerRef.current = window.setTimeout(() => {
+      suppressGenerateDialogRouteReopenRef.current = false;
+      generateDialogCloseTimerRef.current = null;
+    }, 300);
+  };
+
   const setGenerateDialogOpen = (next: boolean) => {
+    if (next) {
+      clearGenerateDialogCloseTimer();
+      suppressGenerateDialogRouteReopenRef.current = false;
+    } else {
+      markGenerateDialogClosing();
+    }
     setGenerateOpen(next);
     const nextParams = new URLSearchParams(searchParams);
     if (next) {
@@ -4157,11 +3899,10 @@ export function SchedulesPage() {
   // briefly making `openGenerateFromRoute=true` after `generateOpen` was set
   // to false, causing the dialog to flicker open for ~1s on close.
   useEffect(() => {
-    if (openGenerateFromRoute && !generateOpen) {
+    if (openGenerateFromRoute && !generateOpen && !suppressGenerateDialogRouteReopenRef.current) {
       setGenerateOpen(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openGenerateFromRoute]);
+  }, [openGenerateFromRoute, generateOpen]);
 
   const hasLoadedSchedules = schedulesQuery.isSuccess;
 
@@ -4449,33 +4190,78 @@ export function SchedulesPage() {
   }, [activeViewMode, filteredAssignments, highlightedAssignmentId]);
 
   const handleGenerated = (result: { scheduleId?: string; schedule?: { id?: string } }) => {
-    setGenerateDialogOpen(false);
-    // Kick off the refetch immediately so data is ready when the animation ends.
-    void schedulesQuery.refetch();
-    const newId = result?.scheduleId ?? result?.schedule?.id;
-    if (newId) {
-      // State updates and URL sync are deferred until after the close animation.
-      window.setTimeout(() => {
-        window.requestAnimationFrame(() => {
-          startTransition(() => {
-            setViewAssignment(null);
-            setEditAssignment(null);
-            setDeleteAssignment(null);
-            setViewProctors(null);
-            setLastHighlightedAssignmentId(null);
-            clearFilters();
-            setSelectedId(newId);
+    // `onGenerated` is called from the dialog after it finishes closing.
+    // Try to optimistically insert the returned schedule object if present,
+    // otherwise construct a minimal placeholder using scheduleId/scheduleName
+    // so the versions table shows the new row immediately.
+    const scheduleObj = (result as any)?.schedule ?? null;
+    const newId = result?.scheduleId ?? scheduleObj?.id ?? null;
+    const scheduleName = (result as any)?.scheduleName ?? scheduleObj?.name ?? null;
 
-            const nextParams = new URLSearchParams(searchParams);
-            nextParams.set("scheduleId", newId);
-            nextParams.delete("id");
-            nextParams.delete("assignmentId");
-            nextParams.delete("aPage");
-            nextParams.delete("openGenerate");
-            setSearchParams(nextParams);
+    if (newId) {
+      if (scheduleObj && scheduleObj.id && !knownScheduleIds.has(scheduleObj.id)) {
+        try {
+          queryClient.setQueryData(scheduleKeys.lists, (old: any) => {
+            if (!old) return old;
+            const existing = new Set((old.data ?? []).map((s: any) => s.id));
+            if (existing.has(scheduleObj.id)) return old;
+            return {
+              ...old,
+              data: [scheduleObj, ...(old.data ?? [])],
+            };
           });
+        } catch {
+          // ignore optimistic update failures
+        }
+      } else if (!scheduleObj && newId && !knownScheduleIds.has(newId)) {
+        const optimistic = {
+          id: newId,
+          name: scheduleName ?? "New schedule",
+          isFinal: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          assignments: [],
+          _count: { assignments: (result as any)?.assignmentsCount ?? 0 },
+        } as any;
+        try {
+          queryClient.setQueryData(scheduleKeys.lists, (old: any) => {
+            if (!old) return old;
+            const existing = new Set((old.data ?? []).map((s: any) => s.id));
+            if (existing.has(optimistic.id)) return old;
+            return {
+              ...old,
+              data: [optimistic, ...(old.data ?? [])],
+            };
+          });
+        } catch {
+          // ignore optimistic update failures
+        }
+      }
+    }
+
+    // Refresh in background to reconcile with server state.
+    void schedulesQuery.refetch();
+
+    if (newId) {
+      window.requestAnimationFrame(() => {
+        startTransition(() => {
+          setViewAssignment(null);
+          setEditAssignment(null);
+          setDeleteAssignment(null);
+          setViewProctors(null);
+          setLastHighlightedAssignmentId(null);
+          clearFilters();
+          setSelectedId(newId);
+
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.set("scheduleId", newId);
+          nextParams.delete("id");
+          nextParams.delete("assignmentId");
+          nextParams.delete("aPage");
+          nextParams.delete("openGenerate");
+          setSearchParams(nextParams);
         });
-      }, DIALOG_CLOSE_SETTLE_DELAY_MS);
+      });
     }
   };
 

@@ -5,7 +5,7 @@ import { TimeSlot, timeSlotFormSchema, TimeSlotFormValues } from "../../schemas/
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { AlertCircle, AlertTriangle, CalendarDays, CheckCircle2, Clock } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface TimeSlotFormProps {
@@ -201,24 +201,7 @@ export function TimeSlotForm({
         </p>
       )}
 
-      {hasConflicts && (
-        <div className="rounded-none border border-amber-300 bg-amber-50 p-3 space-y-2">
-          <div className="flex items-center gap-2 text-amber-800">
-            <AlertTriangle className="size-4 shrink-0" />
-            <p className="text-sm font-semibold">Overlaps existing option</p>
-          </div>
-          <p className="text-xs text-amber-800/90">
-            Overlapping setup options are allowed. The scheduling engine prevents actual room, proctor, and student exam conflicts during assignment.
-          </p>
-          <ul className="space-y-1 pl-6 text-xs text-amber-800/90 list-disc">
-            {conflicts.map((c) => (
-              <li key={c.id}>
-                {toTimeInputValue(c.startTime)} – {toTimeInputValue(c.endTime)} on {toDateInputValue(c.date ?? c.startTime)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Overlaps existing option UI removed per UX request */}
 
       <Button
         type="submit"

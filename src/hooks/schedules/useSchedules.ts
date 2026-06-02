@@ -11,13 +11,11 @@ import {
   type UpdateScheduleDto,
 } from "../../api/schedulesApi";
 import {
-  optimizeScheduling,
   fetchScheduleAnalysis,
   generateSchedule,
   prepareScheduling,
   publishSchedule,
   validateSchedulingInput,
-  type OptimizeSchedulingDto,
   type PrepareSchedulingDto,
   type PrepareSchedulingResult,
   type ValidateSchedulingInputDto,
@@ -195,23 +193,6 @@ export const useValidateSchedulingInput = () => {
         description: getSmartErrorDescription(
           error,
           "An error occurred while validating scheduling input."
-        ),
-      });
-    },
-  });
-};
-
-export const useOptimizeScheduling = () => {
-  const { addToast } = useToast();
-  return useMutation<ValidateSchedulingResult, unknown, OptimizeSchedulingDto | undefined>({
-    mutationFn: (payload: OptimizeSchedulingDto = {}) => optimizeScheduling(payload),
-    onError: (error: unknown) => {
-      addToast({
-        type: "error",
-        title: "Optimization Failed",
-        description: getSmartErrorDescription(
-          error,
-          "An error occurred while optimizing the scheduling draft."
         ),
       });
     },

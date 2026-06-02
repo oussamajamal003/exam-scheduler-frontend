@@ -31,7 +31,6 @@ export type PrepareSchedulingDto = {
 };
 
 export type ValidateSchedulingInputDto = PrepareSchedulingDto;
-export type OptimizeSchedulingDto = PrepareSchedulingDto;
 
 // -------------------- POST /api/scheduling/prepare --------------------
 
@@ -140,23 +139,6 @@ export type SchedulingRiskAnalysis = {
   softPenalty?: number;
 };
 
-export type SchedulingOptimizationResult = {
-  attempted: boolean;
-  optimized: boolean;
-  strategy?: string;
-  attemptedStrategies: string[];
-  softPenalty?: number;
-  beforeScore?: number;
-  afterScore?: number;
-  beforeQualityMetrics?: Record<string, number | string | Record<string, number>>;
-  improvementPercentage?: number;
-  improvementLabel?: string;
-  weakAreas?: { area: string; score: number }[];
-  qualityMetrics?: Record<string, number | string | Record<string, number>>;
-  localSearchRepairs?: unknown[];
-  message?: string;
-};
-
 export type SchedulingQualitySummary = {
   originalScore: number;
   optimizedScore: number;
@@ -187,7 +169,6 @@ export type ValidateSchedulingResult = {
   semester?: { name: string } | null;
   riskAnalysis?: SchedulingRiskAnalysis;
   algorithm?: SchedulingAlgorithmInfo;
-  optimization?: SchedulingOptimizationResult;
   quality?: SchedulingQualitySummary;
   // Legacy flat metrics (kept for the generate dialog)
   metrics: {
@@ -253,51 +234,6 @@ export const validateSchedulingInput = async (
     blockingCount: 0,
     schedulableExamsCount: 0,
     totalExamsCount: result.metrics.examsCount ?? 0,
-  };
-  return result;
-};
-
-export const optimizeScheduling = async (
-  payload: OptimizeSchedulingDto = {}
-): Promise<ValidateSchedulingResult> => {
-  const response = await axiosClient.post<ApiEnvelope<ValidateSchedulingResult>>(
-    "/scheduling/optimize",
-    payload
-  );
-  const result = unwrap(response.data, "Optimize scheduling");
-  result.isValid = result.isValid ?? result.ready ?? false;
-  result.ready = result.ready ?? result.isValid;
-  result.errors = result.errors ?? {};
-  result.warnings = result.warnings ?? [];
-  result.metrics = result.metrics ?? {
-    roomsCount: 0,
-    proctorsCount: 0,
-    examsCount: 0,
-    timeSlotsCount: 0,
-    studentsWithExamsCount: 0,
-    existingAssignmentsCount: 0,
-    schedulableExamsCount: 0,
-    blockingIssuesCount: 0,
-  };
-  result.groups = result.groups ?? {
-    rooms: { ok: true, issues: [] },
-    proctors: { ok: true, issues: [] },
-    timeSlots: { ok: true, issues: [] },
-    courseOfferings: { ok: true, issues: [] },
-    enrollments: { ok: true, issues: [] },
-    studentOverlapRisks: { ok: true, issues: [] },
-  };
-  result.issues = result.issues ?? [];
-  result.riskAnalysis = result.riskAnalysis ?? {
-    blocking: [],
-    blockingCount: 0,
-    schedulableExamsCount: 0,
-    totalExamsCount: result.metrics.examsCount ?? 0,
-  };
-  result.optimization = result.optimization ?? {
-    attempted: false,
-    optimized: false,
-    attemptedStrategies: [],
   };
   return result;
 };

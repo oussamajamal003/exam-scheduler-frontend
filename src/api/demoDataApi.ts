@@ -24,7 +24,7 @@ export type DemoDataSummary = {
 
 export type DemoDataResult = {
   message: string;
-  dataset?: 'A' | 'B' | 'C' | 'REAL';
+  dataset?: 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027';
   datasetLabel?: string;
   loginHint?: string;
   summary: DemoDataSummary;
@@ -41,11 +41,11 @@ export type DemoDataResult = {
 };
 
 export type GenerateDemoDataDto = {
-  dataset?: 'A' | 'B' | 'C' | 'REAL';
+  dataset?: 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027';
 };
 
 export type ClearDemoDataDto = {
-  dataset?: 'A' | 'B' | 'C' | 'REAL';
+  dataset?: 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027';
 };
 
 const unwrap = <T,>(payload: ApiEnvelope<T> | undefined, label: string): T => {

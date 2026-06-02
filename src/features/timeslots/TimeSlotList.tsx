@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { TimeSlot } from "../../schemas/timeSlot";
-import { AlertTriangle, Clock, Edit2, Trash2 } from "lucide-react";
+import { Clock, Edit2, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TableSkeletonRows } from "../../components/ui/skeleton";
 import { EmptyState } from "../../components/shared/EmptyState";
@@ -178,8 +178,7 @@ export function TimeSlotList({
                       key={slot.id}
                       className={cn(
                         "border-b border-zinc-200/40 transition-all duration-200 hover:bg-zinc-50/60",
-                        idx === slotRows.length - 1 && "border-b-0",
-                        inConflict && "bg-amber-50/40 shadow-[inset_4px_0_0_0_#f59e0b]"
+                        idx === slotRows.length - 1 && "border-b-0"
                       )}
                     >
                       {onToggleSelected && (
@@ -190,11 +189,6 @@ export function TimeSlotList({
                       <TableCell className="px-4 py-4 sm:px-6">
                         <div className="font-semibold text-zinc-950 text-sm flex items-center gap-2">
                           {formatDate(slot.date ?? slot.startTime)}
-                          {inConflict && (
-                            <span className="inline-flex items-center gap-1 rounded-none border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                              <AlertTriangle className="size-3" /> Overlaps Existing Option
-                            </span>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell className="px-4 py-4 sm:px-6 text-sm text-zinc-700 font-mono">

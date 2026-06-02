@@ -18,14 +18,6 @@ type QualityKey = (typeof QUALITY_KEYS)[number];
 
 export type QualityMetrics = Record<QualityKey, number | null>;
 
-export interface OptimizationSnapshot {
-  before: number | null;
-  after: number | null;
-  improvement: number | null;
-  strategy: string | null;
-  attempted: boolean;
-}
-
 export type DashboardStatusTone = 'success' | 'warning' | 'info' | 'neutral';
 
 export interface DashboardScheduleStatus {
@@ -49,16 +41,13 @@ export interface DashboardAnalyticsResult {
   selectedDetailed: Schedule | undefined;
   assignments: ScheduleAssignment[];
   qualityMetrics: QualityMetrics;
-  optimization: OptimizationSnapshot;
   weakAreas: WeakArea[];
   charts: DashboardCharts;
   qualityScores: {
     qualityScore: number | null | undefined;
     hardConstraintScore: number | null | undefined;
     softConstraintScore: number | null | undefined;
-    draftScore: number | null;
-    optimizedScore: number | null;
-    improvementScore: number | null;
+    overallQuality: number | null;
   };
   totalConflicts: number | null;
   status: DashboardScheduleStatus;
@@ -242,49 +231,27 @@ const deriveAssignmentQualityMetrics = (assignments: ScheduleAssignment[]): Qual
   };
 };
 
-const extractOptimization = (schedule?: Schedule | null): OptimizationSnapshot => {
-  const meta = schedule?.algorithmMetadata;
-  if (!isObj(meta)) {
-    return { before: null, after: null, improvement: null, strategy: null, attempted: false };
+const computeOverallQuality = (metrics: QualityMetrics) => {
+  const roomUtilization = metrics.roomUtilization;
+  const proctorWorkloadBalance = metrics.proctorWorkloadBalance;
+  const studentSpacing = metrics.studentSpacing;
+  const examDistribution = metrics.examDistribution;
+
+  if (
+    roomUtilization == null
+    || proctorWorkloadBalance == null
+    || studentSpacing == null
+    || examDistribution == null
+  ) {
+    return null;
   }
-  const evaluation = isObj(meta.evaluation) ? meta.evaluation : undefined;
-  if (evaluation) {
-    const before = firstNumber(evaluation, [
-      ['beforeOptimization', 'score'],
-      ['beforeScore'],
-      ['originalScore'],
-    ]);
-    const after = firstNumber(evaluation, [
-      ['afterOptimization', 'score'],
-      ['afterScore'],
-      ['optimizedScore'],
-    ]);
-    return {
-      before,
-      after,
-      improvement: before != null && after != null ? after - before : null,
-      strategy: typeof meta.strategy === 'string' ? meta.strategy : null,
-      attempted: true,
-    };
-  }
-  const opt = isObj(meta.optimization) ? meta.optimization : undefined;
-  if (!opt) {
-    return { before: null, after: null, improvement: null, strategy: null, attempted: false };
-  }
-  const before =
-    (typeof opt.beforeScore === 'number' ? opt.beforeScore : null) ??
-    (typeof opt.before === 'number' ? opt.before : null);
-  const after =
-    (typeof opt.afterScore === 'number' ? opt.afterScore : null) ??
-    (typeof opt.after === 'number' ? opt.after : null);
-  const strategy =
-    typeof opt.strategy === 'string'
-      ? opt.strategy
-      : typeof opt.method === 'string'
-        ? opt.method
-        : null;
-  const improvement = before != null && after != null ? after - before : null;
-  return { before, after, improvement, strategy, attempted: true };
+
+  return Math.round(
+    (roomUtilization * 0.25)
+    + (proctorWorkloadBalance * 0.30)
+    + (studentSpacing * 0.30)
+    + (examDistribution * 0.15)
+  );
 };
 
 const extractQualityMetrics = (
@@ -301,7 +268,6 @@ const extractQualityMetrics = (
       const fromSources = sourceCandidates
         .map((source) =>
           firstNumber(source, [
-            ['evaluation', 'afterOptimization', 'qualityMetrics', key],
             ['evaluation', 'qualityMetrics', key],
             ['qualityMetrics', key],
             ['metrics', key],
@@ -405,14 +371,14 @@ export const useDashboardAnalytics = (
     [assignmentsQuery.data]
   );
 
-  const optimization = React.useMemo(
-    () => extractOptimization(selectedDetailed),
-    [selectedDetailed]
-  );
-
   const qualityMetrics = React.useMemo(
     () => extractQualityMetrics(selectedDetailed, analysisQuery.data, assignments),
     [selectedDetailed, analysisQuery.data, assignments]
+  );
+
+  const overallQuality = React.useMemo(
+    () => scorePct(selectedDetailed?.qualityScore ?? computeOverallQuality(qualityMetrics)),
+    [selectedDetailed?.qualityScore, qualityMetrics]
   );
 
   const weakAreas = React.useMemo(
@@ -466,12 +432,7 @@ export const useDashboardAnalytics = (
     qualityScore: selectedDetailed?.qualityScore ?? null,
     hardConstraintScore: selectedDetailed?.hardConstraintScore ?? null,
     softConstraintScore: selectedDetailed?.softConstraintScore ?? null,
-    draftScore: scorePct(optimization.before),
-    optimizedScore: scorePct(optimization.after ?? selectedDetailed?.qualityScore),
-    improvementScore:
-      scorePct(optimization.before) != null && scorePct(optimization.after ?? selectedDetailed?.qualityScore) != null
-        ? scorePct(optimization.after ?? selectedDetailed?.qualityScore)! - scorePct(optimization.before)!
-        : null,
+    overallQuality,
   };
 
   const queries = [detailQuery, assignmentsQuery, analysisQuery];
@@ -482,7 +443,6 @@ export const useDashboardAnalytics = (
     selectedDetailed,
     assignments,
     qualityMetrics,
-    optimization,
     weakAreas,
     charts,
     qualityScores,

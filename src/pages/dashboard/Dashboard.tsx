@@ -15,8 +15,6 @@ import {
   Clock4,
   Layers,
   AlertTriangle,
-  TrendingUp,
-  ShieldCheck,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -24,9 +22,7 @@ import { AnalyticsCard } from '@/components/dashboard/AnalyticsCard';
 import { SmartStatusCard } from '@/components/dashboard/SmartStatusCard';
 import { RealBarChart } from '@/components/dashboard/RealBarChart';
 import { EvaluationSummary } from '@/components/dashboard/EvaluationSummary';
-import { WeakAreasPanel } from '@/components/dashboard/WeakAreasPanel';
 import { ScheduleOverview } from '@/components/dashboard/ScheduleOverview';
-import { OptimizationSummary } from '@/components/dashboard/OptimizationSummary';
 import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
 import { getScheduleAssignmentCount } from '@/lib/scheduleCounts';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
@@ -104,17 +100,19 @@ export const Dashboard: React.FC = () => {
     selectedDetailed,
     assignments,
     qualityMetrics,
-    optimization,
-    weakAreas,
     charts,
-    qualityScores,
-    totalConflicts,
     status,
   } = analytics;
 
-  const optimizationScoreDisplay = qualityScores.optimizedScore ?? qualityScores.draftScore;
+  const overallQualityDisplay = analytics.qualityScores.overallQuality;
 
   const qualityMetricEntries = [
+    {
+      key: 'overallQuality',
+      label: 'Overall Quality',
+      value: overallQualityDisplay,
+      tone: 'bg-zinc-950 dark:bg-zinc-100',
+    },
     {
       key: 'roomUtilization',
       label: 'Room Utilization',
@@ -123,7 +121,7 @@ export const Dashboard: React.FC = () => {
     },
     {
       key: 'proctorWorkloadBalance',
-      label: 'Proctor Workload Balance',
+      label: 'Proctor Balance',
       value: qualityMetrics.proctorWorkloadBalance,
       tone: 'bg-violet-500',
     },
@@ -135,7 +133,7 @@ export const Dashboard: React.FC = () => {
     },
     {
       key: 'examDistribution',
-      label: 'Exam Distribution',
+      label: 'Distribution',
       value: qualityMetrics.examDistribution,
       tone: 'bg-emerald-500',
     },
@@ -144,7 +142,7 @@ export const Dashboard: React.FC = () => {
   const quickActions: QuickAction[] = [
     {
       label: 'Generate Schedule',
-      description: 'Run hybrid optimizer',
+      description: 'Run smart generation',
       icon: CalendarPlus,
       tone: 'indigo',
       onClick: goToScheduleGenerate,
@@ -255,64 +253,22 @@ export const Dashboard: React.FC = () => {
           subtitle="Currently published"
         />
         <AnalyticsCard
-          title="Optimization Score"
-          value={optimizationScoreDisplay ?? '—'}
+          title="Overall Quality"
+          value={overallQualityDisplay ?? '—'}
           icon={Gauge}
           accent={
-            optimizationScoreDisplay == null
+            overallQualityDisplay == null
               ? 'zinc'
-              : optimizationScoreDisplay >= 85
+              : overallQualityDisplay >= 85
                 ? 'emerald'
-                : optimizationScoreDisplay >= 65
+                : overallQualityDisplay >= 65
                   ? 'sky'
-                  : optimizationScoreDisplay >= 40
+                  : overallQualityDisplay >= 40
                     ? 'amber'
                     : 'rose'
           }
           loading={analytics.isLoading}
-          subtitle={selectedSchedule ? 'Selected schedule quality' : 'No schedules yet'}
-        />
-      </div>
-
-      {/* Selected schedule score summaries */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AnalyticsCard
-          title="Before Optimization"
-          value={qualityScores.draftScore != null ? `${qualityScores.draftScore}%` : '—'}
-          icon={ShieldCheck}
-          accent="zinc"
-          loading={analytics.isLoading}
-          subtitle="Draft score"
-        />
-        <AnalyticsCard
-          title="After Optimization"
-          value={
-            qualityScores.optimizedScore != null ? `${qualityScores.optimizedScore}%` : '—'
-          }
-          icon={Gauge}
-          accent="emerald"
-          loading={analytics.isLoading}
-          subtitle="Optimized score"
-        />
-        <AnalyticsCard
-          title="Improvement"
-          value={
-            qualityScores.improvementScore != null
-              ? `${qualityScores.improvementScore >= 0 ? '+' : ''}${qualityScores.improvementScore}%`
-              : '—'
-          }
-          icon={TrendingUp}
-          accent="sky"
-          loading={analytics.isLoading}
-          subtitle="After - before"
-        />
-        <AnalyticsCard
-          title="Detected Conflicts"
-          value={totalConflicts ?? '—'}
-          icon={AlertTriangle}
-          accent={totalConflicts && totalConflicts > 0 ? 'rose' : 'emerald'}
-          loading={analytics.isLoading}
-          subtitle="Analysis endpoint"
+          subtitle={selectedSchedule ? 'Final KPI aggregate' : 'No schedules yet'}
         />
       </div>
 
@@ -362,8 +318,7 @@ export const Dashboard: React.FC = () => {
             },
             {
               label: 'Quality',
-              value:
-                optimizationScoreDisplay != null ? `${optimizationScoreDisplay}/100` : '—',
+              value: overallQualityDisplay != null ? `${overallQualityDisplay}/100` : '—',
             },
           ]}
           action={{ label: 'Open Schedules', onClick: () => navigate('/schedules') }}
@@ -431,24 +386,11 @@ export const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Evaluation + Weak areas */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <EvaluationSummary
           qualityScore={selectedDetailed?.qualityScore}
           hardConstraintScore={selectedDetailed?.hardConstraintScore}
           softConstraintScore={selectedDetailed?.softConstraintScore}
-          loading={analytics.isLoading}
-        />
-        <WeakAreasPanel weakAreas={weakAreas} loading={analytics.isLoading} />
-      </div>
-
-      {/* Optimization + Recent schedules */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
-        <OptimizationSummary
-          beforeScore={optimization.before}
-          afterScore={optimization.after}
-          strategy={optimization.strategy}
-          attempted={optimization.attempted}
           loading={analytics.isLoading}
         />
         <ScheduleOverview

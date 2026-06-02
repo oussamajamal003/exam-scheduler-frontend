@@ -8,6 +8,7 @@ import { useClearDemoData, useGenerateDemoData } from '@/hooks/demoData/useDemoD
 import type { DemoDataSummary } from '@/api/demoDataApi';
 
 type SummaryLabel = { key: keyof DemoDataSummary; label: string };
+type DemoDatasetKey = 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027';
 
 export const DemoDataPanel: React.FC = () => {
   const { t } = useTranslation('common');
@@ -33,11 +34,12 @@ export const DemoDataPanel: React.FC = () => {
     { key: 'B' as const, title: t('adminSettings.demoData.datasetB'), caption: t('adminSettings.demoData.datasetBCaption'), detail: t('adminSettings.demoData.datasetBDetail') },
     { key: 'C' as const, title: t('adminSettings.demoData.datasetC'), caption: t('adminSettings.demoData.datasetCCaption'), detail: t('adminSettings.demoData.datasetCDetail') },
     { key: 'REAL' as const, title: t('adminSettings.demoData.datasetREAL'), caption: t('adminSettings.demoData.datasetREALCaption'), detail: t('adminSettings.demoData.datasetREALDetail') },
-  ];
+    { key: 'FEIT2027' as const, title: t('adminSettings.demoData.datasetFEIT2027'), caption: t('adminSettings.demoData.datasetFEIT2027Caption'), detail: t('adminSettings.demoData.datasetFEIT2027Detail') },
+  ] satisfies ReadonlyArray<{ key: DemoDatasetKey; title: string; caption: string; detail: string }>;
 
   const [confirmClearOpen, setConfirmClearOpen] = React.useState(false);
-  const [selectedDataset, setSelectedDataset] = React.useState<'A' | 'B' | 'C' | 'REAL'>('A');
-  const [selectedClearDataset, setSelectedClearDataset] = React.useState<'A' | 'B' | 'C' | 'REAL'>('A');
+  const [selectedDataset, setSelectedDataset] = React.useState<DemoDatasetKey>('A');
+  const [selectedClearDataset, setSelectedClearDataset] = React.useState<DemoDatasetKey>('A');
   const generateMutation = useGenerateDemoData();
   const clearMutation = useClearDemoData();
   const isBusy = generateMutation.isPending || clearMutation.isPending;
@@ -113,7 +115,7 @@ export const DemoDataPanel: React.FC = () => {
                 onClick={() => generateMutation.mutate({ dataset: selectedDataset })}
               >
                 {generateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
-                {t('adminSettings.demoData.generateDataset')}
+                {t('adminSettings.demoData.generateSelectedDataset', { dataset: selectedDatasetConfig.title })}
               </Button>
             </div>
             <div className="mt-4 flex items-start justify-between gap-3 rounded-none border border-zinc-200 bg-white px-4 py-3">
@@ -126,6 +128,15 @@ export const DemoDataPanel: React.FC = () => {
                 <ShieldCheck className="size-4" />
               </span>
             </div>
+            {generateMutation.isPending && (
+              <div className="mt-4 flex items-center gap-3 rounded-none border border-zinc-200 bg-zinc-950 px-4 py-3 text-sm text-white">
+                <Loader2 className="size-4 animate-spin" />
+                <div>
+                  <p className="font-semibold">{t('adminSettings.demoData.generationInProgress', { dataset: selectedDatasetConfig.title })}</p>
+                  <p className="text-xs text-zinc-300">{t('adminSettings.demoData.generationInProgressDetail')}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
