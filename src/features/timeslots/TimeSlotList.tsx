@@ -1,5 +1,4 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
-import { useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { TimeSlot } from "../../schemas/timeSlot";
@@ -44,42 +43,6 @@ const computeDuration = (slot: TimeSlot): number => {
   return Math.max(0, Math.round(diff / 60000));
 };
 
-const dateKey = (slot: TimeSlot) => {
-  const value = slot.date ?? slot.startTime;
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
-};
-
-const detectConflicts = (slots: TimeSlot[]): Set<string> => {
-  const conflicting = new Set<string>();
-  const byDate = new Map<string, TimeSlot[]>();
-  for (const s of slots) {
-    const key = dateKey(s);
-    if (!key) continue;
-    if (!byDate.has(key)) byDate.set(key, []);
-    byDate.get(key)!.push(s);
-  }
-  for (const list of byDate.values()) {
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i];
-        const b = list[j];
-        const aStart = new Date(a.startTime).getTime();
-        const aEnd = new Date(a.endTime).getTime();
-        const bStart = new Date(b.startTime).getTime();
-        const bEnd = new Date(b.endTime).getTime();
-        if (aStart < bEnd && aEnd > bStart) {
-          conflicting.add(a.id);
-          conflicting.add(b.id);
-        }
-      }
-    }
-  }
-  return conflicting;
-};
-
 export function TimeSlotList({
   timeSlots,
   isLoading,
@@ -95,7 +58,6 @@ export function TimeSlotList({
   const slotRows = Array.isArray(timeSlots) ? timeSlots : [];
   const selectedCount = slotRows.filter((slot) => selectedIds?.has(slot.id)).length;
   const isAllSelected = slotRows.length > 0 && selectedCount === slotRows.length;
-  const conflictIds = useMemo(() => detectConflicts(slotRows), [slotRows]);
   const { scrollRef, onScroll, virtualRows, topPadding, bottomPadding, isVirtualized, containerClassName } = useVirtualRows(slotRows, { estimateRowHeight: 76 });
 
   return (
@@ -171,7 +133,6 @@ export function TimeSlotList({
                   </TableRow>
                 )}
                 {virtualRows.map(({ item: slot, index: idx }) => {
-                  const inConflict = conflictIds.has(slot.id);
                   const assignmentsCount = slot?.assignmentsCount ?? 0;
                   return (
                     <TableRow

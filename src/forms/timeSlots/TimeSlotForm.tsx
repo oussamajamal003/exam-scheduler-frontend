@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { TimeSlot, timeSlotFormSchema, TimeSlotFormValues } from "../../schemas/timeSlot";
@@ -39,7 +39,6 @@ const toMinutes = (value: string): number => {
 
 export function TimeSlotForm({
   initialData,
-  existingSlots = [],
   onSubmit,
   isLoading,
   submitErrorMessage,
@@ -64,27 +63,11 @@ export function TimeSlotForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.date, initialData?.startTime, initialData?.endTime]);
 
-  const dateValue = form.watch("date");
   const startValue = form.watch("startTime");
   const endValue = form.watch("endTime");
 
-  const conflicts = useMemo(() => {
-    if (!dateValue || !startValue || !endValue) return [];
-    const newStart = toMinutes(startValue);
-    const newEnd = toMinutes(endValue);
-    if (newEnd <= newStart) return [];
 
-    return existingSlots.filter((slot) => {
-      if (initialData?.id && slot.id === initialData.id) return false;
-      const slotDate = toDateInputValue(slot.date ?? slot.startTime);
-      if (slotDate !== dateValue) return false;
-      const slotStart = toMinutes(toTimeInputValue(slot.startTime));
-      const slotEnd = toMinutes(toTimeInputValue(slot.endTime));
-      return newStart < slotEnd && newEnd > slotStart;
-    });
-  }, [dateValue, startValue, endValue, existingSlots, initialData?.id]);
 
-  const hasConflicts = conflicts.length > 0;
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const durationMinutes =
     startValue && endValue && toMinutes(endValue) > toMinutes(startValue)

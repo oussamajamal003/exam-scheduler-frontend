@@ -137,7 +137,7 @@ export function CoursesPage() {
     const term = (commandSearchText || deferredSearch).toLowerCase();
     if (!term) return courses;
     return courses.filter((c) =>
-      [c.title, c.name, c.code, c.program, c.semester]
+      [c.name, c.code, c.program, c.semester]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term))
     );

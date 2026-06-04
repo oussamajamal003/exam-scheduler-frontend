@@ -3,20 +3,6 @@ import { getAllUsers, getCurrentUser, type User } from '@/api/auth.api';
 
 const AUTH_USER_STORAGE_KEY = 'auth_user';
 
-const getStoredUser = (): User | undefined => {
-  const storedUser = localStorage.getItem(AUTH_USER_STORAGE_KEY);
-  if (!storedUser) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(storedUser) as User;
-  } catch {
-    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-    return undefined;
-  }
-};
-
 const resolveCurrentUser = async (): Promise<User> => {
   const user = await getCurrentUser();
   localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));

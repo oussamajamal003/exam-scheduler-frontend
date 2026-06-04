@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useChangeRolePassword } from '@/hooks/roleSettings/useRoleSettings';
 import { cn } from '@/lib/utils';
 import type { RolePortal } from '@/api/roleSettings.api';
@@ -63,13 +62,6 @@ const Toggle = ({ checked, disabled, onClick }: { checked: boolean; disabled?: b
       )}
     />
   </label>
-);
-
-const SettingsSkeleton = () => (
-  <div className="space-y-5 p-5 sm:p-6 lg:p-8">
-    <Skeleton className="h-8 w-72" />
-    <Skeleton className="h-80 w-full" />
-  </div>
 );
 
 export const RoleSettingsPage: React.FC<RoleSettingsPageProps> = ({ portal, roleName }) => {

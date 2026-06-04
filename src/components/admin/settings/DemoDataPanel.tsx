@@ -8,7 +8,7 @@ import { useClearDemoData, useGenerateDemoData } from '@/hooks/demoData/useDemoD
 import type { DemoDataSummary } from '@/api/demoDataApi';
 
 type SummaryLabel = { key: keyof DemoDataSummary; label: string };
-type DemoDatasetKey = 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027';
+type DemoDatasetKey = 'A' | 'B' | 'C' | 'REAL' | 'FEIT2027' | 'FAIL' | 'FAIL2' | 'FAIL3';
 
 export const DemoDataPanel: React.FC = () => {
   const { t } = useTranslation('common');
@@ -35,6 +35,9 @@ export const DemoDataPanel: React.FC = () => {
     { key: 'C' as const, title: t('adminSettings.demoData.datasetC'), caption: t('adminSettings.demoData.datasetCCaption'), detail: t('adminSettings.demoData.datasetCDetail') },
     { key: 'REAL' as const, title: t('adminSettings.demoData.datasetREAL'), caption: t('adminSettings.demoData.datasetREALCaption'), detail: t('adminSettings.demoData.datasetREALDetail') },
     { key: 'FEIT2027' as const, title: t('adminSettings.demoData.datasetFEIT2027'), caption: t('adminSettings.demoData.datasetFEIT2027Caption'), detail: t('adminSettings.demoData.datasetFEIT2027Detail') },
+    { key: 'FAIL' as const, title: t('adminSettings.demoData.datasetFAIL', 'Fail Demo Dataset'), caption: t('adminSettings.demoData.datasetFAILCaption', 'Deterministically unschedulable resources for failure-path testing'), detail: t('adminSettings.demoData.datasetFAILDetail', 'Creates a dataset that always fails feasibility checks so the Generate dialog can demonstrate stage-specific failure handling.') },
+    { key: 'FAIL2' as const, title: t('adminSettings.demoData.datasetFAIL2', 'Fail Demo Dataset 2'), caption: t('adminSettings.demoData.datasetFAIL2Caption', 'Deterministically unschedulable resources with a small slot window'), detail: t('adminSettings.demoData.datasetFAIL2Detail', 'Creates a second failure-path dataset with 80 offerings, 4 rooms, 20 proctors, and 6 time slots so the Generate dialog can test a constrained-but-nonempty window.') },
+    { key: 'FAIL3' as const, title: t('adminSettings.demoData.datasetFAIL3', 'Fail Demo Dataset 3'), caption: t('adminSettings.demoData.datasetFAIL3Caption', 'Validation passes, then candidate filtering fails'), detail: t('adminSettings.demoData.datasetFAIL3Detail', 'Creates a third failure-path dataset that looks feasible up front but stops during candidate filtering with no valid assignment for Operating Systems.') },
   ] satisfies ReadonlyArray<{ key: DemoDatasetKey; title: string; caption: string; detail: string }>;
 
   const [confirmClearOpen, setConfirmClearOpen] = React.useState(false);
@@ -201,7 +204,7 @@ export const DemoDataPanel: React.FC = () => {
             <Button type="button" variant="outline" className="rounded-none" disabled={clearMutation.isPending} onClick={() => setConfirmClearOpen(false)}>
               {t('actions.cancel')}
             </Button>
-            <Button type="button" variant="destructive" className="rounded-none" disabled={clearMutation.isPending} onClick={() => clearMutation.mutate({ dataset: selectedClearDataset })}>
+            <Button type="button" variant="destructive" className="rounded-none" disabled={clearMutation.isPending} onClick={() => clearMutation.mutate({ dataset: selectedClearDataset }, { onSuccess: () => setConfirmClearOpen(false) })}>
               {clearMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
               {t('adminSettings.demoData.confirmClearButton')}
             </Button>

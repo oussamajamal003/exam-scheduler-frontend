@@ -112,7 +112,6 @@ export const StudentCoursesPage: React.FC = () => {
       [
         courseOffering.course?.code,
         courseOffering.course?.title,
-        courseOffering.course?.name,
         courseOffering.instructor,
         courseOffering.semester?.name,
         courseOffering.section,

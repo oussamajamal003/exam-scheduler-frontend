@@ -190,6 +190,7 @@ export type ValidateSchedulingResult = {
     courseOfferings: ValidationGroup;
     enrollments: ValidationGroup;
     studentOverlapRisks: ValidationGroup;
+    roomCapacity: ValidationGroup;
     [key: string]: ValidationGroup;
   };
   // Flat issue list (legacy)
@@ -227,6 +228,7 @@ export const validateSchedulingInput = async (
     courseOfferings: { ok: true, issues: [] },
     enrollments: { ok: true, issues: [] },
     studentOverlapRisks: { ok: true, issues: [] },
+    roomCapacity: { ok: true, issues: [] },
   };
   result.issues = result.issues ?? [];
   result.riskAnalysis = result.riskAnalysis ?? {
