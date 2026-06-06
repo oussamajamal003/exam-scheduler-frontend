@@ -1398,6 +1398,7 @@ const GenerateScheduleDialog = ({
   }, [open]);
 
   // Test helper: allow forcing a validation failure state when the dialog opens
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (open && forceValidationFailure) {
       setPipelinePhase("validating");
