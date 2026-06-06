@@ -2027,7 +2027,7 @@ const GenerateScheduleDialog = ({
               </div>
             )}
 
-            {isBusy && <PipelineLoadingExperience steps={steps} activeStepKey={activeStepKey} />}
+            {isBusy && <PipelineLoadingExperience steps={steps} activeStepKey={activeStepKey} phase={phase} />}
 
             {(phase !== "idle") && !isPreparing && (
               <div className="space-y-4">

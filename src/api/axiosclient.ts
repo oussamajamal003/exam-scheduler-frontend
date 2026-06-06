@@ -29,6 +29,7 @@ export const clearStoredAuthSession = () => {
 
 export const axiosClient = axios.create({
   baseURL: env.API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
