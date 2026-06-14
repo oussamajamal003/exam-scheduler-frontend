@@ -35,6 +35,38 @@ export interface DashboardCharts {
   qualityMetricBars: ChartDatum[];
 }
 
+export interface ScalabilityEvaluation {
+  generation: {
+    startedAt: string | null;
+    endedAt: string | null;
+    durationMs: number | null;
+    durationSeconds: number | null;
+  };
+  successRate: {
+    examsScheduled: number | null;
+    examsFailed: number | null;
+    successPercentage: number | null;
+  };
+  constraintValidation: {
+    studentConflicts: number | null;
+    roomCapacityViolations: number | null;
+    roomDoubleBookingViolations: number | null;
+    proctorDoubleBookingViolations: number | null;
+  };
+  resourceUtilization: {
+    roomUtilization: number | null;
+    proctorUtilization: number | null;
+    timeslotUtilization: number | null;
+  };
+  qualityMetrics: {
+    roomUtilizationScore: number | null;
+    proctorBalanceScore: number | null;
+    studentSpacingScore: number | null;
+    distributionScore: number | null;
+    overallQualityScore: number | null;
+  };
+}
+
 export interface DashboardAnalyticsResult {
   scheduleId: string | undefined;
   selectedSchedule: Schedule | undefined;
@@ -50,6 +82,7 @@ export interface DashboardAnalyticsResult {
     overallQuality: number | null;
   };
   totalConflicts: number | null;
+  scalabilityEvaluation: ScalabilityEvaluation | null;
   status: DashboardScheduleStatus;
   isLoading: boolean;
   isFetching: boolean;
@@ -102,6 +135,11 @@ const groupCount = <T,>(
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   return Array.from(counts, ([name, value]) => ({ name, value }));
+};
+
+const toNumberOrNull = (value: unknown) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value;
 };
 
 const getAssignmentStudentIds = (assignment: ScheduleAssignment) => {
@@ -287,6 +325,96 @@ const extractQualityMetrics = (
   );
 };
 
+const extractScalabilityEvaluation = (
+  schedule: Schedule | undefined,
+  analysis: unknown,
+  assignments: ScheduleAssignment[],
+  qualityMetrics: QualityMetrics,
+): ScalabilityEvaluation | null => {
+  if (!schedule) return null;
+  const meta = isObj(schedule?.algorithmMetadata) ? schedule.algorithmMetadata : null;
+  const scalabilityMeta = meta && isObj(meta.scalabilityEvaluation)
+    ? (meta.scalabilityEvaluation as Record<string, any>)
+    : null;
+
+  const distinctExamIds = new Set(assignments.map((assignment) => assignment.examId)).size;
+
+  const generation = {
+    startedAt: typeof scalabilityMeta?.generation?.startedAt === 'string' ? scalabilityMeta.generation.startedAt : null,
+    endedAt: typeof scalabilityMeta?.generation?.endedAt === 'string' ? scalabilityMeta.generation.endedAt : null,
+    durationMs: toNumberOrNull(scalabilityMeta?.generation?.durationMs),
+    durationSeconds: toNumberOrNull(scalabilityMeta?.generation?.durationSeconds),
+  };
+
+  const successRate = {
+    examsScheduled: toNumberOrNull(scalabilityMeta?.successRate?.examsScheduled) ?? distinctExamIds,
+    examsFailed: toNumberOrNull(scalabilityMeta?.successRate?.examsFailed) ?? 0,
+    successPercentage: toNumberOrNull(scalabilityMeta?.successRate?.successPercentage) ?? (distinctExamIds > 0 ? 100 : null),
+  };
+
+  const derivedConflicts = isObj(analysis) && isObj(analysis.conflicts) && isObj(analysis.conflicts.derived)
+    ? analysis.conflicts.derived
+    : null;
+
+  const constraintValidation = {
+    studentConflicts: Array.isArray(derivedConflicts?.studentOverlaps) ? derivedConflicts.studentOverlaps.length : null,
+    roomCapacityViolations: Array.isArray(derivedConflicts?.roomCapacityViolations) ? derivedConflicts.roomCapacityViolations.length : null,
+    roomDoubleBookingViolations: Array.isArray(derivedConflicts?.roomReuseViolations) ? derivedConflicts.roomReuseViolations.length : null,
+    proctorDoubleBookingViolations: Array.isArray(derivedConflicts?.proctorConflicts) ? derivedConflicts.proctorConflicts.length : null,
+  };
+
+  const roomUtilization =
+    toNumberOrNull(scalabilityMeta?.resourceUtilization?.roomUtilization)
+    ?? qualityMetrics.roomUtilization
+    ?? toNumberOrNull(firstNumber(analysis, [['metrics', 'averageRoomUtilization']]));
+  const proctorUtilization = toNumberOrNull(scalabilityMeta?.resourceUtilization?.proctorUtilization);
+  const timeslotUtilization = toNumberOrNull(scalabilityMeta?.resourceUtilization?.timeslotUtilization);
+
+  const quality = {
+    roomUtilizationScore: toNumberOrNull(scalabilityMeta?.qualityMetrics?.roomUtilizationScore) ?? qualityMetrics.roomUtilization,
+    proctorBalanceScore: toNumberOrNull(scalabilityMeta?.qualityMetrics?.proctorBalanceScore) ?? qualityMetrics.proctorWorkloadBalance,
+    studentSpacingScore: toNumberOrNull(scalabilityMeta?.qualityMetrics?.studentSpacingScore) ?? qualityMetrics.studentSpacing,
+    distributionScore: toNumberOrNull(scalabilityMeta?.qualityMetrics?.distributionScore) ?? qualityMetrics.examDistribution,
+    overallQualityScore: toNumberOrNull(scalabilityMeta?.qualityMetrics?.overallQualityScore) ?? scorePct(schedule?.qualityScore ?? null),
+  };
+
+  if (
+    generation.startedAt == null
+    && generation.endedAt == null
+    && generation.durationMs == null
+    && generation.durationSeconds == null
+    && successRate.examsScheduled == null
+    && successRate.examsFailed == null
+    && successRate.successPercentage == null
+    && constraintValidation.studentConflicts == null
+    && constraintValidation.roomCapacityViolations == null
+    && constraintValidation.roomDoubleBookingViolations == null
+    && constraintValidation.proctorDoubleBookingViolations == null
+    && roomUtilization == null
+    && proctorUtilization == null
+    && timeslotUtilization == null
+    && quality.roomUtilizationScore == null
+    && quality.proctorBalanceScore == null
+    && quality.studentSpacingScore == null
+    && quality.distributionScore == null
+    && quality.overallQualityScore == null
+  ) {
+    return null;
+  }
+
+  return {
+    generation,
+    successRate,
+    constraintValidation,
+    resourceUtilization: {
+      roomUtilization,
+      proctorUtilization,
+      timeslotUtilization,
+    },
+    qualityMetrics: quality,
+  };
+};
+
 const extractWeakAreas = (schedule?: Schedule | null, analysis?: unknown): WeakArea[] => {
   const candidates: unknown[] = [];
   const meta = schedule?.algorithmMetadata;
@@ -376,6 +504,11 @@ export const useDashboardAnalytics = (
     [selectedDetailed, analysisQuery.data, assignments]
   );
 
+  const scalabilityEvaluation = React.useMemo(
+    () => extractScalabilityEvaluation(selectedDetailed, analysisQuery.data, assignments, qualityMetrics),
+    [selectedDetailed, analysisQuery.data, assignments, qualityMetrics]
+  );
+
   const overallQuality = React.useMemo(
     () => scorePct(selectedDetailed?.qualityScore ?? computeOverallQuality(qualityMetrics)),
     [selectedDetailed?.qualityScore, qualityMetrics]
@@ -447,6 +580,7 @@ export const useDashboardAnalytics = (
     charts,
     qualityScores,
     totalConflicts,
+    scalabilityEvaluation,
     status,
     isLoading: queries.some((query) => query.isLoading),
     isFetching: queries.some((query) => query.isFetching),

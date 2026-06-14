@@ -1028,13 +1028,13 @@ const PIPELINE_STEP_META: Array<Pick<PipelineStep, "key" | "label" | "descriptio
   },
 ];
 
-const PREPARE_STAGE_DELAY_MS = 3000;
-const VALIDATE_STAGE_DELAY_MS = 3000;
-const SORT_STAGE_DELAY_MS = 4000;
-const FILTER_STAGE_DELAY_MS = 4000;
-const CHOOSE_STAGE_DELAY_MS = 4000;
-const RESERVE_STAGE_DELAY_MS = 4000;
-const OPTIMIZE_STAGE_DELAY_MS = 5000;
+const PREPARE_STAGE_DELAY_MS = 2000;
+const VALIDATE_STAGE_DELAY_MS = 2000;
+const SORT_STAGE_DELAY_MS = 3000;
+const FILTER_STAGE_DELAY_MS = 3000;
+const CHOOSE_STAGE_DELAY_MS = 3000;
+const RESERVE_STAGE_DELAY_MS = 3000;
+const OPTIMIZE_STAGE_DELAY_MS = 4000;
 const CONFIRM_STAGE_DELAY_MS = 1500;
 const DIALOG_CLOSE_SETTLE_DELAY_MS = 360;
 
@@ -2977,6 +2977,26 @@ const AssignmentDetailsSheet = ({
 
     return Array.from(roomGroups.values());
   }, [groupedAssignments]);
+  const sharedExamCountByRoomId = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!a?.timeSlotId) return counts;
+
+    const examIdsByRoom = new Map<string, Set<string>>();
+    for (const item of assignments) {
+      if (item.timeSlotId !== a.timeSlotId) continue;
+      const roomId = item.roomId;
+      if (!roomId) continue;
+      const set = examIdsByRoom.get(roomId) ?? new Set<string>();
+      set.add(item.examId);
+      examIdsByRoom.set(roomId, set);
+    }
+
+    for (const [roomId, examIds] of examIdsByRoom.entries()) {
+      counts.set(roomId, examIds.size);
+    }
+
+    return counts;
+  }, [a?.timeSlotId, assignments]);
   const totalAllocatedCapacity = useMemo(
     () => groupedRooms.reduce((sum, group) => sum + (group.room?.capacity ?? 0), 0),
     [groupedRooms]
@@ -3153,6 +3173,11 @@ const AssignmentDetailsSheet = ({
                           <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950">
                             <DoorOpen className="size-4 text-emerald-700" />
                             <span className="truncate">{group.room?.name ?? "Not assigned"}</span>
+                            {(group.room?.id && (sharedExamCountByRoomId.get(group.room.id) ?? 0) > 1) && (
+                              <Badge variant="secondary" className="rounded-none text-[10px]">
+                                Shared · {sharedExamCountByRoomId.get(group.room.id)} exams
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-zinc-500">
                             <MapPin className="size-3.5" />
