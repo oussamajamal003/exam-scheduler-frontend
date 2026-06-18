@@ -182,14 +182,9 @@ The UI reflects this pipeline across scheduling pages, dashboard summaries, vali
 | `src/routes` | Route definitions and route orchestration. |
 | `src/i18n` | Translation setup, locale registration, and language metadata. |
 | `src/assets` | Static frontend assets. |
-
-### Requested but not currently present as dedicated folders
-
-| Folder | Current status |
-| --- | --- |
-| `src/utils` | Not present as a dedicated folder; shared helpers currently live in `src/lib`. |
-| `src/types` | Not present as a dedicated folder; frontend contracts are modeled primarily in `src/schemas`. |
-| `src/context` | Not present as a dedicated folder; app-wide wiring is handled in `src/providers`. |
+| `src/lib` | Shared helpers. |
+| `src/schemas` | Frontend contracts are modeled primarily. |
+| `src/providers` | App-wide wiring is handled. |
 
 ## Screens Overview
 
